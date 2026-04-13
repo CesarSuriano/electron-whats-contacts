@@ -2,14 +2,19 @@
 
 # Compiled output
 /dist
+/release
 /tmp
+/out
 /out-tsc
 /bazel-out
+*.tsbuildinfo
 
 # Node
 /node_modules
-npm-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # IDEs and editors
 .idea/
@@ -31,12 +36,21 @@ yarn-error.log
 # Miscellaneous
 /.angular/cache
 .sass-cache/
+.cache/
+.eslintcache
 /connect.lock
 /coverage
 /libpeerconnection.log
 testem.log
 /typings
 
+# Local environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
 # System files
 .DS_Store
 Thumbs.db
+Desktop.ini
