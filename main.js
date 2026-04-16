@@ -1,6 +1,50 @@
 const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
+const { pathToFileURL } = require('url');
+
+let bridgeProcess = null;
+
+function startWhatsappBridge() {
+  if (bridgeProcess) {
+    return;
+  }
+
+  const bridgeDir = path.join(__dirname, 'whatsapp-webjs-bridge');
+  const bridgeEntry = path.join(bridgeDir, 'server.js');
+
+  bridgeProcess = spawn(process.execPath, [bridgeEntry], {
+    cwd: bridgeDir,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      PORT: process.env.PORT || '3344',
+      ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*'
+    },
+    stdio: 'inherit',
+    windowsHide: true
+  });
+
+  bridgeProcess.on('exit', (code) => {
+    console.log(`[electron] whatsapp-webjs bridge finalizada (code=${code ?? 'null'})`);
+    bridgeProcess = null;
+  });
+
+  bridgeProcess.on('error', (error) => {
+    console.error('[electron] falha ao iniciar whatsapp-webjs bridge:', error);
+    bridgeProcess = null;
+  });
+}
+
+function stopWhatsappBridge() {
+  if (!bridgeProcess || bridgeProcess.killed) {
+    return;
+  }
+
+  bridgeProcess.kill();
+  bridgeProcess = null;
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -14,8 +58,23 @@ function createWindow() {
 
   win.maximize();
 
-  win.loadURL(`file://${path.join(__dirname, 'dist/uniq-system/index.html')}`);
+  const rendererIndex = resolveRendererIndexPath();
+  if (!rendererIndex) {
+    throw new Error('Nao foi possivel localizar dist/uniq-system/index.html para iniciar o renderer.');
+  }
+
+  win.loadURL(pathToFileURL(rendererIndex).toString());
   Menu.setApplicationMenu(null);
+}
+
+function resolveRendererIndexPath() {
+  const candidates = [
+    path.join(process.cwd(), 'dist', 'uniq-system', 'index.html'),
+    path.join(__dirname, 'dist', 'uniq-system', 'index.html'),
+    path.join(app.getAppPath(), 'dist', 'uniq-system', 'index.html')
+  ];
+
+  return candidates.find(candidate => fs.existsSync(candidate)) || null;
 }
 
 // Handler para carregar o XML a partir da pasta do executável (produção)
@@ -38,4 +97,11 @@ ipcMain.handle('load-xml', async () => {
   return fs.promises.readFile(xmlPath, 'utf8');
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  startWhatsappBridge();
+  createWindow();
+});
+
+app.on('before-quit', () => {
+  stopWhatsappBridge();
+});

@@ -1,0 +1,172 @@
+<div class="app-container">
+  <header class="app-header">
+    <div class="header-left">
+      <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
+    </div>
+    <div class="header-center">
+      <span class="app-title">Clientes da Loja</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-outline" type="button" (click)="goToWhatsapp()">
+        <span class="material-symbols-outlined btn-icon-symbol">chat</span>
+        <span class="btn-label">WhatsApp</span>
+      </button>
+
+      <div class="header-config-wrapper">
+        <button
+          class="btn btn-outline header-settings-btn"
+          type="button"
+          (click)="toggleHeaderSettingsMenu()"
+          aria-label="Configurações do app"
+        >
+          <span class="material-symbols-outlined btn-icon-symbol">settings</span>
+        </button>
+
+        <div class="header-config-menu" *ngIf="isHeaderSettingsOpen">
+          <button class="config-menu-item" type="button" (click)="openAboutModal()">
+            Ver versão do app
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="legend-row">
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-color legend-today"></span>
+          <span class="legend-label">Aniversariantes de hoje</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color legend-upcoming"></span>
+          <span class="legend-label">Aniversário nos próximos 7 dias</span>
+        </div>
+      </div>
+
+      <div class="legend-center">
+        <div class="toggle-group">
+          <span class="toggle-label">Enviar mensagem por</span>
+          <div class="whatsapp-mode-toggle">
+            <button
+              class="toggle-btn"
+              type="button"
+              [class.toggle-btn-active]="!useInternalWhatsapp"
+              (click)="toggleWhatsappMode('official')"
+            >WhatsApp Oficial</button>
+            <button
+              class="toggle-btn"
+              type="button"
+              [class.toggle-btn-active]="useInternalWhatsapp"
+              (click)="toggleWhatsappMode('internal')"
+            >Uniq WhatsApp</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-actions">
+        <span class="last-updated" *ngIf="lastUpdated">
+          Última atualização: {{ lastUpdated }}
+        </span>
+
+        <button class="btn btn-icon" type="button" (click)="openUploadModal()">
+          <span class="material-symbols-outlined btn-icon-symbol">upload</span>
+          <span class="btn-label">Enviar arquivo</span>
+        </button>
+
+        <div class="header-config-wrapper">
+          <button class="btn btn-outline" type="button" (click)="toggleConfigMenu()">
+            <span class="material-symbols-outlined btn-icon-symbol">edit_note</span>
+            <span class="btn-label">Editar mensagens</span>
+          </button>
+
+          <div class="header-config-menu" *ngIf="isConfigMenuOpen">
+            <button class="config-menu-item" type="button" (click)="openTemplateEditor('birthday')">
+              Editar mensagem de parabéns
+            </button>
+            <button class="config-menu-item" type="button" (click)="openTemplateEditor('review')">
+              Editar mensagem de avaliação
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="bulk-action-bar" *ngIf="useInternalWhatsapp">
+      <span class="bulk-count">
+        {{ selectionCount > 0 ? (selectionCount + ' cliente' + (selectionCount === 1 ? '' : 's') + ' selecionado' + (selectionCount === 1 ? '' : 's')) : 'Nenhum cliente selecionado' }}
+      </span>
+      <button class="btn btn-outline bulk-btn" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
+        <span class="action-icon">🎉</span> Enviar Parabéns
+      </button>
+      <button class="btn btn-outline bulk-btn" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
+        <span class="action-icon">⭐</span> Enviar Avaliação
+      </button>
+      <button class="bulk-cancel-btn" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar seleção</button>
+    </div>
+
+    <section class="table-card" *ngIf="sortedClientes.length; else loadingOrEmpty">
+      <app-clientes-table
+        [clientes]="sortedClientes"
+        [sortedColumn]="sortedColumn"
+        [sortDirection]="sortDirection"
+        [isYearEndButtonAvailable]="isYearEndButtonAvailable"
+        [selectionMode]="useInternalWhatsapp"
+        [selectedClienteIds]="selectedClienteIds"
+        [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
+        (sortChange)="changeSort($event)"
+        (birthdayClick)="openWhatsappBirthday($event)"
+        (reviewClick)="openWhatsappReview($event)"
+        (yearEndClick)="openWhatsappYearEnd($event)"
+        (selectionToggle)="toggleClienteSelection($event)"
+      ></app-clientes-table>
+    </section>
+
+    <ng-template #loadingOrEmpty>
+      <section class="loading-state" *ngIf="isLoading">
+        <div class="loading-spinner"></div>
+        <p>Carregando clientes...</p>
+      </section>
+      <section class="empty-state" *ngIf="!isLoading && hasError">
+        <p>Nenhum cliente carregado.</p>
+      </section>
+    </ng-template>
+  </main>
+
+  <app-upload-xml-modal
+    [isOpen]="isUploadModalOpen"
+    [isDraggingFile]="isDraggingFile"
+    [isSavingUpload]="isSavingUpload"
+    [selectedFileName]="selectedFileName"
+    [storedFileName]="storedFileName"
+    [storedSavedAtLabel]="storedSavedAtLabel"
+    [uploadErrorMessage]="uploadErrorMessage"
+    [hasPendingFile]="!!pendingXmlContent"
+    (close)="closeUploadModal()"
+    (fileChosen)="onXmlFileChosen($event)"
+    (save)="saveUploadedFile()"
+    (dragStateChange)="setDraggingState($event)"
+  ></app-upload-xml-modal>
+
+  <app-message-template-modal
+    [isOpen]="isMessageTemplateModalOpen"
+    [isSaving]="isSavingTemplate"
+    [editorConfig]="activeTemplateEditorConfig"
+    [initialTemplate]="activeTemplateText"
+    [initialImageDataUrl]="activeTemplateImageDataUrl"
+    (close)="closeTemplateEditor()"
+    (save)="saveTemplate($event)"
+  ></app-message-template-modal>
+
+  <app-about-modal
+    [isOpen]="isAboutModalOpen"
+    [version]="appVersion"
+    [whatsNew]="appWhatsNew"
+    (close)="closeAboutModal()"
+  ></app-about-modal>
+
+  <div class="app-toast" *ngIf="successToastMessage">
+    <span class="material-symbols-outlined app-toast-icon">check_circle</span>
+    <span>{{ successToastMessage }}</span>
+  </div>
+</div>

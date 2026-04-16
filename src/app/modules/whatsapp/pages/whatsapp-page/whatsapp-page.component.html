@@ -1,0 +1,92 @@
+<div class="whatsapp-page-shell">
+  <header class="app-header">
+    <div class="header-left">
+      <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
+    </div>
+    <div class="header-center">
+      <span class="app-title">WhatsApp</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-outline" type="button" (click)="goToHome()">
+        <span class="material-symbols-outlined btn-icon-symbol">arrow_back</span>
+        <span class="btn-label">Clientes</span>
+      </button>
+
+      <div class="header-config-wrapper">
+        <button
+          class="btn btn-outline header-settings-btn"
+          type="button"
+          (click)="toggleHeaderSettingsMenu()"
+          aria-label="Configurações do app"
+        >
+          <span class="material-symbols-outlined btn-icon-symbol">settings</span>
+        </button>
+
+        <div class="header-config-menu" *ngIf="isHeaderSettingsOpen">
+          <button class="config-menu-item" type="button" (click)="onToggleSessionConnection()" [disabled]="isSessionActionLoading">
+            {{ connectActionLabel }}
+          </button>
+          <button class="config-menu-item" type="button" (click)="openAboutModal()">
+            Ver versão do app
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="whatsapp-page-content">
+    <app-whatsapp-console *ngIf="isSessionReady"></app-whatsapp-console>
+
+    <section class="wa-auth-shell" *ngIf="!isSessionReady">
+      <div class="wa-auth-card">
+        <h2>WhatsApp</h2>
+        <p class="wa-auth-status">{{ sessionStatusText }}</p>
+
+        <div class="wa-auth-loading" *ngIf="isCheckingSession">
+          <div class="loading-spinner"></div>
+        </div>
+
+        <div class="wa-auth-qr" *ngIf="!isCheckingSession && qrCodeDataUrl">
+          <img [src]="qrCodeDataUrl" alt="QR code para conectar WhatsApp" />
+          <p>Abra o WhatsApp no celular e escaneie este código.</p>
+        </div>
+
+        <p class="wa-auth-error" *ngIf="sessionErrorMessage">{{ sessionErrorMessage }}</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" *ngIf="isAboutModalOpen" (click)="closeAboutModal()"></div>
+  <section class="about-modal" *ngIf="isAboutModalOpen" role="dialog" aria-modal="true">
+    <header class="about-modal-header">
+      <h3>Sobre o app</h3>
+      <button class="btn btn-outline" type="button" (click)="closeAboutModal()">Fechar</button>
+    </header>
+
+    <p class="about-modal-version">Versão {{ appVersion }}</p>
+
+    <h4>Novidades</h4>
+    <ul>
+      <li *ngFor="let change of appWhatsNew">{{ change }}</li>
+    </ul>
+  </section>
+
+  <div class="modal-backdrop" *ngIf="isDisconnectModalOpen" (click)="closeDisconnectModal()"></div>
+  <section class="confirm-modal" *ngIf="isDisconnectModalOpen" role="dialog" aria-modal="true">
+    <header class="confirm-modal-header">
+      <h3>Desconectar WhatsApp</h3>
+    </header>
+
+    <p>Tem certeza que deseja desconectar do WhatsApp?</p>
+
+    <footer class="confirm-modal-actions">
+      <button class="btn btn-outline" type="button" (click)="closeDisconnectModal()" [disabled]="isSessionActionLoading">
+        Cancelar
+      </button>
+      <button class="btn btn-icon" type="button" (click)="confirmDisconnect()" [disabled]="isSessionActionLoading">
+        <span class="material-symbols-outlined btn-icon-symbol">link_off</span>
+        <span class="btn-label">{{ isSessionActionLoading ? 'Desconectando...' : 'Desconectar' }}</span>
+      </button>
+    </footer>
+  </section>
+</div>

@@ -1,0 +1,35 @@
+<div class="messages-wrapper" #scrollContainer>
+  <div class="empty-state" *ngIf="!messages.length">
+    Ainda não há mensagens nesta conversa.
+  </div>
+
+  <ng-container *ngFor="let message of messages; trackBy: trackById">
+  <article
+    *ngIf="message.text || isMediaMessage(message)"
+    class="message-bubble"
+    [class.from-me]="message.isFromMe"
+  >
+    <div class="media-block" *ngIf="isMediaMessage(message)">
+      <img class="media-image" *ngIf="isImageMessage(message)" [src]="imagePreviewUrl(message)" alt="Imagem anexada" />
+
+      <div class="media-file" *ngIf="!isImageMessage(message)">
+        <span class="material-symbols-outlined">description</span>
+        <div class="media-file-meta">
+          <strong>{{ mediaLabel(message) }}</strong>
+          <small>{{ mediaFilename(message) }}</small>
+        </div>
+      </div>
+    </div>
+
+    <p *ngIf="message.text">{{ message.text }}</p>
+    <div class="message-footer">
+      <time>{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
+      <span
+        *ngIf="message.isFromMe && getAckIcon(message)"
+        class="material-symbols-outlined ack-icon"
+        [class.ack-read]="isAckRead(message)"
+      >{{ getAckIcon(message) }}</span>
+    </div>
+  </article>
+  </ng-container>
+</div>

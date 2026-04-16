@@ -1,0 +1,20 @@
+<section class="chat-view" *ngIf="contact; else emptyState">
+  <app-chat-header [contact]="contact"></app-chat-header>
+  <app-message-list [messages]="messages"></app-message-list>
+  <app-composer
+    [draftText]="draftText"
+    [isSending]="isSending"
+    [disabled]="disabled || isSyncingMessages"
+    (draftTextChange)="onDraftChange($event)"
+    (sendText)="onSendText($event)"
+    (sendMedia)="onSendMedia($event)"
+  ></app-composer>
+</section>
+
+<ng-template #emptyState>
+  <section class="chat-empty">
+    <span class="material-symbols-outlined">forum</span>
+    <h3>Selecione uma conversa</h3>
+    <p>Escolha um contato na lista ao lado para ver as mensagens.</p>
+  </section>
+</ng-template>

@@ -1,0 +1,250 @@
+﻿:host {
+  @apply flex flex-1 min-h-0;
+}
+
+.conversation-list {
+  @apply flex flex-col min-h-0 w-full;
+  background: #ffffff;
+  border-right: 1px solid #e9edef;
+}
+
+.list-top {
+  @apply flex items-center gap-2;
+  padding: 0.55rem 0.75rem;
+}
+
+.sync-bar {
+  @apply flex items-center border-b;
+  gap: 0.4rem;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.75rem;
+  color: #667781;
+  background: #f0f2f5;
+  border-color: #e9edef;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.sync-dot {
+  @apply flex-shrink-0 rounded-full;
+  width: 6px;
+  height: 6px;
+  background: #25d366;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.filter-chips {
+  @apply flex overflow-x-auto;
+  gap: 0.45rem;
+  padding: 0 0.75rem 0.6rem;
+}
+
+.filter-chip {
+  @apply border cursor-pointer whitespace-nowrap flex items-center;
+  gap: 0.35rem;
+  border-color: #d1d7db;
+  background: #ffffff;
+  color: #41525d;
+  border-radius: 999px;
+  padding: 0.38rem 0.78rem;
+  font-size: 0.85rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.label-dot {
+  @apply inline-block rounded-full flex-shrink-0;
+  width: 8px;
+  height: 8px;
+}
+
+.filter-chip.active {
+  @apply font-medium;
+  background: #d9fdd3;
+  border-color: #8fd38a;
+  color: #0f6a40;
+}
+
+.filter-chip:disabled {
+  @apply opacity-60 cursor-not-allowed;
+}
+
+.search-bar {
+  @apply flex items-center gap-2;
+  padding: 0.55rem 0.75rem;
+  background: #f0f2f5;
+  border-radius: 10px;
+  flex: 1;
+}
+
+.btn-select-mode {
+  @apply inline-flex items-center border cursor-pointer whitespace-nowrap;
+  gap: 0.35rem;
+  border-color: #d1d7db;
+  background: #ffffff;
+  color: #41525d;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.btn-select-mode:hover {
+  background: #f0f2f5;
+}
+
+.btn-select-mode:disabled {
+  @apply opacity-55 cursor-not-allowed;
+}
+
+.btn-select-mode:disabled:hover {
+  background: #ffffff;
+}
+
+.btn-select-mode .material-symbols-outlined {
+  font-size: 1.05rem;
+  color: #54656f;
+}
+
+.selection-checkbox {
+  @apply flex items-center justify-center flex-shrink-0;
+  color: #54656f;
+}
+
+.selection-checkbox .material-symbols-outlined {
+  font-size: 1.4rem;
+}
+
+.conversation-item.selected .selection-checkbox {
+  color: #00a884;
+}
+
+.conversation-item.selected {
+  background: #e8f7f0;
+}
+
+.search-bar .material-symbols-outlined {
+  color: #667781;
+  font-size: 1.2rem;
+}
+
+.search-bar input {
+  @apply flex-1 border-none bg-transparent outline-none;
+  font-size: 0.92rem;
+  color: #111b21;
+}
+
+.list-scroll {
+  @apply flex-1 overflow-y-auto;
+}
+
+.conversation-item {
+  @apply flex items-center w-full border-none bg-transparent cursor-pointer text-left border-b;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-color: #f0f2f5;
+  transition: background 0.12s ease;
+}
+
+.conversation-item:hover {
+  background: #f5f6f6;
+}
+
+.conversation-item:disabled {
+  @apply opacity-80 cursor-not-allowed;
+}
+
+.conversation-item:disabled:hover {
+  background: transparent;
+}
+
+.conversation-item.active {
+  background: #e9f3ef;
+}
+
+@keyframes flash-new-message {
+  0%   { background: #d9fdd3; }
+  60%  { background: #d9fdd3; }
+  100% { background: transparent; }
+}
+
+.conversation-item.flashing {
+  animation: flash-new-message 1.5s ease-out forwards;
+}
+
+.conversation-info {
+  @apply flex flex-col min-w-0 flex-1;
+  gap: 0.28rem;
+}
+
+.conversation-row {
+  @apply flex items-center justify-between min-w-0;
+  gap: 0.55rem;
+}
+
+.conversation-name {
+  @apply font-medium min-w-0 overflow-hidden whitespace-nowrap;
+  color: #111b21;
+  font-size: 0.97rem;
+  text-overflow: ellipsis;
+}
+
+.conversation-time {
+  @apply flex-shrink-0;
+  font-size: 0.74rem;
+  color: #667781;
+}
+
+.meta-row {
+  @apply min-w-0;
+}
+
+.conversation-preview {
+  @apply inline-flex items-center min-w-0 overflow-hidden whitespace-nowrap;
+  gap: 0.2rem;
+  font-size: 0.84rem;
+  color: #667781;
+  text-overflow: ellipsis;
+}
+
+.preview-check {
+  @apply flex-shrink-0;
+  font-size: 1rem;
+}
+
+.preview-check.ack-read {
+  color: #53bdeb;
+}
+
+.preview-check.ack-pending {
+  color: #667781;
+}
+
+.unread-badge {
+  @apply inline-flex items-center justify-center flex-shrink-0 text-white font-semibold;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #25d366;
+  font-size: 0.8rem;
+}
+
+.conversation-item.active .unread-badge {
+  background: #16a34a;
+}
+
+.empty-state {
+  @apply text-center;
+  color: #667781;
+  padding: 2rem 1rem;
+  font-size: 0.9rem;
+}
+
+.loading-area {
+  @apply flex flex-col items-center justify-center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #667781;
+}

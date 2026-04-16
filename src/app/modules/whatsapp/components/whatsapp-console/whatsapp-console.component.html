@@ -1,0 +1,61 @@
+<section class="console-shell">
+  <app-bulk-action-bar
+    *ngIf="isSelectionMode"
+    [selectedCount]="selectedCount"
+    [totalVisible]="totalVisible"
+    [allSelected]="allSelected"
+    [disabled]="isUiBlocked"
+    (selectAll)="onSelectAll()"
+    (clearSelection)="onClearSelection()"
+    (exitMode)="onExitSelectionMode()"
+    (openBulkSend)="onOpenBulkSend()"
+  ></app-bulk-action-bar>
+
+  <header class="console-toolbar" *ngIf="!isSelectionMode && (instances.length > 1 || errorMessage || isLoadingMessages)">
+    <div class="toolbar-status" *ngIf="isLoadingMessages">
+      <span class="material-symbols-outlined">sync</span>
+      <span>Sincronizando conversas...</span>
+    </div>
+
+    <div class="toolbar-right" *ngIf="instances.length > 1">
+      <label for="instance-select">Instância</label>
+      <select
+        id="instance-select"
+        [ngModel]="selectedInstanceName"
+        (ngModelChange)="onInstanceChange($event)"
+        [disabled]="isUiBlocked"
+      >
+        <option *ngFor="let instance of instances" [ngValue]="instance.name">
+          {{ instance.name }}{{ instance.connected ? ' (conectada)' : '' }}
+        </option>
+      </select>
+      <button type="button" class="btn-refresh" (click)="onRefresh()" [disabled]="isUiBlocked" aria-label="Atualizar">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <p class="console-error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+  <div class="console-body" *ngIf="!isInitialLoading; else loading">
+    <app-conversation-list class="console-sidebar" [disabled]="isUiBlocked"></app-conversation-list>
+    <app-chat-view class="console-chat" [disabled]="isUiBlocked"></app-chat-view>
+  </div>
+
+  <ng-template #loading>
+    <div class="console-loading">
+      <div class="loading-spinner"></div>
+      <p>{{ isLoadingContacts ? 'Carregando conversas...' : 'Conectando ao WhatsApp...' }}</p>
+    </div>
+  </ng-template>
+
+  <app-bulk-task-panel></app-bulk-task-panel>
+
+  <app-message-template-modal
+    [isOpen]="isTemplateModalOpen"
+    [editorConfig]="templateEditorConfig"
+    [initialTemplate]="''"
+    (close)="onCloseTemplateModal()"
+    (save)="onSaveTemplate($event)"
+  ></app-message-template-modal>
+</section>

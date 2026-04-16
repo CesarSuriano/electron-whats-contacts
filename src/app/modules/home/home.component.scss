@@ -1,0 +1,156 @@
+$primary-color: #751013;
+$background-color: #ffffff;
+$border-radius-card: 8px;
+
+.app-container {
+  @apply flex flex-col;
+  height: 100vh;
+  background-color: $background-color;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.last-updated {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.legend-row {
+  @apply flex items-center gap-4 mb-2;
+}
+
+.legend-row .legend {
+  @apply flex-1 mb-0;
+}
+
+.legend-center {
+  @apply flex justify-center;
+}
+
+.legend-actions {
+  @apply flex-1 flex items-center flex-wrap justify-end;
+  gap: 0.65rem;
+}
+
+.header-settings-btn {
+  padding-inline: 0.55rem;
+  min-width: 2.1rem;
+}
+
+.header-settings-btn .btn-icon-symbol {
+  margin-right: 0;
+}
+
+.content {
+  @apply flex-1 flex flex-col gap-4 min-h-0;
+  padding: 1.5rem;
+}
+
+.table-card {
+  @apply bg-white overflow-auto flex-1 min-h-0;
+  border-radius: $border-radius-card;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.empty-state {
+  @apply flex items-center justify-center p-8;
+  color: #777;
+}
+
+.toggle-group {
+  @apply flex flex-col items-center;
+  gap: 0.3rem;
+}
+
+.toggle-label {
+  @apply whitespace-nowrap;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.whatsapp-mode-toggle {
+  @apply flex overflow-hidden border;
+  border-color: #ccc;
+  border-radius: 6px;
+}
+
+.toggle-btn {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  background: #fff;
+  color: #555;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+
+  &:hover:not(.toggle-btn-active) {
+    background: #f5f5f5;
+  }
+}
+
+.toggle-btn-active {
+  background: #751013;
+  color: #fff;
+  font-weight: 600;
+}
+
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  background: #f0f7ff;
+  border: 1px solid #c5d9f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.bulk-count {
+  color: #444;
+  font-weight: 500;
+  margin-right: 0.25rem;
+}
+
+.bulk-btn {
+  font-size: 0.85rem;
+}
+
+.bulk-cancel-btn {
+  @apply border-none cursor-pointer underline;
+  background: transparent;
+  color: #666;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+
+  &:hover:not(:disabled) {
+    color: #751013;
+    background: rgba(117, 16, 19, 0.05);
+  }
+
+  &:disabled {
+    @apply opacity-55 cursor-not-allowed;
+  }
+}
+
+@media (max-width: 900px) {
+  .content {
+    padding: 1rem;
+  }
+
+  .legend-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .legend-center {
+    justify-content: flex-start;
+  }
+
+  .legend-actions {
+    justify-content: flex-start;
+  }
+}

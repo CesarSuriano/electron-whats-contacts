@@ -1,0 +1,144 @@
+<ng-container *ngIf="isOpen && editorConfig as config">
+	<div class="modal-backdrop" (click)="close.emit()"></div>
+	<section class="message-template-modal" aria-modal="true" role="dialog">
+		<div class="message-template-modal-loading" *ngIf="isSaving">
+			<div class="loading-spinner"></div>
+			<p>Salvando mensagem...</p>
+		</div>
+
+		<header class="upload-modal-header">
+			<div>
+				<h2>{{ config.title }}</h2>
+				<p>{{ config.description }}</p>
+			</div>
+			<button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+				<span class="material-symbols-outlined">close</span>
+			</button>
+		</header>
+
+		<section class="message-template-toolbar">
+			<button class="btn btn-outline" type="button" (click)="undo()" [disabled]="!canUndo">
+				<span class="material-symbols-outlined toolbar-icon">undo</span>
+				Desfazer
+			</button>
+			<button class="btn btn-outline" type="button" (click)="redo()" [disabled]="!canRedo">
+				<span class="material-symbols-outlined toolbar-icon">redo</span>
+				Refazer
+			</button>
+			<button class="btn btn-outline" type="button" (click)="applyBold()">
+				<span class="material-symbols-outlined toolbar-icon">format_bold</span>
+				Negrito
+			</button>
+			<button class="btn btn-outline" type="button" (click)="applyItalic()">
+				<span class="material-symbols-outlined toolbar-icon">format_italic</span>
+				Itálico
+			</button>
+			<button class="btn btn-outline" type="button" (click)="insertNameToken()">
+				<span class="material-symbols-outlined toolbar-icon">badge</span>
+				Nome do cliente
+			</button>
+			<button class="btn btn-outline" type="button" (click)="insertLineBreak()">
+				<span class="material-symbols-outlined toolbar-icon">keyboard_return</span>
+				Quebra de linha
+			</button>
+		</section>
+
+		<div class="tabs-image-row">
+		  <nav class="message-template-tabs" aria-label="Modo de edição da mensagem">
+		    <button
+		      class="message-template-tab"
+		      type="button"
+		      [class.active]="activeTab === 'edit'"
+		      (click)="selectTab('edit')"
+		    >
+		      Edição
+		    </button>
+		    <button
+		      class="message-template-tab"
+		      type="button"
+		      [class.active]="activeTab === 'preview'"
+		      (click)="selectTab('preview')"
+		    >
+		      Pré-visualização
+		    </button>
+		  </nav>
+
+		  <div class="template-image-section">
+		    <input type="file" accept="image/*" #imageInput style="display:none" (change)="onImageSelected($event)">
+		    <div class="template-image-preview" *ngIf="selectedImageDataUrl">
+		      <img [src]="selectedImageDataUrl" alt="Imagem da mensagem" class="template-image-thumb">
+		      <button type="button" class="template-image-remove" (click)="clearImage()" aria-label="Remover imagem">
+		        <span class="material-symbols-outlined">close</span>
+		      </button>
+		    </div>
+		    <button *ngIf="!selectedImageDataUrl" type="button" class="btn btn-outline" (click)="chooseImage()">
+		      <span class="material-symbols-outlined toolbar-icon">image</span>
+		      Adicionar imagem
+		    </button>
+		  </div>
+		</div>
+
+		<ng-container *ngIf="activeTab === 'edit'; else previewTab">
+			<textarea
+				#templateTextarea
+				class="message-template-textarea"
+				[(ngModel)]="editableTemplate"
+				(ngModelChange)="onTemplateInput()"
+				(keydown)="onTextareaKeydown($event)"
+				placeholder="Digite a mensagem aqui"
+			></textarea>
+		</ng-container>
+
+		<ng-template #previewTab>
+			<section class="message-template-preview" [innerHTML]="previewHtml"></section>
+		</ng-template>
+
+		<section class="message-template-emojis">
+			<div class="message-template-emojis-header">
+				<strong>Emojis rápidos</strong>
+				<button class="btn btn-outline" type="button" (click)="toggleEmojiPicker()">
+					{{ isEmojiPickerExpanded ? 'Menos opções' : 'Mais opções' }}
+				</button>
+			</div>
+			<div class="message-template-emoji-grid">
+				<button
+					*ngFor="let emoji of quickAccessEmojis"
+					class="emoji-btn"
+					type="button"
+					(click)="insertEmoji(emoji)"
+				>
+					{{ emoji }}
+				</button>
+			</div>
+			<div class="message-template-emoji-grid expanded" *ngIf="isEmojiPickerExpanded">
+				<button
+					*ngFor="let emoji of additionalEmojiOptions"
+					class="emoji-btn"
+					type="button"
+					(click)="insertEmoji(emoji)"
+				>
+					{{ emoji }}
+				</button>
+				<button class="emoji-btn emoji-btn-add" type="button" (click)="addCustomEmoji()" aria-label="Adicionar emoji personalizado">
+					+
+				</button>
+			</div>
+		</section>
+
+		<section class="message-template-help">
+			<p><strong>Ajuda</strong></p>
+			<p>Negrito: <strong>*texto*</strong></p>
+			<p>Itálico: <strong>_texto_</strong></p>
+			<p>Nome do cliente: <strong>{{ '{nome}' }}</strong></p>
+			<p>Quebra de linha: <strong>\n</strong></p>
+		</section>
+
+		<footer class="upload-modal-footer">
+			<button class="btn btn-outline" type="button" (click)="close.emit()">Cancelar</button>
+			<button class="btn btn-icon" type="button" (click)="saveTemplate()" [disabled]="isSaving">
+				<span class="material-symbols-outlined btn-icon-symbol">save</span>
+				<span class="btn-label">Salvar mensagem</span>
+			</button>
+		</footer>
+	</section>
+</ng-container>

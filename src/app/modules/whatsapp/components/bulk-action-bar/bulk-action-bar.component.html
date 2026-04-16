@@ -1,0 +1,25 @@
+<div class="bulk-bar">
+  <button type="button" class="btn-icon" [disabled]="disabled" (click)="exitMode.emit()" aria-label="Sair da seleção">
+    <span class="material-symbols-outlined">close</span>
+  </button>
+
+  <span class="bulk-count">{{ selectedCount }} {{ selectedCount === 1 ? 'selecionada' : 'selecionadas' }}</span>
+
+  <div class="bulk-actions">
+    <button type="button" class="btn-link" *ngIf="!allSelected" [disabled]="disabled" (click)="selectAll.emit()">
+      Selecionar todas
+    </button>
+    <button type="button" class="btn-link" *ngIf="selectedCount > 0" [disabled]="disabled" (click)="clearSelection.emit()">
+      Limpar
+    </button>
+    <button
+      type="button"
+      class="btn-primary"
+      [disabled]="disabled || selectedCount === 0"
+      (click)="openBulkSend.emit()"
+    >
+      <span class="material-symbols-outlined">send</span>
+      Enviar mensagens
+    </button>
+  </div>
+</div>

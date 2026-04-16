@@ -1,0 +1,30 @@
+<ng-container *ngIf="isOpen">
+	<div class="modal-backdrop" (click)="close.emit()"></div>
+	<section class="about-modal" aria-modal="true" role="dialog">
+		<header class="upload-modal-header">
+			<div>
+				<h2>Sobre</h2>
+				<p>Informações da versão atual do sistema.</p>
+			</div>
+			<button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+				<span class="material-symbols-outlined">close</span>
+			</button>
+		</header>
+
+		<section class="about-modal-content">
+			<p class="about-version-label">Versão atual</p>
+			<p class="about-version-value">{{ version }}</p>
+
+			<div class="about-whats-new">
+				<h3>O que tem de novo</h3>
+				<ul>
+					<li *ngFor="let item of whatsNew">{{ item }}</li>
+				</ul>
+			</div>
+		</section>
+
+		<footer class="upload-modal-footer">
+			<button class="btn btn-outline" type="button" (click)="close.emit()">Fechar</button>
+		</footer>
+	</section>
+</ng-container>

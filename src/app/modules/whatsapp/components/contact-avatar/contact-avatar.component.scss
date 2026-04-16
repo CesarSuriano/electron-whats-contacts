@@ -1,0 +1,28 @@
+.avatar {
+  @apply flex items-center justify-center overflow-hidden flex-shrink-0 text-white font-semibold select-none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3d8b6e 0%, #2a5f4e 100%);
+  font-size: 1rem;
+}
+
+.avatar img {
+  @apply w-full h-full object-cover block;
+}
+
+.avatar-initials {
+  letter-spacing: 0.02em;
+}
+
+.avatar.avatar-sm {
+  width: 36px;
+  height: 36px;
+  font-size: 0.82rem;
+}
+
+.avatar.avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 1.25rem;
+}

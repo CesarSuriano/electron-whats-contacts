@@ -1,0 +1,71 @@
+.bulk-bar {
+  @apply flex items-center gap-3 border-b;
+  padding: 0.55rem 0.75rem;
+  background: #00a884;
+  color: #ffffff;
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+.btn-icon {
+  @apply flex items-center justify-center border-none cursor-pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  color: #ffffff;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-icon:disabled,
+.btn-link:disabled,
+.btn-primary:disabled {
+  @apply opacity-55 cursor-not-allowed;
+}
+
+.bulk-count {
+  @apply font-medium flex-1;
+  font-size: 0.95rem;
+}
+
+.bulk-actions {
+  @apply inline-flex items-center;
+  gap: 0.55rem;
+}
+
+.btn-link {
+  @apply border-none cursor-pointer underline;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+}
+
+.btn-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-link:disabled:hover {
+  background: transparent;
+}
+
+.btn-primary {
+  @apply inline-flex items-center border-none font-medium cursor-pointer;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 18px;
+  background: #ffffff;
+  color: #00755a;
+  font-size: 0.9rem;
+}
+
+.btn-primary:disabled {
+  @apply opacity-55 cursor-not-allowed;
+}
+
+.btn-primary .material-symbols-outlined {
+  font-size: 1.1rem;
+}

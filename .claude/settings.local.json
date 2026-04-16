@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx ng *)",
+      "Bash(awk -F/ '{print $1\"/\"$2}')",
+      "Bash(awk -F/ '{if\\($1==\"whatsapp-webjs-bridge\"\\) print $2; else print $1}')",
+      "Bash(node -e \"const rx = require\\('rxjs'\\); console.log\\(typeof rx.debounceTime, typeof rx.distinctUntilChanged\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(grep -E \"\\\\.\\(ts|html\\)$\")",
+      "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); print\\(json.dumps\\({**p.get\\('dependencies',{}\\), **p.get\\('devDependencies',{}\\)}, indent=2\\)\\)\")",
+      "Bash(node whatsapp-webjs-bridge/server.test.mjs)",
+      "WebFetch(domain:docs.wwebjs.dev)",
+      "Bash(node --check server.js)",
+      "Bash(node --check lib/events.js)",
+      "Bash(node --check lib/contacts.js)",
+      "Bash(node --check lib/utils.js)",
+      "Bash(node --check lib/jid.js)"
+    ]
+  }
+}

@@ -1,0 +1,172 @@
+.whatsapp-page-shell {
+  @apply flex flex-col bg-white;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.app-header {
+  @apply z-10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.header-settings-btn {
+  padding-inline: 0.55rem;
+  min-width: 2.1rem;
+}
+
+.header-settings-btn .btn-icon-symbol {
+  margin-right: 0;
+}
+
+.whatsapp-page-content {
+  @apply flex-1 min-h-0 flex p-0 w-full;
+}
+
+.whatsapp-page-content app-whatsapp-console {
+  @apply flex flex-1 min-w-0 min-h-0;
+}
+
+.wa-auth-shell {
+  @apply flex-1 flex items-center justify-center p-5;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(15, 93, 73, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 82%, rgba(117, 16, 19, 0.07), transparent 34%),
+    #f6fbfc;
+}
+
+.wa-auth-card {
+  @apply flex flex-col items-center gap-3 text-center border;
+  width: min(460px, calc(100vw - 2rem));
+  border-radius: 18px;
+  padding: 1.25rem;
+  background: #ffffff;
+  border-color: #dbe9ec;
+  box-shadow: 0 16px 40px rgba(20, 35, 39, 0.12);
+}
+
+.wa-auth-card h2 {
+  @apply m-0;
+  color: #19353a;
+}
+
+.wa-auth-status {
+  @apply m-0;
+  color: #48656b;
+}
+
+.wa-auth-loading {
+  padding: 0.5rem 0;
+}
+
+.wa-auth-qr {
+  @apply flex flex-col items-center;
+  gap: 0.55rem;
+}
+
+.wa-auth-qr img {
+  @apply bg-white border max-w-full;
+  width: 280px;
+  height: 280px;
+  border-radius: 12px;
+  border-color: #d3e3e7;
+}
+
+.wa-auth-qr p {
+  @apply m-0;
+  color: #5d797f;
+  font-size: 0.9rem;
+}
+
+.wa-auth-error {
+  margin: 0;
+  color: #b42318;
+  background: #fff2f0;
+  border: 1px solid #ffd3ce;
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+}
+
+.about-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100vh - 3rem);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+  z-index: 21;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  overflow: auto;
+}
+
+.about-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.about-modal-header h3 {
+  margin: 0;
+  color: #751013;
+}
+
+.about-modal-version {
+  margin: 0;
+  font-weight: 600;
+  color: #4c5f64;
+}
+
+.about-modal h4 {
+  margin: 0;
+  color: #19353a;
+}
+
+.about-modal ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #33484d;
+}
+
+.header-config-menu .config-menu-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.confirm-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 2rem));
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+  z-index: 21;
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.confirm-modal-header h3 {
+  margin: 0;
+  color: #751013;
+}
+
+.confirm-modal p {
+  margin: 0;
+  color: #354b51;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}

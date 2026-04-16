@@ -1,0 +1,65 @@
+<ng-container *ngIf="isOpen">
+	<div class="modal-backdrop" (click)="close.emit()"></div>
+	<section class="upload-modal" aria-modal="true" role="dialog">
+		<div class="upload-modal-loading" *ngIf="isSavingUpload">
+			<div class="loading-spinner"></div>
+			<p>Atualizando lista de clientes...</p>
+		</div>
+
+		<header class="upload-modal-header">
+			<div>
+				<h2>Enviar arquivo XML</h2>
+				<p>Arraste e solte um XML em qualquer lugar da tela ou selecione um arquivo para atualizar a lista de clientes.</p>
+			</div>
+			<button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+				<span class="material-symbols-outlined">close</span>
+			</button>
+		</header>
+
+		<div
+			class="upload-dropzone"
+			[class.dragging]="isDraggingFile"
+			(drop)="onFileDrop($event)"
+			(dragover)="onDragOver($event)"
+			(dragleave)="onDragLeave($event)"
+		>
+			<span class="material-symbols-outlined upload-dropzone-icon">upload_file</span>
+			<strong>Solte o arquivo XML aqui</strong>
+			<span>ou</span>
+			<button class="btn btn-outline" type="button" (click)="openFilePicker()">
+				Selecionar arquivo
+			</button>
+			<input
+				#xmlFileInput
+				type="file"
+				accept=".xml,text/xml,application/xml"
+				class="hidden-file-input"
+				(change)="onFileSelected($event)"
+			/>
+		</div>
+
+		<section class="upload-summary" *ngIf="selectedFileName || storedFileName">
+			<p *ngIf="selectedFileName">
+				Arquivo selecionado: <strong>{{ selectedFileName }}</strong>
+			</p>
+			<p *ngIf="storedFileName">
+				Arquivo em uso atualmente: <strong>{{ storedFileName }}</strong>
+			</p>
+			<p *ngIf="storedSavedAtLabel">
+				Última atualização: <strong>{{ storedSavedAtLabel }}</strong>
+			</p>
+		</section>
+
+		<p class="upload-error" *ngIf="uploadErrorMessage">{{ uploadErrorMessage }}</p>
+
+		<footer class="upload-modal-footer">
+			<button class="btn btn-outline" type="button" (click)="close.emit()">
+				Cancelar
+			</button>
+			<button class="btn btn-icon" type="button" (click)="save.emit()" [disabled]="!hasPendingFile || isSavingUpload">
+				<span class="material-symbols-outlined btn-icon-symbol">save</span>
+				<span class="btn-label">{{ isSavingUpload ? 'Salvando...' : 'Salvar XML' }}</span>
+			</button>
+		</footer>
+	</section>
+</ng-container>

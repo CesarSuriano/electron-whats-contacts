@@ -1,0 +1,67 @@
+<div class="composer">
+  <div class="attachment-preview" *ngIf="selectedFile">
+    <img *ngIf="filePreviewUrl" [src]="filePreviewUrl" alt="Pré-visualização" />
+    <div class="document-badge" *ngIf="!filePreviewUrl">
+      <span class="material-symbols-outlined">description</span>
+    </div>
+
+    <div class="attachment-meta">
+      <span class="attachment-name">{{ selectedFile.name }}</span>
+      <span class="attachment-size">{{ fileSizeLabel }}</span>
+    </div>
+
+    <button type="button" class="btn-clear-attachment" (click)="clearAttachment()" aria-label="Remover anexo">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+
+  <p class="attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>
+
+  <div class="composer-row">
+    <div class="attach-wrapper">
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="toggleAttachMenu()"
+        [disabled]="disabled || isSending"
+        aria-label="Anexar arquivo"
+      >
+        <span class="material-symbols-outlined">attach_file</span>
+      </button>
+
+      <div class="attach-menu" *ngIf="isAttachMenuOpen">
+        <button type="button" [disabled]="disabled || isSending" (click)="chooseFile('image')">
+          <span class="material-symbols-outlined">image</span>
+          Imagem
+        </button>
+        <button type="button" [disabled]="disabled || isSending" (click)="chooseFile('document')">
+          <span class="material-symbols-outlined">description</span>
+          Documento
+        </button>
+      </div>
+
+      <input #fileInput type="file" hidden (change)="onFileSelected($event)" />
+    </div>
+
+    <textarea
+      #textarea
+      [ngModel]="draftText"
+      (ngModelChange)="onTextChange($event)"
+      (keydown)="onTextareaKeydown($event)"
+      (paste)="onPaste($event)"
+      [placeholder]="selectedFile ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem'"
+      [disabled]="disabled"
+      rows="1"
+    ></textarea>
+
+    <button
+      type="button"
+      class="btn-icon btn-send"
+      [disabled]="!hasContent || isSending || disabled"
+      (click)="onSubmit()"
+      aria-label="Enviar"
+    >
+      <span class="material-symbols-outlined">send</span>
+    </button>
+  </div>
+</div>

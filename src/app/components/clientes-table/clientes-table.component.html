@@ -1,0 +1,78 @@
+<table class="clients-table">
+	<thead>
+		<tr>
+			<th class="checkbox-column" *ngIf="selectionMode"></th>
+			<th (click)="requestSort('nome')">
+				Nome
+				<span class="sort-arrow">{{ getSortArrow('nome') }}</span>
+			</th>
+			<th (click)="requestSort('cpf')">
+				CPF
+				<span class="sort-arrow">{{ getSortArrow('cpf') }}</span>
+			</th>
+			<th (click)="requestSort('telefone')">
+				Telefone
+				<span class="sort-arrow">{{ getSortArrow('telefone') }}</span>
+			</th>
+			<th (click)="requestSort('dataCadastro')">
+				Data de cadastro
+				<span class="sort-arrow">{{ getSortArrow('dataCadastro') }}</span>
+			</th>
+			<th (click)="requestSort('dataNascimento')">
+				Data de aniversário
+				<span class="sort-arrow">{{ getSortArrow('dataNascimento') }}</span>
+			</th>
+			<th class="actions-column">Ações</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr
+			*ngFor="let cliente of clientes; trackBy: trackByCliente"
+			[ngClass]="getRowClass(cliente)"
+			[class.row-selected]="selectionMode && selectedClienteIds.has(cliente.id)"
+			(click)="selectionMode ? selectionToggle.emit(cliente.id) : null"
+			[class.row-selectable]="selectionMode"
+		>
+			<td class="checkbox-column" *ngIf="selectionMode" (click)="$event.stopPropagation(); selectionToggle.emit(cliente.id)">
+				<span class="material-symbols-outlined checkbox-icon">
+					{{ selectedClienteIds.has(cliente.id) ? 'check_box' : 'check_box_outline_blank' }}
+				</span>
+			</td>
+			<td>{{ cliente.nome }}</td>
+			<td>{{ cliente.cpf }}</td>
+			<td>{{ cliente.telefone }}</td>
+			<td>{{ cliente.dataCadastro }}</td>
+			<td>{{ cliente.dataNascimento }}</td>
+			<td class="actions-cell">
+				<button
+					class="btn btn-outline"
+					type="button"
+					[disabled]="actionsDisabled"
+					(click)="birthdayClick.emit(cliente)"
+				>
+					<span class="action-icon">🎉</span>
+					<span>Parabéns</span>
+				</button>
+				<button
+					class="btn btn-outline"
+					type="button"
+					[disabled]="actionsDisabled"
+					(click)="reviewClick.emit(cliente)"
+				>
+					<span class="action-icon">⭐</span>
+					<span>Avaliação</span>
+				</button>
+				<button
+					*ngIf="isYearEndButtonAvailable"
+					class="btn btn-outline"
+					type="button"
+					[disabled]="actionsDisabled"
+					(click)="yearEndClick.emit(cliente)"
+				>
+					<span class="action-icon">🎄</span>
+					<span>Natal</span>
+				</button>
+			</td>
+		</tr>
+	</tbody>
+</table>

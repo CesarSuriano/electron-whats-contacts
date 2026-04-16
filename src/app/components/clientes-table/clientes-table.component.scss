@@ -1,0 +1,101 @@
+.clients-table {
+  @apply w-full border-collapse;
+  table-layout: fixed;
+}
+
+.clients-table thead {
+  background-color: #751013;
+  color: #fff;
+}
+
+.clients-table thead th {
+  @apply sticky top-0 z-10;
+  background-color: #751013;
+}
+
+.clients-table th,
+.clients-table td {
+  @apply text-left;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.clients-table th {
+  @apply cursor-pointer select-none whitespace-nowrap;
+}
+
+.clients-table th.actions-column {
+  @apply text-center cursor-default;
+  width: 350px;
+}
+
+.clients-table th.checkbox-column,
+.clients-table td.checkbox-column {
+  @apply cursor-default;
+  width: 2.5rem;
+  padding: 0.5rem 0.25rem 0.5rem 0.75rem;
+}
+
+.row-selectable {
+  @apply cursor-pointer;
+}
+
+.row-selected {
+  background-color: #f0f7ff !important;
+}
+
+.checkbox-icon {
+  @apply align-middle;
+  font-size: 1.35rem;
+  color: #54656f;
+}
+
+.row-selected .checkbox-icon {
+  color: #751013;
+}
+
+.clients-table tbody tr {
+  @apply border-t;
+  border-color: #eee;
+  transition: box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.clients-table tbody tr:nth-child(even):not(.row-birthday-today):not(.row-birthday-upcoming) {
+  background-color: #f7f7f7;
+}
+
+.clients-table tbody tr:hover {
+  @apply relative z-10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  filter: brightness(0.97);
+}
+
+.row-birthday-today {
+  background-color: #e5f7e5;
+}
+
+.row-birthday-upcoming {
+  background-color: #fff4d8;
+}
+
+.actions-cell {
+  @apply flex justify-center flex-wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1300px) {
+  .actions-cell {
+    @apply flex-col items-center justify-center w-full;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .clients-table th:nth-child(2),
+  .clients-table td:nth-child(2),
+  .clients-table th:nth-child(3),
+  .clients-table td:nth-child(3) {
+    @apply hidden;
+  }
+}

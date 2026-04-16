@@ -1,0 +1,66 @@
+<aside class="bulk-panel" *ngIf="queue" [class.minimized]="isMinimized">
+  <header class="bulk-panel-header">
+    <div class="bulk-panel-title">
+      <span class="material-symbols-outlined">auto_awesome</span>
+      <div>
+        <strong>Envio em massa</strong>
+        <span class="bulk-panel-progress">{{ progress.done }}/{{ progress.total }} · {{ progress.percent }}%</span>
+      </div>
+    </div>
+
+    <div class="bulk-panel-header-actions">
+      <button type="button" class="btn-icon" (click)="toggleMinimize()" [attr.aria-label]="isMinimized ? 'Expandir' : 'Minimizar'">
+        <span class="material-symbols-outlined">{{ isMinimized ? 'expand_less' : 'expand_more' }}</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="bulk-panel-progress-bar">
+    <div class="bulk-panel-progress-fill" [style.width.%]="progress.percent"></div>
+  </div>
+
+  <div class="bulk-panel-body" *ngIf="!isMinimized">
+    <p class="bulk-panel-hint" *ngIf="!queue.isPaused">
+      <span class="material-symbols-outlined">info</span>
+      Abra o contato atual, revise a mensagem e clique em enviar. O próximo será aberto automaticamente.
+    </p>
+
+    <p class="bulk-panel-hint paused" *ngIf="queue.isPaused">
+      <span class="material-symbols-outlined">pause_circle</span>
+      Envio pausado. Retome quando quiser continuar.
+    </p>
+
+    <ul class="bulk-panel-list">
+      <li
+        *ngFor="let item of queue.items; trackBy: trackByJid"
+        class="bulk-item"
+        [class.status-current]="item.status === 'current'"
+        [class.status-done]="item.status === 'done'"
+        [class.status-skipped]="item.status === 'skipped'"
+        [class.status-error]="item.status === 'error'"
+      >
+        <span class="material-symbols-outlined bulk-item-icon">{{ statusIcon(item) }}</span>
+        <span class="bulk-item-name">{{ item.name }}</span>
+      </li>
+    </ul>
+
+    <footer class="bulk-panel-controls">
+      <button type="button" class="btn-control" *ngIf="!queue.isPaused" (click)="pause()">
+        <span class="material-symbols-outlined">pause</span>
+        Pausar
+      </button>
+      <button type="button" class="btn-control" *ngIf="queue.isPaused" (click)="resume()">
+        <span class="material-symbols-outlined">play_arrow</span>
+        Retomar
+      </button>
+      <button type="button" class="btn-control" (click)="skip()" [disabled]="queue.isPaused">
+        <span class="material-symbols-outlined">skip_next</span>
+        Pular
+      </button>
+      <button type="button" class="btn-control danger" (click)="cancel()">
+        <span class="material-symbols-outlined">stop_circle</span>
+        Cancelar
+      </button>
+    </footer>
+  </div>
+</aside>
