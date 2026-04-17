@@ -13,6 +13,7 @@ import {
   isBlankMessage,
   readMessageTimestampSeconds,
   readMessageText,
+  readMessageInlineImageDataUrl,
   toIsoFromUnixTimestamp
 } from './lib/utils.js';
 import { init as initJid, resolveIsFromMe, getSerializedMessageId, isSelfJid } from './lib/jid.js';
@@ -445,13 +446,19 @@ app.get('/api/whatsapp/chats/:jid/messages', async (req, res) => {
     const eventsHistory = (history || [])
       .filter(message => !message.isNotification && !isBlankMessage(message))
       .map(message => {
-        const mediaMimetype = typeof message?._data?.mimetype === 'string' ? message._data.mimetype : '';
+        const inlineImageDataUrl = readMessageInlineImageDataUrl(message);
+        const mediaMimetypeFromData = typeof message?._data?.mimetype === 'string' ? message._data.mimetype.trim() : '';
+        const mediaMimetypeFromInline = inlineImageDataUrl
+          ? (inlineImageDataUrl.match(/^data:([^;,]+)/i)?.[1] || '')
+          : '';
+        const mediaMimetype = mediaMimetypeFromData || mediaMimetypeFromInline;
         const mediaFilename = typeof message?._data?.filename === 'string' ? message._data.filename : '';
         const timestamp = readMessageTimestampSeconds(message);
         const receivedAt = timestamp > 0
           ? new Date(timestamp * 1000).toISOString()
           : new Date().toISOString();
         const serializedId = getSerializedMessageId(message) || randomUUID();
+        const hasMedia = Boolean(message.hasMedia) || Boolean(mediaMimetype) || Boolean(inlineImageDataUrl);
 
         const ack = typeof message.ack === 'number' ? message.ack : null;
         return {
@@ -467,10 +474,10 @@ app.get('/api/whatsapp/chats/:jid/messages', async (req, res) => {
             id: serializedId,
             timestamp,
             type: message.type || '',
-            hasMedia: Boolean(message.hasMedia),
+            hasMedia,
             mediaMimetype,
             mediaFilename,
-            mediaDataUrl: null,
+            mediaDataUrl: inlineImageDataUrl,
             ack
           }
         };

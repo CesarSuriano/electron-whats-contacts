@@ -110,6 +110,45 @@ describe('ConversationListComponent', () => {
     expect(component.isSelectionMode).toBeTrue();
   });
 
+  it('formats data URL preview as media label', () => {
+    const contact: WhatsappContact = {
+      ...makeContact('a@c.us', 'Ana'),
+      lastMessagePreview: 'data:image/png;base64,abc'
+    };
+
+    expect(component.formatLastMessagePreview(contact)).toBe('Foto');
+  });
+
+  it('formats raw JPEG base64 preview as media label', () => {
+    const contact: WhatsappContact = {
+      ...makeContact('a@c.us', 'Ana'),
+      lastMessagePreview: '/9j/' + 'A'.repeat(320)
+    };
+
+    expect(component.formatLastMessagePreview(contact)).toBe('Foto');
+  });
+
+  it('returns image icon for image media preview', () => {
+    const contact: WhatsappContact = {
+      ...makeContact('a@c.us', 'Ana'),
+      lastMessagePreview: 'Foto',
+      lastMessageType: 'image',
+      lastMessageHasMedia: true,
+      lastMessageMediaMimetype: 'image/jpeg'
+    };
+
+    expect(component.getPreviewMediaIcon(contact)).toBe('image');
+  });
+
+  it('does not return media icon for plain text preview', () => {
+    const contact: WhatsappContact = {
+      ...makeContact('a@c.us', 'Ana'),
+      lastMessagePreview: 'Oi, tudo bem?'
+    };
+
+    expect(component.getPreviewMediaIcon(contact)).toBe('');
+  });
+
   it('isFlashing returns false for non-flashing jid', () => {
     expect(component.isFlashing('unknown@c.us')).toBeFalse();
   });

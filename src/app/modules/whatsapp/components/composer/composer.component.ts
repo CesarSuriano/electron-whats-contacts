@@ -55,6 +55,7 @@ export class ComposerComponent {
       this.clearPreview();
       this.selectedFile = new File([blob], filename, { type: mime });
       this.filePreviewUrl = dataUrl;
+      this.focus();
     } catch {
       // ignore conversion errors
     }
@@ -107,6 +108,7 @@ export class ComposerComponent {
         const ext = item.type.split('/')[1] || 'png';
         this.selectedFile = new File([file], `imagem-colada.${ext}`, { type: item.type });
         this.filePreviewUrl = URL.createObjectURL(file);
+        this.focus();
         return;
       }
     }
@@ -173,6 +175,8 @@ export class ComposerComponent {
     if (file.type.startsWith('image/')) {
       this.filePreviewUrl = URL.createObjectURL(file);
     }
+
+    this.focus();
   }
 
   clearAttachment(): void {

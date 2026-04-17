@@ -213,6 +213,12 @@
   font-size: 1rem;
 }
 
+.preview-media-icon {
+  @apply flex-shrink-0;
+  font-size: 1rem;
+  color: #667781;
+}
+
 .preview-check.ack-read {
   color: #53bdeb;
 }

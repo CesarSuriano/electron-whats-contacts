@@ -11,6 +11,126 @@ export function normalizePhone(raw) {
   return userPart.replace(/\D/g, '');
 }
 
+const DATA_URL_PATTERN = /^data:[^,]+,/i;
+const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+const RAW_IMAGE_BASE64_SIGNATURE_PATTERN = /^(\/9j\/|iVBORw0KGgo|R0lGOD|UklGR)/;
+
+function isDataUrl(value) {
+  return typeof value === 'string' && DATA_URL_PATTERN.test(value.trim());
+}
+
+function normalizeBase64Candidate(value) {
+  return typeof value === 'string' ? value.replace(/\s+/g, '') : '';
+}
+
+function isLikelyRawImageBase64(value) {
+  const normalized = normalizeBase64Candidate(value);
+  if (normalized.length < 256) {
+    return false;
+  }
+
+  // Base64 payloads cannot have remainder 1 when divided by 4.
+  if (normalized.length % 4 === 1) {
+    return false;
+  }
+
+  if (!BASE64_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  return RAW_IMAGE_BASE64_SIGNATURE_PATTERN.test(normalized);
+}
+
+function readExplicitMessageMediaMimetype(message) {
+  const fromData = typeof message?._data?.mimetype === 'string' ? message._data.mimetype.trim() : '';
+  if (fromData) {
+    return fromData;
+  }
+
+  const direct = typeof message?.mimetype === 'string' ? message.mimetype.trim() : '';
+  if (direct) {
+    return direct;
+  }
+
+  return '';
+}
+
+function isLikelyInlineMediaBody(value, message) {
+  if (!value) {
+    return false;
+  }
+
+  if (isDataUrl(value)) {
+    return true;
+  }
+
+  const mediaMimetype = readExplicitMessageMediaMimetype(message).toLowerCase();
+  const type = typeof message?.type === 'string' ? message.type : '';
+  const imageHint = mediaMimetype.startsWith('image/') || type === 'image' || Boolean(message?.hasMedia);
+
+  return imageHint && isLikelyRawImageBase64(value);
+}
+
+function readMessageMediaMimetype(message) {
+  const explicit = readExplicitMessageMediaMimetype(message);
+  if (explicit) {
+    return explicit;
+  }
+
+  const inlineImageDataUrl = readMessageInlineImageDataUrl(message);
+  if (inlineImageDataUrl) {
+    const match = inlineImageDataUrl.match(/^data:([^;,]+)/i);
+    return match && typeof match[1] === 'string' ? match[1].toLowerCase() : '';
+  }
+
+  return '';
+}
+
+function isLikelyMediaMessage(message) {
+  const type = typeof message?.type === 'string' ? message.type : '';
+  const mediaMimetype = readMessageMediaMimetype(message);
+  return Boolean(message?.hasMedia)
+    || Boolean(mediaMimetype)
+    || type === 'image'
+    || type === 'video'
+    || type === 'audio'
+    || type === 'ptt'
+    || type === 'document'
+    || type === 'sticker';
+}
+
+export function readMessageInlineImageDataUrl(message) {
+  const explicitMimetype = readExplicitMessageMediaMimetype(message).toLowerCase();
+  const type = typeof message?.type === 'string' ? message.type : '';
+  const imageHint = explicitMimetype.startsWith('image/') || type === 'image' || Boolean(message?.hasMedia);
+
+  const candidates = [
+    typeof message?.body === 'string' ? message.body.trim() : '',
+    typeof message?.mediaDataUrl === 'string' ? message.mediaDataUrl.trim() : '',
+    typeof message?._data?.body === 'string' ? message._data.body.trim() : ''
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    if (isDataUrl(candidate)) {
+      if (candidate.toLowerCase().startsWith('data:image/')) {
+        return candidate;
+      }
+      continue;
+    }
+
+    if (imageHint && isLikelyRawImageBase64(candidate)) {
+      const mimetype = explicitMimetype.startsWith('image/') ? explicitMimetype : 'image/jpeg';
+      return `data:${mimetype};base64,${normalizeBase64Candidate(candidate)}`;
+    }
+  }
+
+  return null;
+}
+
 // Retorna o JID alternativo para números brasileiros (9° dígito).
 // Ex: "5511987654321@c.us" ↔ "551187654321@c.us"
 export function brazilianAlternativeJid(jid) {
@@ -41,18 +161,38 @@ export function isBlankMessage(message) {
 // mas recebe um objeto de mensagem individual (não o chat).
 export function resolveMessagePreviewText(message) {
   const body = typeof message?.body === 'string' ? message.body.trim() : '';
-  if (body) return body;
+  const mediaMimetype = readMessageMediaMimetype(message);
+  const hasMedia = isLikelyMediaMessage(message);
+
+  if (body && !(hasMedia && isLikelyInlineMediaBody(body, message))) {
+    return body;
+  }
+
+  const caption = typeof message?.caption === 'string' ? message.caption.trim() : '';
+  if (caption) {
+    return caption;
+  }
 
   const type = typeof message?.type === 'string' ? message.type : '';
+  if (type === 'image' || mediaMimetype.startsWith('image/')) {
+    return 'Foto';
+  }
+  if (type === 'video' || mediaMimetype.startsWith('video/')) {
+    return 'Vídeo';
+  }
+  if (type === 'audio' || type === 'ptt' || mediaMimetype.startsWith('audio/')) {
+    return 'Áudio';
+  }
+
   switch (type) {
-    case 'image':    return 'Foto';
-    case 'video':    return 'Vídeo';
-    case 'audio':
-    case 'ptt':      return 'Áudio';
-    case 'document': return 'Documento';
-    case 'sticker':  return 'Figurinha';
-    case 'revoked':  return 'Mensagem apagada';
-    default:         return message?.hasMedia ? '[mídia]' : '';
+    case 'document':
+      return 'Documento';
+    case 'sticker':
+      return 'Figurinha';
+    case 'revoked':
+      return 'Mensagem apagada';
+    default:
+      return hasMedia ? '[mídia]' : '';
   }
 }
 
@@ -147,12 +287,18 @@ export function readMessageTimestampSeconds(message) {
 }
 
 export function readMessageText(message) {
-  if (typeof message?.body === 'string') {
-    return message.body;
+  const body = typeof message?.body === 'string' ? message.body : '';
+  if (body.trim()) {
+    if (!(isLikelyMediaMessage(message) && isLikelyInlineMediaBody(body, message))) {
+      return body;
+    }
   }
-  if (typeof message?.caption === 'string') {
-    return message.caption;
+
+  const caption = typeof message?.caption === 'string' ? message.caption : '';
+  if (caption.trim()) {
+    return caption;
   }
+
   return '';
 }
 
@@ -206,22 +352,34 @@ export function extractLastMessagePreview(chat) {
   }
 
   const body = typeof lastMessage.body === 'string' ? lastMessage.body.trim() : '';
-  if (body) {
+  const mediaMimetype = readMessageMediaMimetype(lastMessage);
+  const hasMedia = isLikelyMediaMessage(lastMessage);
+
+  if (body && !(hasMedia && isLikelyInlineMediaBody(body, lastMessage))) {
     return body;
+  }
+
+  const caption = typeof lastMessage.caption === 'string' ? lastMessage.caption.trim() : '';
+  if (caption) {
+    return caption;
   }
 
   const type = typeof lastMessage.type === 'string' ? lastMessage.type : '';
   if (lastMessage.isNotification || type === 'e2e_notification' || type === 'notification_template' || type === 'call_log') {
     return '';
   }
+
+  if (type === 'image' || mediaMimetype.startsWith('image/')) {
+    return 'Foto';
+  }
+  if (type === 'video' || mediaMimetype.startsWith('video/')) {
+    return 'Video';
+  }
+  if (type === 'audio' || type === 'ptt' || mediaMimetype.startsWith('audio/')) {
+    return 'Audio';
+  }
+
   switch (type) {
-    case 'image':
-      return 'Foto';
-    case 'video':
-      return 'Video';
-    case 'audio':
-    case 'ptt':
-      return 'Audio';
     case 'document':
       return 'Documento';
     case 'sticker':
@@ -229,6 +387,6 @@ export function extractLastMessagePreview(chat) {
     case 'revoked':
       return 'Mensagem apagada';
     default:
-      return lastMessage.hasMedia ? '[mídia]' : '';
+      return hasMedia ? '[mídia]' : '';
   }
 }

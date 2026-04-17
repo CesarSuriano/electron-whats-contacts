@@ -37,6 +37,31 @@ let lastContactsRefreshAt = 0;
 let lastSeedEventsAt = 0;
 let seedEventsPromise = null;
 
+function resolveLastMessageMetadata(lastMessage, existing = {}) {
+  const lastMessageType = typeof lastMessage?.type === 'string'
+    ? lastMessage.type
+    : (typeof existing.lastMessageType === 'string' ? existing.lastMessageType : '');
+  const lastMessageMediaMimetype = typeof lastMessage?._data?.mimetype === 'string'
+    ? lastMessage._data.mimetype
+    : (typeof existing.lastMessageMediaMimetype === 'string' ? existing.lastMessageMediaMimetype : '');
+  const lastMessageHasMedia = lastMessage
+    ? Boolean(lastMessage?.hasMedia)
+      || Boolean(lastMessageMediaMimetype)
+      || lastMessageType === 'image'
+      || lastMessageType === 'video'
+      || lastMessageType === 'audio'
+      || lastMessageType === 'ptt'
+      || lastMessageType === 'document'
+      || lastMessageType === 'sticker'
+    : Boolean(existing.lastMessageHasMedia);
+
+  return {
+    lastMessageType,
+    lastMessageHasMedia,
+    lastMessageMediaMimetype
+  };
+}
+
 export function getLastContactsRefreshAt() {
   return lastContactsRefreshAt;
 }
@@ -141,6 +166,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageAt: existing.lastMessageAt || null,
         lastMessagePreview: existing.lastMessagePreview || '',
         lastMessageFromMe: Boolean(existing.lastMessageFromMe),
+        lastMessageType: typeof existing.lastMessageType === 'string' ? existing.lastMessageType : '',
+        lastMessageHasMedia: Boolean(existing.lastMessageHasMedia),
+        lastMessageMediaMimetype: typeof existing.lastMessageMediaMimetype === 'string' ? existing.lastMessageMediaMimetype : '',
         unreadCount: typeof existing.unreadCount === 'number' ? existing.unreadCount : 0,
         labels: Array.isArray(existing.labels) ? existing.labels : [],
         isGroup: false
@@ -191,6 +219,11 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       const lastMessageFromMe = chat?.lastMessage
         ? resolveIsFromMe(chat.lastMessage)
         : Boolean(existing.lastMessageFromMe);
+      const {
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype
+      } = resolveLastMessageMetadata(chat?.lastMessage, existing);
 
       contactsByJid.set(canonicalKey, {
         jid: canonicalKey,
@@ -200,6 +233,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageAt,
         lastMessagePreview,
         lastMessageFromMe,
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype,
         unreadCount,
         labels,
         isGroup: false
@@ -226,6 +262,11 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       const lastMessageFromMe = chat?.lastMessage
         ? resolveIsFromMe(chat.lastMessage)
         : Boolean(existing.lastMessageFromMe);
+      const {
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype
+      } = resolveLastMessageMetadata(chat?.lastMessage, existing);
 
       contactsByJid.set(serialized, {
         jid: serialized,
@@ -235,6 +276,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageAt,
         lastMessagePreview,
         lastMessageFromMe,
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype,
         unreadCount,
         labels,
         isGroup: true
@@ -280,12 +324,20 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       const lastMessageFromMe = chat?.lastMessage
         ? resolveIsFromMe(chat.lastMessage)
         : Boolean(existing.lastMessageFromMe);
+      const {
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype
+      } = resolveLastMessageMetadata(chat?.lastMessage, existing);
 
       contactsByJid.set(canonicalKey, {
         ...existing,
         lastMessageAt,
         lastMessagePreview,
         lastMessageFromMe,
+        lastMessageType,
+        lastMessageHasMedia,
+        lastMessageMediaMimetype,
         unreadCount,
         labels
       });

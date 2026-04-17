@@ -192,10 +192,34 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   formatLastMessagePreview(contact: WhatsappContact): string {
     const text = (contact.lastMessagePreview || '').trim();
     if (text) {
+      if (this.isDataUrlPreview(text)) {
+        return this.resolveDataUrlPreviewLabel(text);
+      }
+      if (this.looksLikeRawImageBase64(text)) {
+        return 'Foto';
+      }
       return text;
     }
 
     return this.formatPhone(contact);
+  }
+
+  getPreviewMediaIcon(contact: WhatsappContact): string {
+    const kind = this.resolvePreviewMediaKind(contact);
+    switch (kind) {
+      case 'image':
+        return 'image';
+      case 'video':
+        return 'videocam';
+      case 'audio':
+        return 'mic';
+      case 'sticker':
+        return 'mood';
+      case 'document':
+        return 'description';
+      default:
+        return '';
+    }
   }
 
   formatLastMessageTime(contact: WhatsappContact): string {
@@ -315,7 +339,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       const digits = term.replace(/\D/g, '');
       const name = (contact.name || '').toLowerCase();
       const phone = contact.phone || '';
-      const preview = (contact.lastMessagePreview || '').toLowerCase();
+      const preview = this.formatLastMessagePreview(contact).toLowerCase();
       const labelsJoined = (Array.isArray(contact.labels) ? contact.labels : []).join(' ').toLowerCase();
 
       if (name.includes(term) || preview.includes(term) || labelsJoined.includes(term)) {
@@ -401,6 +425,90 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     }
 
     return decodeURIComponent(this.activeFilter.slice('label:'.length));
+  }
+
+  private isDataUrlPreview(value: string): boolean {
+    return /^data:[^,]+,/i.test(value);
+  }
+
+  private resolvePreviewMediaKind(contact: WhatsappContact): string {
+    const mediaType = typeof contact.lastMessageType === 'string' ? contact.lastMessageType : '';
+    const mediaMimetype = typeof contact.lastMessageMediaMimetype === 'string' ? contact.lastMessageMediaMimetype : '';
+
+    if (mediaType === 'image' || mediaMimetype.startsWith('image/')) {
+      return 'image';
+    }
+    if (mediaType === 'video' || mediaMimetype.startsWith('video/')) {
+      return 'video';
+    }
+    if (mediaType === 'audio' || mediaType === 'ptt' || mediaMimetype.startsWith('audio/')) {
+      return 'audio';
+    }
+    if (mediaType === 'sticker') {
+      return 'sticker';
+    }
+    if (mediaType === 'document' || (Boolean(contact.lastMessageHasMedia) && mediaMimetype.startsWith('application/'))) {
+      return 'document';
+    }
+
+    const previewText = (contact.lastMessagePreview || '').trim();
+    if (this.isDataUrlPreview(previewText) || this.looksLikeRawImageBase64(previewText)) {
+      return 'image';
+    }
+
+    const formattedPreview = this.formatLastMessagePreview(contact);
+    if (formattedPreview === 'Foto') {
+      return 'image';
+    }
+    if (formattedPreview === 'Video') {
+      return 'video';
+    }
+    if (formattedPreview === 'Audio') {
+      return 'audio';
+    }
+    if (formattedPreview === 'Documento') {
+      return 'document';
+    }
+    if (formattedPreview === 'Figurinha') {
+      return 'sticker';
+    }
+
+    return '';
+  }
+
+  private looksLikeRawImageBase64(value: string): boolean {
+    const normalized = this.normalizeBase64(value);
+    if (normalized.length < 256) {
+      return false;
+    }
+
+    if (normalized.length % 4 === 1) {
+      return false;
+    }
+
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+      return false;
+    }
+
+    return /^(\/9j\/|iVBORw0KGgo|R0lGOD|UklGR)/.test(normalized);
+  }
+
+  private normalizeBase64(value: string): string {
+    return value.replace(/\s+/g, '');
+  }
+
+  private resolveDataUrlPreviewLabel(value: string): string {
+    const normalized = value.toLowerCase();
+    if (normalized.startsWith('data:image/')) {
+      return 'Foto';
+    }
+    if (normalized.startsWith('data:video/')) {
+      return 'Video';
+    }
+    if (normalized.startsWith('data:audio/')) {
+      return 'Audio';
+    }
+    return 'Documento';
   }
 
 }

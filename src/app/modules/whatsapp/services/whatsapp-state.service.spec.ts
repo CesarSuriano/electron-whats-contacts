@@ -390,6 +390,77 @@ describe('WhatsappStateService', () => {
     });
   });
 
+  describe('media preview normalization', () => {
+    it('drops data URL text when mapping media events', () => {
+      const mapped = (service as any).mapEventsToMessages([
+        {
+          id: 'evt-1',
+          source: 'history',
+          receivedAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          chatJid: mockContact.jid,
+          phone: mockContact.phone,
+          text: 'data:image/png;base64,abc',
+          payload: {
+            hasMedia: true,
+            mediaMimetype: 'image/png'
+          }
+        }
+      ]);
+
+      expect(mapped.length).toBe(1);
+      expect(mapped[0].text).toBe('');
+    });
+
+    it('converts raw JPEG base64 text into mediaDataUrl and hides text', () => {
+      const rawJpegBase64 = '/9j/' + 'A'.repeat(320);
+      const mapped = (service as any).mapEventsToMessages([
+        {
+          id: 'evt-raw-1',
+          source: 'history',
+          receivedAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          chatJid: mockContact.jid,
+          phone: mockContact.phone,
+          text: rawJpegBase64,
+          payload: {
+            hasMedia: true,
+            mediaMimetype: 'image/jpeg'
+          }
+        }
+      ]);
+
+      expect(mapped.length).toBe(1);
+      expect(mapped[0].text).toBe('');
+      expect(String(mapped[0].payload?.['mediaDataUrl'] || '')).toContain('data:image/jpeg;base64,/9j/');
+    });
+
+    it('uses media placeholder in contact preview when message has media and no text', () => {
+      (service as any).contactsSubject.next([{ ...mockContact, lastMessagePreview: '' }]);
+
+      (service as any).resortContactsByLatestMessage([
+        {
+          id: 'msg-media',
+          contactJid: mockContact.jid,
+          text: '',
+          sentAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          source: 'history',
+          payload: {
+            hasMedia: true,
+            mediaMimetype: 'image/jpeg'
+          }
+        }
+      ]);
+
+      const updated = (service as any).contactsSubject.value as WhatsappContact[];
+      expect(updated[0].lastMessagePreview).toBe('Foto');
+      expect(updated[0].lastMessageType).toBe('image');
+      expect(updated[0].lastMessageHasMedia).toBeTrue();
+      expect(updated[0].lastMessageMediaMimetype).toBe('image/jpeg');
+    });
+  });
+
   describe('requestPhoto', () => {
     it('retries photo fetch after previous null result cooldown expires', fakeAsync(() => {
       (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([

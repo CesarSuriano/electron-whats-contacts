@@ -64,6 +64,23 @@ export class MessageListComponent implements AfterViewChecked {
     return 'Documento';
   }
 
+  messageText(message: WhatsappMessage): string {
+    if (typeof message.text !== 'string') {
+      return '';
+    }
+
+    const trimmed = message.text.trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    if (/^data:[^,]+,/i.test(trimmed) || this.looksLikeRawImageBase64(trimmed)) {
+      return '';
+    }
+
+    return message.text;
+  }
+
   getAckIcon(message: WhatsappMessage): string {
     if (!message.isFromMe) return '';
     const ack = message.ack ?? (message.payload?.['ack'] as number | undefined) ?? null;
@@ -95,7 +112,16 @@ export class MessageListComponent implements AfterViewChecked {
     const filename = typeof payload['mediaFilename'] === 'string' && payload['mediaFilename'].trim().length
       ? payload['mediaFilename']
       : 'Arquivo anexado';
-    const previewUrl = typeof payload['mediaDataUrl'] === 'string' ? payload['mediaDataUrl'] : null;
+    const rawPreview = typeof payload['mediaDataUrl'] === 'string' ? payload['mediaDataUrl'].trim() : '';
+    let previewUrl: string | null = null;
+    if (rawPreview) {
+      if (/^data:[^,]+,/i.test(rawPreview)) {
+        previewUrl = rawPreview;
+      } else if ((mediaMimetype.startsWith('image/') || mediaType === 'image') && this.looksLikeRawImageBase64(rawPreview)) {
+        const mime = mediaMimetype.startsWith('image/') ? mediaMimetype : 'image/jpeg';
+        previewUrl = `data:${mime};base64,${this.normalizeBase64(rawPreview)}`;
+      }
+    }
 
     let kind = 'document';
     if (mediaMimetype.startsWith('image/') || mediaType === 'image') {
@@ -114,5 +140,26 @@ export class MessageListComponent implements AfterViewChecked {
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
+  }
+
+  private looksLikeRawImageBase64(value: string): boolean {
+    const normalized = this.normalizeBase64(value);
+    if (normalized.length < 256) {
+      return false;
+    }
+
+    if (normalized.length % 4 === 1) {
+      return false;
+    }
+
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+      return false;
+    }
+
+    return /^(\/9j\/|iVBORw0KGgo|R0lGOD|UklGR)/.test(normalized);
+  }
+
+  private normalizeBase64(value: string): string {
+    return value.replace(/\s+/g, '');
   }
 }

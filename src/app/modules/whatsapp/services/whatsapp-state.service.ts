@@ -1045,20 +1045,34 @@ export class WhatsappStateService implements OnDestroy {
       }
       const existing = contact.lastMessageAt ? Date.parse(contact.lastMessageAt) : 0;
       if (derived.ts >= existing) {
-        const preview = derived.msg.text?.trim() || contact.lastMessagePreview || '';
+        const preview = this.resolveContactPreviewFromMessage(derived.msg, contact.lastMessagePreview || '');
         const lastMessageAck = derived.msg.isFromMe ? (derived.msg.ack ?? null) : null;
+        const lastMessagePayload = derived.msg.payload;
+        const lastMessageType = typeof lastMessagePayload?.['type'] === 'string'
+          ? lastMessagePayload['type']
+          : '';
+        const lastMessageMediaMimetype = typeof lastMessagePayload?.['mediaMimetype'] === 'string'
+          ? lastMessagePayload['mediaMimetype']
+          : '';
+        const lastMessageHasMedia = this.isMediaPayload(lastMessagePayload);
         const next = {
           ...contact,
           lastMessageAt: new Date(derived.ts).toISOString(),
           lastMessagePreview: preview,
           lastMessageFromMe: derived.msg.isFromMe,
-          lastMessageAck
+          lastMessageAck,
+          lastMessageType,
+          lastMessageHasMedia,
+          lastMessageMediaMimetype
         };
         if (
           next.lastMessageAt !== contact.lastMessageAt ||
           next.lastMessagePreview !== contact.lastMessagePreview ||
           next.lastMessageFromMe !== contact.lastMessageFromMe ||
-          next.lastMessageAck !== contact.lastMessageAck
+          next.lastMessageAck !== contact.lastMessageAck ||
+          next.lastMessageType !== contact.lastMessageType ||
+          next.lastMessageHasMedia !== contact.lastMessageHasMedia ||
+          next.lastMessageMediaMimetype !== contact.lastMessageMediaMimetype
         ) {
           changed = true;
           return next;
@@ -1088,22 +1102,181 @@ export class WhatsappStateService implements OnDestroy {
   private mapEventsToMessages(events: WhatsappEvent[]): WhatsappMessage[] {
     return events
       .filter(event => Boolean(event.chatJid))
-      .map(event => ({
-        id: event.id,
-        contactJid: event.chatJid,
-        text: event.text,
-        sentAt: event.receivedAt,
-        isFromMe: this.normalizeIsFromMe((event as unknown as { isFromMe?: unknown }).isFromMe, event.id),
-        source: event.source,
-        ack: typeof event.ack === 'number' ? event.ack : (
-          typeof (event.payload as Record<string, unknown>)?.['ack'] === 'number'
-            ? (event.payload as Record<string, unknown>)['ack'] as number
-            : null
-        ),
-        payload: (event.payload && typeof event.payload === 'object')
-          ? (event.payload as Record<string, unknown>)
-          : undefined
-      }));
+      .map(event => {
+        const payload = this.normalizeEventPayload(event.payload, event.text);
+
+        return {
+          id: event.id,
+          contactJid: event.chatJid,
+          text: this.normalizeEventText(event.text),
+          sentAt: event.receivedAt,
+          isFromMe: this.normalizeIsFromMe((event as unknown as { isFromMe?: unknown }).isFromMe, event.id),
+          source: event.source,
+          ack: typeof event.ack === 'number' ? event.ack : (
+            typeof payload?.['ack'] === 'number'
+              ? payload['ack'] as number
+              : null
+          ),
+          payload
+        };
+      });
+  }
+
+  private normalizeEventPayload(rawPayload: unknown, rawText: unknown): Record<string, unknown> | undefined {
+    const payload = (rawPayload && typeof rawPayload === 'object')
+      ? { ...(rawPayload as Record<string, unknown>) }
+      : undefined;
+
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
+    const dataUrlText = this.looksLikeDataUrl(text) ? text : '';
+    const rawImageBase64 = this.looksLikeRawImageBase64(text) ? this.normalizeBase64(text) : '';
+
+    if (!payload && !dataUrlText && !rawImageBase64) {
+      return undefined;
+    }
+
+    const normalized = payload || {};
+    const mediaMimetype = typeof normalized['mediaMimetype'] === 'string'
+      ? normalized['mediaMimetype'].trim()
+      : '';
+    const mediaType = typeof normalized['type'] === 'string'
+      ? normalized['type'].trim()
+      : '';
+
+    const inferredDataUrl = dataUrlText || (rawImageBase64
+      ? this.toImageDataUrlFromRawBase64(rawImageBase64, mediaMimetype)
+      : '');
+
+    if (inferredDataUrl) {
+      normalized['hasMedia'] = true;
+      if (typeof normalized['mediaDataUrl'] !== 'string' || !normalized['mediaDataUrl']) {
+        normalized['mediaDataUrl'] = inferredDataUrl;
+      }
+
+      if (!mediaMimetype) {
+        const inferredMimetype = this.readDataUrlMimetype(inferredDataUrl) || 'image/jpeg';
+        normalized['mediaMimetype'] = inferredMimetype;
+      }
+
+      if (!mediaType) {
+        normalized['type'] = 'image';
+      }
+    }
+
+    return normalized;
+  }
+
+  private normalizeEventText(rawText: unknown): string {
+    if (typeof rawText !== 'string') {
+      return '';
+    }
+
+    const trimmed = rawText.trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    if (this.looksLikeDataUrl(trimmed) || this.looksLikeRawImageBase64(trimmed)) {
+      return '';
+    }
+
+    return rawText;
+  }
+
+  private resolveContactPreviewFromMessage(message: WhatsappMessage, fallback: string): string {
+    const text = typeof message.text === 'string' ? message.text.trim() : '';
+    if (text) {
+      return text;
+    }
+
+    return this.resolveMediaPreviewLabel(message.payload) || fallback;
+  }
+
+  private resolveMediaPreviewLabel(payload?: Record<string, unknown>): string {
+    if (!this.isMediaPayload(payload)) {
+      return '';
+    }
+
+    const mediaMimetype = typeof payload?.['mediaMimetype'] === 'string' ? payload['mediaMimetype'] : '';
+    const mediaType = typeof payload?.['type'] === 'string' ? payload['type'] : '';
+
+    if (mediaMimetype.startsWith('image/') || mediaType === 'image') {
+      return 'Foto';
+    }
+
+    if (mediaMimetype.startsWith('video/') || mediaType === 'video') {
+      return 'Video';
+    }
+
+    if (mediaMimetype.startsWith('audio/') || mediaType === 'audio' || mediaType === 'ptt') {
+      return 'Audio';
+    }
+
+    if (mediaType === 'sticker') {
+      return 'Figurinha';
+    }
+
+    if (mediaType === 'document') {
+      return 'Documento';
+    }
+
+    return 'Documento';
+  }
+
+  private isMediaPayload(payload?: Record<string, unknown>): boolean {
+    if (!payload) {
+      return false;
+    }
+
+    const mediaMimetype = typeof payload['mediaMimetype'] === 'string' ? payload['mediaMimetype'] : '';
+    const mediaType = typeof payload['type'] === 'string' ? payload['type'] : '';
+
+    return Boolean(payload['hasMedia'])
+      || mediaMimetype.length > 0
+      || (typeof payload['mediaDataUrl'] === 'string' && payload['mediaDataUrl'].length > 0)
+      || mediaType === 'image'
+      || mediaType === 'video'
+      || mediaType === 'audio'
+      || mediaType === 'ptt'
+      || mediaType === 'document'
+      || mediaType === 'sticker';
+  }
+
+  private looksLikeDataUrl(value: string): boolean {
+    return /^data:[^,]+,/i.test(value);
+  }
+
+  private looksLikeRawImageBase64(value: string): boolean {
+    const normalized = this.normalizeBase64(value);
+    if (normalized.length < 256) {
+      return false;
+    }
+
+    if (normalized.length % 4 === 1) {
+      return false;
+    }
+
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+      return false;
+    }
+
+    return /^(\/9j\/|iVBORw0KGgo|R0lGOD|UklGR)/.test(normalized);
+  }
+
+  private normalizeBase64(value: string): string {
+    return value.replace(/\s+/g, '');
+  }
+
+  private toImageDataUrlFromRawBase64(rawBase64: string, mimetypeHint: string): string {
+    const mimetype = mimetypeHint && mimetypeHint.startsWith('image/')
+      ? mimetypeHint
+      : 'image/jpeg';
+    return `data:${mimetype};base64,${this.normalizeBase64(rawBase64)}`;
+  }
+
+  private readDataUrlMimetype(dataUrl: string): string {
+    const match = dataUrl.match(/^data:([^;,]+)/i);
+    return match && typeof match[1] === 'string' ? match[1].toLowerCase() : '';
   }
 
   private normalizeIsFromMe(raw: unknown, id: string): boolean {

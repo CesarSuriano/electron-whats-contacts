@@ -20,7 +20,7 @@
       </div>
     </div>
 
-    <p *ngIf="message.text">{{ message.text }}</p>
+    <p *ngIf="messageText(message) as text">{{ text }}</p>
     <div class="message-footer">
       <time>{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
       <span

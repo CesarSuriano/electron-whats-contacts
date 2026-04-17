@@ -18,6 +18,7 @@ import {
   normalizeRequestedChatJid,
   readMessageTimestampSeconds,
   readMessageText,
+  readMessageInlineImageDataUrl,
   isValidPersonalJid,
   toIsoFromUnixTimestamp,
   getContactName,
@@ -72,6 +73,8 @@ function describe(name, fn) {
   fn();
 }
 
+const RAW_JPEG_BASE64 = '/9j/' + 'A'.repeat(320);
+
 // ── utils.js ─────────────────────────────────────────────────────────────────
 
 describe('normalizePhone', () => {
@@ -107,6 +110,18 @@ describe('isBlankMessage', () => {
 describe('resolveMessagePreviewText', () => {
   assert(resolveMessagePreviewText({ body: 'Olá!' }) === 'Olá!', 'returns body when present');
   assert(resolveMessagePreviewText({ body: '  trimmed  ' }) === 'trimmed', 'trims whitespace');
+  assert(
+    resolveMessagePreviewText({ body: 'data:image/jpeg;base64,abc', hasMedia: true }) === 'Foto',
+    'treats image data URL body as media preview'
+  );
+  assert(
+    resolveMessagePreviewText({ body: 'data:image/jpeg;base64,abc', hasMedia: true, caption: 'Legenda' }) === 'Legenda',
+    'prefers caption when body is data URL media'
+  );
+  assert(
+    resolveMessagePreviewText({ body: RAW_JPEG_BASE64, hasMedia: true, type: 'image' }) === 'Foto',
+    'treats raw JPEG base64 body as image media preview'
+  );
   assert(resolveMessagePreviewText({ type: 'image' }) === 'Foto', 'image → Foto');
   assert(resolveMessagePreviewText({ type: 'video' }) === 'Vídeo', 'video → Vídeo');
   assert(resolveMessagePreviewText({ type: 'audio' }) === 'Áudio', 'audio → Áudio');
@@ -200,8 +215,41 @@ describe('readMessageText', () => {
   assert(readMessageText({ body: 'Olá' }) === 'Olá', 'reads body');
   assert(readMessageText({ caption: 'Caption' }) === 'Caption', 'reads caption when no body');
   assert(readMessageText({ body: 'Body', caption: 'Caption' }) === 'Body', 'prefers body over caption');
+  assert(
+    readMessageText({ body: 'data:image/png;base64,abc', hasMedia: true, caption: 'Imagem com legenda' }) === 'Imagem com legenda',
+    'ignores media data URL body and falls back to caption'
+  );
+  assert(
+    readMessageText({ body: 'data:image/png;base64,abc', hasMedia: true }) === '',
+    'ignores media data URL body when no caption is available'
+  );
+  assert(
+    readMessageText({ body: RAW_JPEG_BASE64, hasMedia: true, type: 'image' }) === '',
+    'ignores raw JPEG base64 body when no caption is available'
+  );
   assert(readMessageText({}) === '', 'returns empty when no text fields');
   assert(readMessageText(null) === '', 'returns empty for null');
+});
+
+describe('readMessageInlineImageDataUrl', () => {
+  assert(
+    readMessageInlineImageDataUrl({ body: 'data:image/png;base64,abc' }) === 'data:image/png;base64,abc',
+    'reads inline image data URL from body'
+  );
+  assert(
+    readMessageInlineImageDataUrl({ body: 'data:application/pdf;base64,abc' }) === null,
+    'ignores non-image data URL'
+  );
+  assert(
+    readMessageInlineImageDataUrl({ mediaDataUrl: 'data:image/jpeg;base64,def' }) === 'data:image/jpeg;base64,def',
+    'reads inline image data URL from mediaDataUrl field'
+  );
+  assert(
+    readMessageInlineImageDataUrl({ body: RAW_JPEG_BASE64, hasMedia: true, type: 'image' })
+      === `data:image/jpeg;base64,${RAW_JPEG_BASE64}`,
+    'converts raw JPEG base64 body into image data URL'
+  );
+  assert(readMessageInlineImageDataUrl(null) === null, 'returns null for null input');
 });
 
 describe('isValidPersonalJid', () => {
@@ -234,6 +282,18 @@ describe('getContactName', () => {
 
 describe('extractLastMessagePreview', () => {
   assert(extractLastMessagePreview({ lastMessage: { body: 'Oi' } }) === 'Oi', 'returns message body');
+  assert(
+    extractLastMessagePreview({ lastMessage: { body: 'data:image/jpeg;base64,abc', hasMedia: true } }) === 'Foto',
+    'uses media placeholder when lastMessage body is data URL image'
+  );
+  assert(
+    extractLastMessagePreview({ lastMessage: { body: 'data:image/jpeg;base64,abc', hasMedia: true, caption: 'Legenda' } }) === 'Legenda',
+    'prefers caption when lastMessage body is data URL image'
+  );
+  assert(
+    extractLastMessagePreview({ lastMessage: { body: RAW_JPEG_BASE64, hasMedia: true, type: 'image' } }) === 'Foto',
+    'uses image placeholder when lastMessage body is raw JPEG base64'
+  );
   assert(extractLastMessagePreview({ lastMessage: { type: 'image' } }) === 'Foto', 'image → Foto');
   assert(extractLastMessagePreview({ lastMessage: { type: 'video' } }) === 'Video', 'video → Video');
   assert(extractLastMessagePreview({ lastMessage: { type: 'audio' } }) === 'Audio', 'audio → Audio');

@@ -16,6 +16,9 @@ export interface WhatsappContact {
   lastMessagePreview?: string;
   lastMessageFromMe?: boolean;
   lastMessageAck?: number | null;
+  lastMessageType?: string;
+  lastMessageHasMedia?: boolean;
+  lastMessageMediaMimetype?: string;
   unreadCount?: number;
   labels?: string[];
   isGroup?: boolean;

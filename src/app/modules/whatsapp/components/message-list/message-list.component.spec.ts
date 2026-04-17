@@ -101,4 +101,44 @@ describe('MessageListComponent', () => {
       expect(component.mediaFilename(msg)).toBe('doc.pdf');
     });
   });
+
+  describe('messageText', () => {
+    it('returns empty for media messages whose text is a data URL', () => {
+      const msg = makeMsg({
+        text: 'data:image/jpeg;base64,abc',
+        payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,abc' }
+      });
+
+      expect(component.messageText(msg)).toBe('');
+    });
+
+    it('returns empty for raw JPEG base64 text', () => {
+      const msg = makeMsg({
+        text: '/9j/' + 'A'.repeat(320),
+        payload: { hasMedia: true, mediaMimetype: 'image/jpeg' }
+      });
+
+      expect(component.messageText(msg)).toBe('');
+    });
+
+    it('returns original text for regular text messages', () => {
+      const msg = makeMsg({ text: 'Olá com legenda', payload: { hasMedia: true, mediaMimetype: 'image/jpeg' } });
+
+      expect(component.messageText(msg)).toBe('Olá com legenda');
+    });
+  });
+
+  it('converts raw mediaDataUrl base64 into image preview URL', () => {
+    const rawJpegBase64 = '/9j/' + 'A'.repeat(320);
+    const msg = makeMsg({
+      payload: {
+        hasMedia: true,
+        mediaMimetype: 'image/jpeg',
+        mediaDataUrl: rawJpegBase64
+      }
+    });
+
+    expect(component.isImageMessage(msg)).toBeTrue();
+    expect(component.imagePreviewUrl(msg)).toContain('data:image/jpeg;base64,/9j/');
+  });
 });

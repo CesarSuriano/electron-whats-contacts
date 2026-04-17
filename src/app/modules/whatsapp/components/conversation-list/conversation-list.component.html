@@ -81,6 +81,10 @@
               [class.ack-read]="isPreviewAckRead(contact)"
               [class.ack-pending]="!isPreviewAckRead(contact)"
             >{{ getPreviewAckIcon(contact) }}</span>
+            <span
+              class="material-symbols-outlined preview-media-icon"
+              *ngIf="getPreviewMediaIcon(contact) as mediaIcon"
+            >{{ mediaIcon }}</span>
             {{ formatLastMessagePreview(contact) }}
           </span>
           <span class="unread-badge" *ngIf="getUnreadCount(contact) > 0">{{ getUnreadCount(contact) }}</span>
