@@ -16,7 +16,7 @@ import {
   toIsoFromUnixTimestamp
 } from './lib/utils.js';
 import { init as initJid, resolveIsFromMe, getSerializedMessageId, isSelfJid } from './lib/jid.js';
-import { events, contactsByJid, ingestInboundMessage, pushEvent, updateEventAck, resetUnreadCount } from './lib/events.js';
+import { events, contactsByJid, ingestInboundMessage, pushEvent, updateEventAck, resetUnreadCount, setOnEventPushed } from './lib/events.js';
 import {
   init as initHistory,
   acquireHistorySlot,
@@ -40,6 +40,7 @@ import {
   ensureClientInitialized,
   disconnectClientSession
 } from './lib/session.js';
+import { createWebSocketServer, broadcast } from './lib/ws.js';
 
 const { Client, LocalAuth, MessageMedia } = pkg;
 
@@ -54,7 +55,7 @@ const allowedOrigins = allowedOriginRaw
   .filter(Boolean);
 const instanceName = process.env.INSTANCE_NAME || 'local-webjs';
 const enableHistoryEvents = String(process.env.WA_ENABLE_HISTORY_EVENTS || 'true').toLowerCase() !== 'false';
-const enableProfilePhotoFetch = String(process.env.WA_ENABLE_PROFILE_PHOTO_FETCH || 'false').toLowerCase() === 'true';
+const enableProfilePhotoFetch = String(process.env.WA_ENABLE_PROFILE_PHOTO_FETCH || 'true').toLowerCase() !== 'false';
 const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
 const puppeteerArgs = String(process.env.PUPPETEER_ARGS || '--no-sandbox,--disable-setuid-sandbox')
   .split(',')
@@ -117,6 +118,7 @@ client.on('qr', qr => {
   sessionState.lastError = '';
   qrcodeTerminal.generate(qr, { small: true });
   console.log('[whatsapp-webjs-bridge] QR recebido. Escaneie no celular.');
+  broadcast('session_state', getSessionSnapshot());
 });
 
 client.on('authenticated', () => {
@@ -124,6 +126,7 @@ client.on('authenticated', () => {
   sessionState.qr = null;
   sessionState.lastError = '';
   console.log('[whatsapp-webjs-bridge] Sessao autenticada.');
+  broadcast('session_state', getSessionSnapshot());
 });
 
 client.on('ready', async () => {
@@ -131,11 +134,13 @@ client.on('ready', async () => {
   sessionState.qr = null;
   sessionState.lastError = '';
   console.log('[whatsapp-webjs-bridge] Cliente pronto.');
+  broadcast('session_state', getSessionSnapshot());
 
   try {
     const chats = await client.getChats();
     await refreshContactsFromChats(chats);
     await seedEventsFromRecentChats(chats);
+    broadcast('contacts_updated', { contacts: Array.from(contactsByJid.values()) });
   } catch (error) {
     console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', error.message);
   }
@@ -145,12 +150,14 @@ client.on('auth_failure', message => {
   sessionState.status = 'auth_failure';
   sessionState.lastError = String(message || 'Authentication failure');
   console.error('[whatsapp-webjs-bridge] Falha de autenticacao:', message);
+  broadcast('session_state', getSessionSnapshot());
 });
 
 client.on('disconnected', reason => {
   sessionState.status = 'disconnected';
   sessionState.lastError = String(reason || 'Disconnected');
   console.warn('[whatsapp-webjs-bridge] Cliente desconectado:', reason);
+  broadcast('session_state', getSessionSnapshot());
 });
 
 client.on('message', message => {
@@ -167,6 +174,7 @@ client.on('message_ack', (message, ack) => {
   const messageId = message?.id?._serialized || '';
   if (messageId) {
     updateEventAck(messageId, ack);
+    broadcast('message_ack', { messageId, ack });
   }
 });
 
@@ -229,6 +237,7 @@ app.get('/api/whatsapp/contacts', async (_, res) => {
   try {
     if (sessionState.status === 'ready' && Date.now() - getLastContactsRefreshAt() >= CONTACTS_REFRESH_COOLDOWN_MS) {
       await refreshContactsFromChats();
+      broadcast('contacts_updated', { contacts: Array.from(contactsByJid.values()) });
     }
 
     res.json({
@@ -691,6 +700,10 @@ app.use((err, _req, res, _next) => {
 
 const httpServer = app.listen(port, async () => {
   console.log(`[whatsapp-webjs-bridge] listening on http://localhost:${port}`);
+
+  createWebSocketServer(httpServer, { allowedOrigins });
+  setOnEventPushed(event => broadcast('new_message', event));
+  console.log('[whatsapp-webjs-bridge] WebSocket server attached.');
 
   try {
     await ensureClientInitialized();

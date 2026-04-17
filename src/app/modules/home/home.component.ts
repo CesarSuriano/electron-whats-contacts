@@ -284,20 +284,22 @@ export class HomeComponent implements OnInit {
   }
 
   openWhatsappBirthday(cliente: Cliente): void {
-    const message = this.messageTemplateService.renderTemplate('birthday', cliente);
-    const imageDataUrl = this.messageTemplateService.getTemplateImage('birthday');
-    if (imageDataUrl) {
-      this.downloadTemplateImage(imageDataUrl, 'imagem-parabens');
+    if (this.useInternalWhatsapp) {
+      this.pendingBulkSendService.set({ templateType: 'birthday', clientes: [cliente] });
+      void this.router.navigate(['/whatsapp']);
+      return;
     }
+    const message = this.messageTemplateService.renderTemplate('birthday', cliente);
     this.openWhatsapp(cliente.telefone, message);
   }
 
   openWhatsappReview(cliente: Cliente): void {
-    const message = this.messageTemplateService.renderTemplate('review', cliente);
-    const imageDataUrl = this.messageTemplateService.getTemplateImage('review');
-    if (imageDataUrl) {
-      this.downloadTemplateImage(imageDataUrl, 'imagem-avaliacao');
+    if (this.useInternalWhatsapp) {
+      this.pendingBulkSendService.set({ templateType: 'review', clientes: [cliente] });
+      void this.router.navigate(['/whatsapp']);
+      return;
     }
+    const message = this.messageTemplateService.renderTemplate('review', cliente);
     this.openWhatsapp(cliente.telefone, message);
   }
 
@@ -353,13 +355,6 @@ export class HomeComponent implements OnInit {
 
   private compareClientes(a: Cliente, b: Cliente): number {
     return compareClientes(a, b, this.sortedColumn, this.sortDirection);
-  }
-
-  private downloadTemplateImage(dataUrl: string, filename: string): void {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    a.click();
   }
 
   private openWhatsapp(phone: string, message: string): void {

@@ -1,9 +1,10 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
+import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 import { WhatsappPageComponent } from './whatsapp-page.component';
 
 const makeStatus = (status: string): WhatsappSessionStatus => ({
@@ -27,11 +28,17 @@ describe('WhatsappPageComponent', () => {
     ]);
     gatewaySpy.loadSessionStatus.and.returnValue(of(makeStatus('initializing')));
 
+    const wsSpy = jasmine.createSpyObj('WhatsappWsService', ['on', 'connect', 'disconnect'], {
+      connected$: of(false)
+    });
+    wsSpy.on.and.returnValue(EMPTY);
+
     await TestBed.configureTestingModule({
       declarations: [WhatsappPageComponent],
       providers: [
         { provide: Router, useValue: routerSpy },
-        { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy }
+        { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy },
+        { provide: WhatsappWsService, useValue: wsSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

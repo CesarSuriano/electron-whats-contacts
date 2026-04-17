@@ -1,9 +1,12 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import * as QRCode from 'qrcode';
 
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
+import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 
 @Component({
   selector: 'app-whatsapp-page',
@@ -25,17 +28,30 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   readonly appWhatsNew = APP_WHATS_NEW;
 
   private sessionPollId: number | null = null;
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private router: Router,
-    private whatsappGatewayService: WhatsappWebjsGatewayService
+    private whatsappGatewayService: WhatsappWebjsGatewayService,
+    private ws: WhatsappWsService
   ) {}
 
   ngOnInit(): void {
     this.startSessionPolling();
+
+    // Real-time session state via WebSocket
+    this.ws.on<WhatsappSessionStatus>('session_state').pipe(takeUntil(this.destroy$)).subscribe(status => {
+      if (status && status.status) {
+        this.isCheckingSession = false;
+        this.sessionErrorMessage = '';
+        this.updateSessionState(status);
+      }
+    });
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     this.stopSessionPolling();
   }
 
@@ -118,7 +134,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       }
 
       this.checkSession();
-    }, 3000);
+    }, 10000);
   }
 
   private stopSessionPolling(): void {

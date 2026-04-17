@@ -65,35 +65,38 @@ $border-radius-card: 8px;
 
 .toggle-label {
   @apply whitespace-nowrap;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: #666;
 }
 
 .whatsapp-mode-toggle {
-  @apply flex overflow-hidden border;
-  border-color: #ccc;
-  border-radius: 6px;
+  @apply flex overflow-hidden;
+  border: 2px solid $primary-color;
+  border-radius: 999px;
 }
 
 .toggle-btn {
-  padding: 0.4rem 0.85rem;
+  padding: 0.4rem 1rem;
   font-size: 0.82rem;
   background: #fff;
-  color: #555;
+  color: $primary-color;
   border: none;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.2s, color 0.2s;
   white-space: nowrap;
+  font-weight: 400;
+  min-width: 8.5rem;
+  text-align: center;
 
   &:hover:not(.toggle-btn-active) {
-    background: #f5f5f5;
+    background: rgba(117, 16, 19, 0.06);
   }
 }
 
 .toggle-btn-active {
-  background: #751013;
+  background: $primary-color;
   color: #fff;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .bulk-action-bar {

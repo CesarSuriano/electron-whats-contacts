@@ -1,11 +1,12 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { BehaviorSubject, Observable, combineLatest, debounceTime, distinctUntilChanged, map } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, combineLatest, debounceTime, distinctUntilChanged, map } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } from '../../../models/whatsapp.model';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
+import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
 
-const EVENT_POLL_MS = 5000;
 const INITIAL_LOAD_DELAY_MS = 4000;
 const LOCAL_MESSAGE_TTL_MS = 30000;
 const PHOTO_BATCH_SIZE = 6;
@@ -39,7 +40,6 @@ export class WhatsappStateService implements OnDestroy {
   private readonly draftImageDataUrlSubject = new BehaviorSubject<string | null>(null);
   private readonly messageSentSubject = new BehaviorSubject<{ jid: string; at: number } | null>(null);
 
-  private pollIntervalId: number | null = null;
   private eventsInFlight = false;
   private initialSyncDone = false;
   private instancesLoadStarted = false;
@@ -49,6 +49,7 @@ export class WhatsappStateService implements OnDestroy {
   private readonly preloadedHistoryJids = new Set<string>();
   private preloadToken = 0;
   private isPreloading = false;
+  private readonly destroy$ = new Subject<void>();
   private pendingPhotoJids = new Set<string>();
   private photoRetryUntil = new Map<string, number>();
   private photoRequestTimer: number | null = null;
@@ -78,7 +79,7 @@ export class WhatsappStateService implements OnDestroy {
   ]).pipe(
     map(([jid]) => this.getMessagesFor(jid)),
     distinctUntilChanged((prev, curr) =>
-      prev.length === curr.length && prev.every((m, i) => m.id === curr[i].id)
+      prev.length === curr.length && prev.every((m, i) => m.id === curr[i].id && m.ack === curr[i].ack)
     )
   );
 
@@ -93,13 +94,62 @@ export class WhatsappStateService implements OnDestroy {
     )
   );
 
-  constructor(private gateway: WhatsappWebjsGatewayService) {}
+  constructor(private gateway: WhatsappWebjsGatewayService, private ws: WhatsappWsService) {
+    this.setupWebSocket();
+  }
 
   ngOnDestroy(): void {
-    this.stopPolling();
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.ws.disconnect();
     if (this.photoRequestTimer !== null) {
       window.clearTimeout(this.photoRequestTimer);
     }
+  }
+
+  private setupWebSocket(): void {
+    this.ws.connect();
+
+    // Real-time new messages
+    this.ws.on<WhatsappEvent>('new_message').pipe(takeUntil(this.destroy$)).subscribe(event => {
+      if (!event || !event.chatJid) {
+        return;
+      }
+      const messages = this.mapEventsToMessages([event]);
+      const merged = this.mergeServerMessages(messages);
+      const withLocal = this.mergeWithLocal(merged);
+      const pruned = this.pruneMessages(withLocal);
+      this.messagesSubject.next(pruned);
+      this.resortContactsByLatestMessage(pruned);
+
+      // Increment unread for inbound messages not in the active chat
+      if (this.initialSyncDone) {
+        const inbound = messages.filter(m => !m.isFromMe);
+        if (inbound.length > 0) {
+          this.incrementUnreadCounts(inbound);
+        }
+      }
+    });
+
+    // Real-time ack updates (check marks)
+    this.ws.on<{ messageId: string; ack: number }>('message_ack').pipe(takeUntil(this.destroy$)).subscribe(({ messageId, ack }) => {
+      if (!messageId) {
+        return;
+      }
+      const current = this.messagesSubject.value;
+      let changed = false;
+      const updated = current.map(msg => {
+        if (msg.id === messageId && msg.ack !== ack) {
+          changed = true;
+          return { ...msg, ack };
+        }
+        return msg;
+      });
+      if (changed) {
+        this.messagesSubject.next(updated);
+        this.resortContactsByLatestMessage(updated);
+      }
+    });
   }
 
   get selectedInstance(): string {
@@ -165,13 +215,9 @@ export class WhatsappStateService implements OnDestroy {
     this.messagesSubject.next([]);
     this.setLoading({ contacts: true, messages: false });
 
-    // Aguarda o whatsapp-web.js terminar de popular o cache de mensagens
-    // antes de fazer os primeiros requests. Sem esse delay as chamadas
-    // iniciais retornam dados esparsos que ficam cacheados por 15s no servidor.
     window.setTimeout(() => {
       this.loadContacts();
       this.refreshEvents(true, false);
-      this.startPolling();
     }, INITIAL_LOAD_DELAY_MS);
   }
 
@@ -216,10 +262,10 @@ export class WhatsappStateService implements OnDestroy {
     return new Observable(observer => {
       this.gateway.sendMessage(instance, jid, text).subscribe({
         next: result => {
-          this.appendLocalMessage(jid, text, 'send-api');
+          const serverId = (result as Record<string, unknown>)?.['id'] as string;
+          this.appendOutgoingMessage(jid, text, 'send-api', serverId);
           this.setLoading({ sending: false });
           this.notifyMessageSent(jid);
-          this.refreshEvents(true, false);
           observer.next(result);
           observer.complete();
         },
@@ -240,14 +286,14 @@ export class WhatsappStateService implements OnDestroy {
     return new Observable(observer => {
       this.gateway.sendMedia(instance, jid, file, caption).subscribe({
         next: result => {
-          this.appendLocalMessage(jid, caption || file.name, 'send-media-api', {
+          const serverId = (result as Record<string, unknown>)?.['id'] as string;
+          this.appendOutgoingMessage(jid, caption, 'send-media-api', serverId, {
             hasMedia: true,
             mediaFilename: file.name,
             mediaMimetype: file.type || 'application/octet-stream'
           });
           this.setLoading({ sending: false });
           this.notifyMessageSent(jid);
-          this.refreshEvents(true, false);
           observer.next(result);
           observer.complete();
         },
@@ -260,9 +306,14 @@ export class WhatsappStateService implements OnDestroy {
     });
   }
 
-  private appendLocalMessage(jid: string, text: string, source: string, payload?: Record<string, unknown>): void {
+  private appendOutgoingMessage(jid: string, text: string, source: string, serverId?: string, payload?: Record<string, unknown>): void {
+    // If we have a server ID, check if the WS broadcast already delivered it
+    if (serverId && this.messagesSubject.value.some(m => m.id === serverId)) {
+      return;
+    }
+
     const message: WhatsappMessage = {
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: serverId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       contactJid: jid,
       text,
       sentAt: new Date().toISOString(),
@@ -455,28 +506,12 @@ export class WhatsappStateService implements OnDestroy {
 
     this.gateway.loadEvents(this.selectedInstance).subscribe({
       next: events => {
-        const existingServerIds = new Set(
-          this.messagesSubject.value
-            .filter(message => !message.id.startsWith('local-'))
-            .map(message => message.id)
-        );
         const incoming = this.mapEventsToMessages(events);
         const mergedServer = this.mergeServerMessages(incoming);
         const merged = this.mergeWithLocal(mergedServer);
         const pruned = this.pruneMessages(merged);
         this.messagesSubject.next(pruned);
-        const hasNewServerMessage = incoming.some(message => !existingServerIds.has(message.id));
-        if (hasNewServerMessage) {
-          this.resortContactsByLatestMessage(pruned);
-        }
-        if (this.initialSyncDone) {
-          const newInboundMessages = incoming.filter(
-            message => !existingServerIds.has(message.id) && !message.isFromMe
-          );
-          if (newInboundMessages.length > 0) {
-            this.incrementUnreadCounts(newInboundMessages);
-          }
-        }
+        this.resortContactsByLatestMessage(pruned);
         this.eventsInFlight = false;
         if (showLoading) {
           this.setLoading({ messages: false });
@@ -884,23 +919,6 @@ export class WhatsappStateService implements OnDestroy {
       }
     }
     return false;
-  }
-
-  private startPolling(): void {
-    this.stopPolling();
-    this.pollIntervalId = window.setInterval(() => {
-      if (document.visibilityState !== 'visible' || !this.selectedInstance) {
-        return;
-      }
-      this.refreshEvents(true, false);
-    }, EVENT_POLL_MS);
-  }
-
-  private stopPolling(): void {
-    if (this.pollIntervalId !== null) {
-      window.clearInterval(this.pollIntervalId);
-      this.pollIntervalId = null;
-    }
   }
 
   private setLoading(patch: Partial<{ instances: boolean; contacts: boolean; messages: boolean; sending: boolean }>): void {

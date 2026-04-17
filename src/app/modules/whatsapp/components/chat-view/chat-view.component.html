@@ -1,6 +1,8 @@
 <section class="chat-view" *ngIf="contact; else emptyState">
   <app-chat-header [contact]="contact"></app-chat-header>
-  <app-message-list [messages]="messages"></app-message-list>
+  <app-message-list
+    [messages]="messages"
+  ></app-message-list>
   <app-composer
     [draftText]="draftText"
     [isSending]="isSending"

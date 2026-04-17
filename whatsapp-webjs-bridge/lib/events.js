@@ -18,6 +18,12 @@ import { resolveIsFromMe } from './jid.js';
 const MAX_EVENTS = 200;
 const MAX_RECENT_EVENT_IDS = 2000;
 
+let _onEventPushed = null;
+
+export function setOnEventPushed(callback) {
+  _onEventPushed = callback;
+}
+
 export const events = [];
 export const contactsByJid = new Map();
 export const lidByPhoneJid = new Map();
@@ -86,6 +92,10 @@ export function pushEvent({ id, source, isFromMe, chatJid, text, payload, receiv
   }
   if (events.length > MAX_EVENTS) {
     events.length = MAX_EVENTS;
+  }
+
+  if (_onEventPushed) {
+    try { _onEventPushed(event); } catch { /* silent */ }
   }
 }
 

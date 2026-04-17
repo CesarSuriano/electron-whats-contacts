@@ -6,7 +6,7 @@
 }
 
 .template-image-preview {
-  @apply flex items-center;
+  @apply relative flex items-center;
   gap: 0.6rem;
 }
 
@@ -16,6 +16,24 @@
   height: 56px;
   border-radius: 6px;
   border-color: #d1d7db;
+}
+
+.template-image-warning {
+  @apply absolute flex items-center justify-center;
+  top: -6px;
+  left: -6px;
+  width: 1.35rem;
+  height: 1.35rem;
+  background: #f59e0b;
+  border-radius: 50%;
+  cursor: help;
+  z-index: 1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+
+  .material-symbols-outlined {
+    font-size: 0.8rem;
+    color: #fff;
+  }
 }
 
 .template-image-remove {

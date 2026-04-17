@@ -17,7 +17,31 @@
 
   <p class="attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>
 
+  <!-- Emoji picker panel -->
+  <div class="emoji-picker-panel" *ngIf="isEmojiPickerOpen">
+    <div class="emoji-grid">
+      <button
+        *ngFor="let emoji of emojiList"
+        type="button"
+        class="emoji-grid-btn"
+        (click)="insertEmoji(emoji)"
+      >{{ emoji }}</button>
+    </div>
+  </div>
+
   <div class="composer-row">
+    <div class="attach-wrapper">
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="toggleEmojiPicker()"
+        [disabled]="disabled || isSending"
+        aria-label="Emojis"
+      >
+        <span class="material-symbols-outlined">sentiment_satisfied</span>
+      </button>
+    </div>
+
     <div class="attach-wrapper">
       <button
         type="button"

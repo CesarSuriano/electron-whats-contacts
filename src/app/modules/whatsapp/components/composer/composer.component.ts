@@ -4,6 +4,19 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_MIME_PREFIXES = ['image/', 'application/pdf'];
 const ACCEPTED_DOC_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'];
 
+const EMOJI_LIST = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊',
+  '😇', '🥰', '😍', '🤩', '😘', '😗', '😋', '😛', '😜', '🤪',
+  '😝', '🤑', '🤗', '🤭', '🫢', '🤫', '🤔', '🫡', '🤐', '🤨',
+  '😐', '😑', '😶', '🫥', '😏', '😒', '🙄', '😬', '😮‍💨', '🤥',
+  '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮',
+  '🥵', '🥶', '😵', '🤯', '🥳', '🥺', '😢', '😭', '😤', '😠',
+  '😡', '🤬', '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙',
+  '👋', '🤚', '✋', '🖖', '👏', '🙌', '🤝', '🙏', '❤️', '🧡',
+  '💛', '💚', '💙', '💜', '🖤', '🤍', '💯', '💢', '💥', '🔥',
+  '⭐', '🌟', '✨', '💫', '🎉', '🎊', '🏆', '🥇', '🏅', '🎯'
+];
+
 @Component({
   selector: 'app-composer',
   templateUrl: './composer.component.html',
@@ -19,6 +32,9 @@ export class ComposerComponent {
 
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('textarea') textarea?: ElementRef<HTMLTextAreaElement>;
+
+  isEmojiPickerOpen = false;
+  emojiList = EMOJI_LIST;
 
   setAttachmentFromDataUrl(dataUrl: string, filename: string): void {
     try {
@@ -184,6 +200,18 @@ export class ComposerComponent {
     }
 
     this.sendText.emit(text);
+  }
+
+  toggleEmojiPicker(): void {
+    if (this.disabled || this.isSending) return;
+    this.isEmojiPickerOpen = !this.isEmojiPickerOpen;
+  }
+
+  insertEmoji(emoji: string): void {
+    this.draftText += emoji;
+    this.draftTextChange.emit(this.draftText);
+    this.isEmojiPickerOpen = false;
+    setTimeout(() => this.focus(), 0);
   }
 
   resetAfterSend(): void {

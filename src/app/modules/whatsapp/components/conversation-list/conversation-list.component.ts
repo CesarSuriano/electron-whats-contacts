@@ -28,6 +28,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   searchTerm = '';
   activeFilter: ConversationFilterId = 'all';
   labelFilters: string[] = [];
+  filterChipsCached: ConversationFilterChip[] = [];
   isLoading = false;
   isSyncing = false;
   isSelectionMode = false;
@@ -44,6 +45,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.rebuildFilterChips();
+
     combineLatest([this.state.contacts$, this.state.selectedContactJid$])
       .pipe(takeUntil(this.destroy$))
       .subscribe(([contacts, jid]) => {
@@ -193,19 +196,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   get filterChips(): ConversationFilterChip[] {
-    const base: ConversationFilterChip[] = [
-      { id: 'all', label: 'Tudo' },
-      { id: 'conversations', label: 'Conversas' },
-      { id: 'unread', label: 'Não lidas' }
-    ];
-
-    const labelChips = this.labelFilters.map(label => ({
-      id: `label:${encodeURIComponent(label)}` as ConversationFilterId,
-      label,
-      hexColor: this.labelColorMap.get(label) || null
-    }));
-
-    return [...base, ...labelChips];
+    return this.filterChipsCached;
   }
 
   getChipStyle(chip: ConversationFilterChip): Record<string, string> {
@@ -254,8 +245,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         return false;
       }
 
-      if (this.activeFilter === 'conversations' && contact.isGroup) {
-        return false;
+      if (this.activeFilter === 'conversations') {
+        if (contact.isGroup || !contact.lastMessageAt) {
+          return false;
+        }
       }
 
       if (activeLabel) {
@@ -300,6 +293,24 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     if (activeLabel && !this.labelFilters.includes(activeLabel)) {
       this.activeFilter = 'all';
     }
+
+    this.rebuildFilterChips();
+  }
+
+  private rebuildFilterChips(): void {
+    const base: ConversationFilterChip[] = [
+      { id: 'all', label: 'Tudo' },
+      { id: 'conversations', label: 'Conversas' },
+      { id: 'unread', label: 'Não lidas' }
+    ];
+
+    const labelChips = this.labelFilters.map(label => ({
+      id: `label:${encodeURIComponent(label)}` as ConversationFilterId,
+      label,
+      hexColor: this.labelColorMap.get(label) || null
+    }));
+
+    this.filterChipsCached = [...base, ...labelChips];
   }
 
   private getActiveLabelName(): string {

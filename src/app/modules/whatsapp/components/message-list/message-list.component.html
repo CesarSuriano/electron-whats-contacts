@@ -3,9 +3,8 @@
     Ainda não há mensagens nesta conversa.
   </div>
 
-  <ng-container *ngFor="let message of messages; trackBy: trackById">
   <article
-    *ngIf="message.text || isMediaMessage(message)"
+    *ngFor="let message of messages; trackBy: trackById"
     class="message-bubble"
     [class.from-me]="message.isFromMe"
   >
@@ -31,5 +30,4 @@
       >{{ getAckIcon(message) }}</span>
     </div>
   </article>
-  </ng-container>
 </div>

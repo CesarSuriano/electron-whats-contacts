@@ -1,8 +1,9 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import { WhatsappContact } from '../../../../models/whatsapp.model';
+import { WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ConversationListComponent } from './conversation-list.component';
 
@@ -40,9 +41,15 @@ describe('ConversationListComponent', () => {
       selectedJids$: selectedJids$.asObservable()
     });
 
+    const gatewaySpy = jasmine.createSpyObj('WhatsappWebjsGatewayService', ['loadLabels']);
+    gatewaySpy.loadLabels.and.returnValue(of([]));
+
     await TestBed.configureTestingModule({
       declarations: [ConversationListComponent],
-      providers: [{ provide: WhatsappStateService, useValue: stateSpy }],
+      providers: [
+        { provide: WhatsappStateService, useValue: stateSpy },
+        { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy }
+      ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
 

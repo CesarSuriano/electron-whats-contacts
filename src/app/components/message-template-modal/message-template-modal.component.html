@@ -67,6 +67,9 @@
 		    <input type="file" accept="image/*" #imageInput style="display:none" (change)="onImageSelected($event)">
 		    <div class="template-image-preview" *ngIf="selectedImageDataUrl">
 		      <img [src]="selectedImageDataUrl" alt="Imagem da mensagem" class="template-image-thumb">
+		      <div class="template-image-warning" title="Essa imagem só será enviada pelo WhatsApp dentro do sistema">
+		        <span class="material-symbols-outlined">warning</span>
+		      </div>
 		      <button type="button" class="template-image-remove" (click)="clearImage()" aria-label="Remover imagem">
 		        <span class="material-symbols-outlined">close</span>
 		      </button>
