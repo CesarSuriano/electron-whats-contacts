@@ -1,5 +1,12 @@
 <section class="chat-view" *ngIf="contact; else emptyState">
   <app-chat-header [contact]="contact"></app-chat-header>
+  <div class="chat-sync-banner" *ngIf="isSyncingMessages">
+    <span class="material-symbols-outlined">sync</span>
+    <div>
+      <strong>Carregando mensagens...</strong>
+      <small>A conversa fica pronta assim que a sincronização terminar.</small>
+    </div>
+  </div>
   <app-message-list
     [messages]="messages"
   ></app-message-list>

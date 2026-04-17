@@ -7,17 +7,34 @@ import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } fro
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
 
-const INITIAL_LOAD_DELAY_MS = 4000;
 const LOCAL_MESSAGE_TTL_MS = 30000;
 const PHOTO_BATCH_SIZE = 6;
 const PHOTO_NULL_RETRY_MS = 30 * 60 * 1000;
 const CHAT_HISTORY_LIMIT = 180;
 const MAX_MESSAGES_PER_CHAT = 260;
-const PRELOAD_HISTORY_CONCURRENCY = 4;
-const PRELOAD_HISTORY_LIMIT = 60;
-const PRELOAD_REQUEST_DELAY_MS = 50;
-const SPARSE_HISTORY_RETRY_MS = 250;
-const SPARSE_HISTORY_MAX_RETRIES = 2;
+const BACKGROUND_HYDRATION_WINDOW_MS = 90 * 1000;
+const BACKGROUND_HYDRATION_DELAY_MS = 180;
+const BACKGROUND_HYDRATION_RETRY_DELAY_MS = 1500;
+const BACKGROUND_HYDRATION_LIMIT = 120;
+const BACKGROUND_HYDRATION_MAX_ATTEMPTS = 3;
+
+export interface WhatsappSyncStatus {
+  active: boolean;
+  mode: 'idle' | 'initial';
+  message: string;
+  detail: string;
+  currentStep: number;
+  totalSteps: number;
+}
+
+const IDLE_SYNC_STATUS: WhatsappSyncStatus = {
+  active: false,
+  mode: 'idle',
+  message: '',
+  detail: '',
+  currentStep: 0,
+  totalSteps: 0
+};
 
 @Injectable({ providedIn: 'root' })
 export class WhatsappStateService implements OnDestroy {
@@ -44,12 +61,15 @@ export class WhatsappStateService implements OnDestroy {
   private initialSyncDone = false;
   private instancesLoadStarted = false;
   private readonly syncingSubject = new BehaviorSubject<boolean>(false);
+  private readonly syncStatusSubject = new BehaviorSubject<WhatsappSyncStatus>(IDLE_SYNC_STATUS);
   private readonly contactHistoryInFlight = new Set<string>();
   private readonly loadedHistoryJids = new Set<string>();
-  private readonly preloadedHistoryJids = new Set<string>();
-  private preloadToken = 0;
-  private isPreloading = false;
   private readonly destroy$ = new Subject<void>();
+  private backgroundHydrationWindowUntil = 0;
+  private backgroundHydrationWindowTimer: number | null = null;
+  private backgroundHydrationQueue: string[] = [];
+  private backgroundHydrationTimer: number | null = null;
+  private readonly backgroundHydrationAttempts = new Map<string, number>();
   private pendingPhotoJids = new Set<string>();
   private photoRetryUntil = new Map<string, number>();
   private photoRequestTimer: number | null = null;
@@ -66,9 +86,10 @@ export class WhatsappStateService implements OnDestroy {
   draftText$: Observable<string> = this.draftTextSubject.asObservable();
   draftImageDataUrl$: Observable<string | null> = this.draftImageDataUrlSubject.asObservable();
   messageSent$: Observable<{ jid: string; at: number } | null> = this.messageSentSubject.asObservable();
+  syncStatus$: Observable<WhatsappSyncStatus> = this.syncStatusSubject.asObservable();
   // Só emite `true` se a sincronização demorar > 600ms (evita piscar em cada poll rápido)
   syncing$: Observable<boolean> = this.syncingSubject.pipe(
-    debounceTime(600),
+    debounceTime(150),
     distinctUntilChanged()
   );
 
@@ -104,6 +125,12 @@ export class WhatsappStateService implements OnDestroy {
     this.ws.disconnect();
     if (this.photoRequestTimer !== null) {
       window.clearTimeout(this.photoRequestTimer);
+    }
+    if (this.backgroundHydrationTimer !== null) {
+      window.clearTimeout(this.backgroundHydrationTimer);
+    }
+    if (this.backgroundHydrationWindowTimer !== null) {
+      window.clearTimeout(this.backgroundHydrationWindowTimer);
     }
   }
 
@@ -205,32 +232,31 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   selectInstance(name: string): void {
-    this.preloadToken += 1;
     this.loadedHistoryJids.clear();
-    this.preloadedHistoryJids.clear();
+    this.resetBackgroundHydration();
     this.initialSyncDone = false;
+    this.beginInitialSync();
+    this.openBackgroundHydrationWindow();
     this.syncingSubject.next(true);
     this.selectedInstanceSubject.next(name);
     this.selectedContactJidSubject.next('');
     this.messagesSubject.next([]);
-    this.setLoading({ contacts: true, messages: false });
+    this.setLoading({ contacts: true, messages: true });
 
-    window.setTimeout(() => {
-      this.loadContacts();
-      this.refreshEvents(true, false);
-    }, INITIAL_LOAD_DELAY_MS);
+    this.loadContacts({ bootstrap: true });
   }
 
-  selectContact(jid: string): void {
+  selectContact(jid: string): Promise<void> {
     this.selectedContactJidSubject.next(jid);
     this.markContactAsRead(jid);
-    if (this.shouldForceHistoryLoad(jid)) {
-      void this.loadMessagesForContact(jid, {
-        retryOnSparse: true,
-        limit: CHAT_HISTORY_LIMIT,
-        markAsLoaded: true
-      });
+
+    const shouldHydrateDuringWindow = this.isWithinBackgroundHydrationWindow() && !this.loadedHistoryJids.has(jid);
+
+    if (shouldHydrateDuringWindow || this.shouldForceHistoryLoad(jid)) {
+      return this.loadHistorySilentlyForContact(jid);
     }
+
+    return Promise.resolve();
   }
 
   private markContactAsRead(jid: string): void {
@@ -251,7 +277,22 @@ export class WhatsappStateService implements OnDestroy {
 
   refresh(): void {
     this.loadContacts();
-    this.refreshEvents();
+
+    const currentSelection = this.selectedContactJid;
+    void this.runVisibleMessageLoad(async () => {
+      await this.loadRecentMessagesSnapshot({ silentError: false, showLoading: false });
+
+      if (!currentSelection) {
+        return;
+      }
+
+      this.loadedHistoryJids.delete(currentSelection);
+      await this.loadMessagesForContact(currentSelection, {
+        limit: CHAT_HISTORY_LIMIT,
+        markAsLoaded: true,
+        force: true
+      });
+    });
   }
 
   sendText(jid: string, text: string): Observable<unknown> {
@@ -433,11 +474,12 @@ export class WhatsappStateService implements OnDestroy {
     this.contactsSubject.next(contacts);
   }
 
-  private loadContacts(): void {
+  private loadContacts(options: { bootstrap?: boolean } = {}): void {
     if (!this.selectedInstance) {
       return;
     }
 
+    const bootstrap = options.bootstrap ?? false;
     this.setLoading({ contacts: true });
 
     this.gateway.loadContacts(this.selectedInstance).subscribe({
@@ -467,36 +509,69 @@ export class WhatsappStateService implements OnDestroy {
             return (a.name || '').localeCompare(b.name || '', 'pt-BR');
           });
         this.contactsSubject.next(enriched);
-        this.setLoading({ contacts: false });
+        this.rebuildBackgroundHydrationQueue(enriched, this.selectedContactJid || enriched[0]?.jid || '');
 
         const currentSelection = this.selectedContactJid;
-        if (!currentSelection && enriched.length) {
-          this.selectContact(enriched[0].jid);
-        } else if (
-          currentSelection
-          && enriched.some(contact => contact.jid === currentSelection)
-          && this.shouldForceHistoryLoad(currentSelection)
-        ) {
-          void this.loadMessagesForContact(currentSelection, {
-            retryOnSparse: true,
-            limit: CHAT_HISTORY_LIMIT,
-            markAsLoaded: true
-          });
+        const fallbackSelection = enriched[0]?.jid || '';
+        const selectedJid = currentSelection && enriched.some(contact => contact.jid === currentSelection)
+          ? currentSelection
+          : fallbackSelection;
+
+        if (selectedJid && selectedJid !== currentSelection) {
+          this.selectedContactJidSubject.next(selectedJid);
+          this.markContactAsRead(selectedJid);
         }
 
-        void this.preloadHistories(enriched);
+        this.setLoading({ contacts: false });
+
+        if (bootstrap) {
+          this.updateInitialSyncStatus({
+            currentStep: 1,
+            totalSteps: selectedJid ? 3 : 2,
+            message: 'Conversas carregadas',
+            detail: selectedJid
+              ? 'Buscando mensagens recentes e preparando a conversa selecionada...'
+              : 'Buscando mensagens recentes...'
+          });
+          void this.runInitialMessageSync(selectedJid);
+          return;
+        }
+
+        if (!currentSelection && selectedJid) {
+          void this.selectContact(selectedJid);
+          return;
+        }
+
+        if (
+          selectedJid
+          && selectedJid === currentSelection
+          && this.shouldForceHistoryLoad(selectedJid)
+        ) {
+          void this.loadHistorySilentlyForContact(selectedJid);
+        }
       },
       error: () => {
         this.setError('Não foi possível carregar os contatos.');
-        this.setLoading({ contacts: false });
-        this.onInitialSyncComplete();
+        this.setLoading({ contacts: false, messages: false });
+        if (options.bootstrap) {
+          this.finishInitialSync();
+          this.onInitialSyncComplete();
+        }
       }
     });
   }
 
-  private refreshEvents(silentError = false, showLoading = true): void {
+  private loadRecentMessagesSnapshot(
+    options: {
+      silentError?: boolean;
+      showLoading?: boolean;
+    } = {}
+  ): Promise<void> {
+    const silentError = options.silentError ?? false;
+    const showLoading = options.showLoading ?? true;
+
     if (!this.selectedInstance || this.eventsInFlight) {
-      return;
+      return Promise.resolve();
     }
 
     this.eventsInFlight = true;
@@ -504,28 +579,84 @@ export class WhatsappStateService implements OnDestroy {
       this.setLoading({ messages: true });
     }
 
-    this.gateway.loadEvents(this.selectedInstance).subscribe({
-      next: events => {
-        const incoming = this.mapEventsToMessages(events);
-        const mergedServer = this.mergeServerMessages(incoming);
-        const merged = this.mergeWithLocal(mergedServer);
-        const pruned = this.pruneMessages(merged);
-        this.messagesSubject.next(pruned);
-        this.resortContactsByLatestMessage(pruned);
-        this.eventsInFlight = false;
-        if (showLoading) {
-          this.setLoading({ messages: false });
+    return new Promise(resolve => {
+      this.gateway.loadEvents(this.selectedInstance).subscribe({
+        next: events => {
+          const incoming = this.mapEventsToMessages(events);
+          const mergedServer = this.mergeServerMessages(incoming);
+          const merged = this.mergeWithLocal(mergedServer);
+          const pruned = this.pruneMessages(merged);
+          this.messagesSubject.next(pruned);
+          this.resortContactsByLatestMessage(pruned);
+          this.eventsInFlight = false;
+          if (showLoading) {
+            this.setLoading({ messages: false });
+          }
+          resolve();
+        },
+        error: () => {
+          if (!silentError) {
+            this.setError('Falha ao buscar eventos da conversa.');
+          }
+          this.eventsInFlight = false;
+          if (showLoading) {
+            this.setLoading({ messages: false });
+          }
+          resolve();
         }
-      },
-      error: () => {
-        if (!silentError) {
-          this.setError('Falha ao buscar eventos da conversa.');
-        }
-        this.eventsInFlight = false;
-        if (showLoading) {
-          this.setLoading({ messages: false });
-        }
-      }
+      });
+    });
+  }
+
+  private runVisibleMessageLoad(task: () => Promise<void>): Promise<void> {
+    this.setLoading({ messages: true });
+    return task().finally(() => {
+      this.setLoading({ messages: false });
+    });
+  }
+
+  private loadHistorySilentlyForContact(jid: string): Promise<void> {
+    if (!jid) {
+      return Promise.resolve();
+    }
+
+    if (this.isWithinBackgroundHydrationWindow() && !this.loadedHistoryJids.has(jid)) {
+      this.backgroundHydrationAttempts.delete(jid);
+      this.prioritizeBackgroundHydration(jid);
+      this.scheduleBackgroundHydration(0);
+      return Promise.resolve();
+    }
+
+    return this.loadMessagesForContact(jid, {
+      limit: CHAT_HISTORY_LIMIT,
+      markAsLoaded: true
+    });
+  }
+
+  private runInitialMessageSync(selectedJid: string): void {
+    const tasks: Promise<void>[] = [];
+
+    tasks.push(
+      this.loadRecentMessagesSnapshot({ silentError: true, showLoading: false })
+        .finally(() => this.advanceInitialSync('Mensagens recentes carregadas.'))
+    );
+
+    if (selectedJid) {
+      tasks.push(
+        this.loadMessagesForContact(selectedJid, {
+          limit: CHAT_HISTORY_LIMIT,
+          markAsLoaded: true,
+          force: true
+        }).finally(() => this.advanceInitialSync('Conversa selecionada pronta.'))
+      );
+    }
+
+    void Promise.allSettled(tasks).finally(() => {
+      this.rebuildBackgroundHydrationQueue(this.contactsSubject.value, selectedJid);
+      this.scheduleBackgroundHydration(0);
+      this.finishInitialSync();
+      this.onInitialSyncComplete();
+      this.setLoading({ messages: false });
     });
   }
 
@@ -588,20 +719,22 @@ export class WhatsappStateService implements OnDestroy {
   private loadMessagesForContact(
     jid: string,
     options: {
-      retryOnSparse?: boolean;
-      sparseAttempt?: number;
       limit?: number;
       markAsLoaded?: boolean;
       deep?: boolean;
+      force?: boolean;
     } = {}
   ): Promise<void> {
-    const retryOnSparse = options.retryOnSparse ?? false;
-    const sparseAttempt = options.sparseAttempt ?? 0;
     const limit = Math.max(1, Math.min(CHAT_HISTORY_LIMIT, Number(options.limit || CHAT_HISTORY_LIMIT)));
     const markAsLoaded = options.markAsLoaded ?? true;
+    const force = options.force ?? false;
     const deep = options.deep ?? markAsLoaded;
 
     if (!jid || !this.selectedInstance || this.contactHistoryInFlight.has(jid)) {
+      return Promise.resolve();
+    }
+
+    if (markAsLoaded && !force && this.loadedHistoryJids.has(jid)) {
       return Promise.resolve();
     }
 
@@ -613,53 +746,21 @@ export class WhatsappStateService implements OnDestroy {
           const history = this.mapEventsToMessages(events).filter(message => message.contactJid === jid);
           this.applyHistoryForContact(jid, history);
 
-          if (markAsLoaded && history.length > 1) {
-            this.loadedHistoryJids.add(jid);
-          } else if (markAsLoaded && history.length <= 1) {
-            this.loadedHistoryJids.delete(jid);
+          if (markAsLoaded) {
+            if (history.length > 1) {
+              this.loadedHistoryJids.add(jid);
+              this.backgroundHydrationAttempts.delete(jid);
+            } else {
+              this.loadedHistoryJids.delete(jid);
+            }
           }
 
           this.contactHistoryInFlight.delete(jid);
-
-          if (retryOnSparse && history.length <= 1 && sparseAttempt < SPARSE_HISTORY_MAX_RETRIES) {
-            window.setTimeout(() => {
-              void this.loadMessagesForContact(jid, {
-                retryOnSparse: true,
-                sparseAttempt: sparseAttempt + 1,
-                limit,
-                markAsLoaded,
-                deep
-              }).finally(resolve);
-            }, SPARSE_HISTORY_RETRY_MS);
-            return;
-          }
-
-          if (!markAsLoaded && this.selectedContactJid === jid && !this.loadedHistoryJids.has(jid)) {
-            window.setTimeout(() => {
-              void this.loadMessagesForContact(jid, {
-                retryOnSparse: true,
-                limit: CHAT_HISTORY_LIMIT,
-                markAsLoaded: true,
-                deep: true
-              });
-            }, 0);
-          }
 
           resolve();
         },
         error: () => {
           this.contactHistoryInFlight.delete(jid);
-
-          if (!markAsLoaded && this.selectedContactJid === jid && !this.loadedHistoryJids.has(jid)) {
-            window.setTimeout(() => {
-              void this.loadMessagesForContact(jid, {
-                retryOnSparse: true,
-                limit: CHAT_HISTORY_LIMIT,
-                markAsLoaded: true,
-                deep: true
-              });
-            }, 0);
-          }
 
           resolve();
         }
@@ -685,61 +786,8 @@ export class WhatsappStateService implements OnDestroy {
     const mergedWithLocal = this.mergeWithLocal(mergedServer);
     const pruned = this.pruneMessages(mergedWithLocal);
 
-    // During preload, accumulate silently to avoid per-contact re-renders.
-    // The single emission happens at the end of preloadHistories().
-    if (!this.isPreloading) {
-      this.messagesSubject.next(pruned);
-      this.resortContactsByLatestMessage(pruned);
-    } else {
-      // Still store the merged state internally for next accumulation
-      this.messagesSubject.next(pruned);
-    }
-  }
-
-  private async preloadHistories(contacts: WhatsappContact[]): Promise<void> {
-    if (!this.selectedInstance) {
-      this.onInitialSyncComplete();
-      return;
-    }
-
-    const token = ++this.preloadToken;
-    const queue = contacts
-      .filter(contact => this.isPreloadEligibleContact(contact))
-      .map(contact => contact.jid)
-      .filter(Boolean)
-      .filter(jid => !this.loadedHistoryJids.has(jid) && !this.preloadedHistoryJids.has(jid));
-
-    if (!queue.length) {
-      this.onInitialSyncComplete();
-      return;
-    }
-
-    this.isPreloading = true;
-
-    const workerCount = Math.max(1, Math.min(PRELOAD_HISTORY_CONCURRENCY, queue.length));
-    const worker = async () => {
-      while (token === this.preloadToken && queue.length > 0) {
-        const nextJid = queue.shift();
-        if (!nextJid) {
-          continue;
-        }
-        await this.loadMessagesForContact(nextJid, {
-          retryOnSparse: false,
-          limit: PRELOAD_HISTORY_LIMIT,
-          markAsLoaded: false,
-          deep: false
-        });
-        this.preloadedHistoryJids.add(nextJid);
-        await this.delay(PRELOAD_REQUEST_DELAY_MS);
-      }
-    };
-
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-    // Single emission + sort after all preloads complete
-    this.isPreloading = false;
+    this.messagesSubject.next(pruned);
     this.resortContactsByLatestMessage(this.messagesSubject.value);
-    this.onInitialSyncComplete();
   }
 
   private onInitialSyncComplete(): void {
@@ -747,37 +795,201 @@ export class WhatsappStateService implements OnDestroy {
       return;
     }
     this.initialSyncDone = true;
-    this.syncingSubject.next(false);
+    if (!this.isWithinBackgroundHydrationWindow()) {
+      this.syncingSubject.next(false);
+    }
   }
 
-  private isPreloadEligibleContact(contact: WhatsappContact): boolean {
-    if (!contact?.jid) {
-      return false;
+  private beginInitialSync(): void {
+    this.syncStatusSubject.next({
+      active: true,
+      mode: 'initial',
+      message: 'Carregando conversas',
+      detail: 'Buscando contatos e preparando as mensagens...',
+      currentStep: 0,
+      totalSteps: 3
+    });
+  }
+
+  private updateInitialSyncStatus(patch: Partial<WhatsappSyncStatus>): void {
+    const current = this.syncStatusSubject.value;
+    this.syncStatusSubject.next({
+      ...current,
+      ...patch
+    });
+  }
+
+  private advanceInitialSync(detail: string): void {
+    const current = this.syncStatusSubject.value;
+    if (!current.active || current.mode !== 'initial') {
+      return;
     }
 
-    if (contact.isGroup) {
-      return false;
-    }
+    this.syncStatusSubject.next({
+      ...current,
+      message: 'Sincronizando mensagens',
+      detail,
+      currentStep: Math.min(current.totalSteps, current.currentStep + 1)
+    });
+  }
 
-    return contact.jid.endsWith('@c.us') || contact.jid.endsWith('@lid');
+  private finishInitialSync(): void {
+    this.syncStatusSubject.next(IDLE_SYNC_STATUS);
   }
 
   private shouldForceHistoryLoad(jid: string): boolean {
-    if (!this.loadedHistoryJids.has(jid)) {
-      return true;
+    if (this.isWithinBackgroundHydrationWindow()) {
+      return false;
     }
 
     const serverMessagesForChat = this.messagesSubject.value.filter(
       message => message.contactJid === jid && !message.id.startsWith('local-')
     );
 
-    return serverMessagesForChat.length <= 1;
+    if (serverMessagesForChat.length > 1) {
+      return false;
+    }
+
+    return !this.loadedHistoryJids.has(jid);
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => {
-      window.setTimeout(resolve, ms);
+  private openBackgroundHydrationWindow(): void {
+    if (this.backgroundHydrationWindowTimer !== null) {
+      window.clearTimeout(this.backgroundHydrationWindowTimer);
+      this.backgroundHydrationWindowTimer = null;
+    }
+
+    this.backgroundHydrationWindowUntil = Date.now() + BACKGROUND_HYDRATION_WINDOW_MS;
+    this.backgroundHydrationWindowTimer = window.setTimeout(() => {
+      this.backgroundHydrationWindowTimer = null;
+      this.backgroundHydrationWindowUntil = 0;
+
+      if (this.initialSyncDone) {
+        this.syncingSubject.next(false);
+      }
+    }, BACKGROUND_HYDRATION_WINDOW_MS);
+  }
+
+  private resetBackgroundHydration(): void {
+    this.backgroundHydrationWindowUntil = 0;
+    this.backgroundHydrationQueue = [];
+    this.backgroundHydrationAttempts.clear();
+    if (this.backgroundHydrationWindowTimer !== null) {
+      window.clearTimeout(this.backgroundHydrationWindowTimer);
+      this.backgroundHydrationWindowTimer = null;
+    }
+    if (this.backgroundHydrationTimer !== null) {
+      window.clearTimeout(this.backgroundHydrationTimer);
+      this.backgroundHydrationTimer = null;
+    }
+  }
+
+  private isWithinBackgroundHydrationWindow(): boolean {
+    if (this.backgroundHydrationWindowUntil <= Date.now()) {
+      this.backgroundHydrationWindowUntil = 0;
+      return false;
+    }
+
+    return true;
+  }
+
+  private rebuildBackgroundHydrationQueue(contacts: WhatsappContact[], prioritizedJid = ''): void {
+    if (!this.isWithinBackgroundHydrationWindow()) {
+      this.backgroundHydrationQueue = [];
+      return;
+    }
+
+    const prioritized = prioritizedJid && this.shouldHydrateInBackground(prioritizedJid)
+      ? [prioritizedJid]
+      : [];
+    const rest = contacts
+      .filter(contact => this.isBackgroundHydrationEligible(contact))
+      .map(contact => contact.jid)
+      .filter(jid => !prioritized.includes(jid));
+
+    this.backgroundHydrationQueue = Array.from(new Set([...prioritized, ...rest]));
+  }
+
+  private prioritizeBackgroundHydration(jid: string): void {
+    if (!this.shouldHydrateInBackground(jid)) {
+      return;
+    }
+
+    this.backgroundHydrationQueue = [jid, ...this.backgroundHydrationQueue.filter(item => item !== jid)];
+  }
+
+  private scheduleBackgroundHydration(delayMs = BACKGROUND_HYDRATION_DELAY_MS): void {
+    if (this.backgroundHydrationTimer !== null || !this.isWithinBackgroundHydrationWindow()) {
+      return;
+    }
+
+    this.backgroundHydrationTimer = window.setTimeout(() => {
+      this.backgroundHydrationTimer = null;
+      void this.runBackgroundHydration();
+    }, Math.max(0, delayMs));
+  }
+
+  private async runBackgroundHydration(): Promise<void> {
+    if (!this.isWithinBackgroundHydrationWindow()) {
+      this.backgroundHydrationQueue = [];
+      return;
+    }
+
+    const nextJid = this.backgroundHydrationQueue.find(jid => this.shouldHydrateInBackground(jid));
+    if (!nextJid) {
+      return;
+    }
+
+    this.backgroundHydrationQueue = this.backgroundHydrationQueue.filter(jid => jid !== nextJid);
+
+    await this.loadMessagesForContact(nextJid, {
+      limit: BACKGROUND_HYDRATION_LIMIT,
+      markAsLoaded: true,
+      deep: true
     });
+
+    const hydrated = this.loadedHistoryJids.has(nextJid);
+    const requeued = !hydrated && this.requeueBackgroundHydration(nextJid);
+
+    if (this.backgroundHydrationQueue.some(jid => this.shouldHydrateInBackground(jid))) {
+      this.scheduleBackgroundHydration(requeued ? BACKGROUND_HYDRATION_RETRY_DELAY_MS : BACKGROUND_HYDRATION_DELAY_MS);
+    }
+  }
+
+  private requeueBackgroundHydration(jid: string): boolean {
+    if (!this.shouldHydrateInBackground(jid)) {
+      return false;
+    }
+
+    const attempts = (this.backgroundHydrationAttempts.get(jid) || 0) + 1;
+    this.backgroundHydrationAttempts.set(jid, attempts);
+
+    if (attempts >= BACKGROUND_HYDRATION_MAX_ATTEMPTS) {
+      return false;
+    }
+
+    this.backgroundHydrationQueue = [
+      ...this.backgroundHydrationQueue.filter(item => item !== jid),
+      jid
+    ];
+    return true;
+  }
+
+  private isBackgroundHydrationEligible(contact: WhatsappContact): boolean {
+    if (!contact?.jid || contact.isGroup) {
+      return false;
+    }
+
+    return contact.jid.endsWith('@c.us') || contact.jid.endsWith('@lid') || contact.jid.endsWith('@s.whatsapp.net');
+  }
+
+  private shouldHydrateInBackground(jid: string): boolean {
+    if (!jid || this.loadedHistoryJids.has(jid) || this.contactHistoryInFlight.has(jid)) {
+      return false;
+    }
+
+    const contact = this.contactsSubject.value.find(item => item.jid === jid);
+    return contact ? this.isBackgroundHydrationEligible(contact) : false;
   }
 
   private incrementUnreadCounts(newInbound: WhatsappMessage[]): void {
@@ -867,6 +1079,9 @@ export class WhatsappStateService implements OnDestroy {
     const orderChanged = sorted.some((contact, index) => contact.jid !== current[index]?.jid);
     if (changed || orderChanged) {
       this.contactsSubject.next(sorted);
+      if (this.isWithinBackgroundHydrationWindow()) {
+        this.rebuildBackgroundHydrationQueue(sorted, this.selectedContactJid || sorted[0]?.jid || '');
+      }
     }
   }
 

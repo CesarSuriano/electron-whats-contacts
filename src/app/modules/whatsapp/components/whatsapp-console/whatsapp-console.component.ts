@@ -22,6 +22,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   isLoadingInstances = false;
   isLoadingContacts = false;
   isLoadingMessages = false;
+  isInitialSyncing = false;
+  syncMessage = 'Conectando ao WhatsApp...';
+  syncDetail = '';
+  syncCurrentStep = 0;
+  syncTotalSteps = 0;
 
   isSelectionMode = false;
   selectedCount = 0;
@@ -63,6 +68,14 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       this.isLoadingInstances = state.instances;
       this.isLoadingContacts = state.contacts;
       this.isLoadingMessages = state.messages;
+    });
+
+    this.state.syncStatus$.pipe(takeUntil(this.destroy$)).subscribe(status => {
+      this.isInitialSyncing = status.active && status.mode === 'initial';
+      this.syncMessage = status.message || 'Conectando ao WhatsApp...';
+      this.syncDetail = status.detail || '';
+      this.syncCurrentStep = status.currentStep || 0;
+      this.syncTotalSteps = status.totalSteps || 0;
     });
 
     this.state.selectionMode$.pipe(takeUntil(this.destroy$)).subscribe(mode => {
@@ -137,7 +150,15 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   get isInitialLoading(): boolean {
-    return this.isLoadingInstances || this.isLoadingContacts;
+    return this.isLoadingInstances || this.isLoadingContacts || this.isInitialSyncing;
+  }
+
+  get syncProgress(): number {
+    if (!this.syncTotalSteps) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, (this.syncCurrentStep / this.syncTotalSteps) * 100));
   }
 
   get isUiBlocked(): boolean {

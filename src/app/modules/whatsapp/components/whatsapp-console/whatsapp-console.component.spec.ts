@@ -26,6 +26,14 @@ describe('WhatsappConsoleComponent', () => {
   const selectedInstance$ = new BehaviorSubject<string>('');
   const errorMessage$ = new BehaviorSubject<string>('');
   const loadingState$ = new BehaviorSubject({ instances: false, contacts: false, messages: false, sending: false });
+  const syncStatus$ = new BehaviorSubject({
+    active: false,
+    mode: 'idle' as const,
+    message: '',
+    detail: '',
+    currentStep: 0,
+    totalSteps: 0
+  });
   const selectionMode$ = new BehaviorSubject<boolean>(false);
   const contacts$ = new BehaviorSubject<WhatsappContact[]>([]);
   const selectedJids$ = new BehaviorSubject<Set<string>>(new Set());
@@ -38,6 +46,7 @@ describe('WhatsappConsoleComponent', () => {
       selectedInstance$: selectedInstance$.asObservable(),
       errorMessage$: errorMessage$.asObservable(),
       loadingState$: loadingState$.asObservable(),
+      syncStatus$: syncStatus$.asObservable(),
       selectionMode$: selectionMode$.asObservable(),
       contacts$: contacts$.asObservable(),
       selectedJids$: selectedJids$.asObservable()
@@ -93,7 +102,15 @@ describe('WhatsappConsoleComponent', () => {
     it('is false when neither is loading', () => {
       component.isLoadingInstances = false;
       component.isLoadingContacts = false;
+      component.isInitialSyncing = false;
       expect(component.isInitialLoading).toBeFalse();
+    });
+
+    it('is true when the initial sync is active', () => {
+      component.isLoadingInstances = false;
+      component.isLoadingContacts = false;
+      component.isInitialSyncing = true;
+      expect(component.isInitialLoading).toBeTrue();
     });
   });
 

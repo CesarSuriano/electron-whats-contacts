@@ -14,7 +14,7 @@
   <header class="console-toolbar" *ngIf="!isSelectionMode && (instances.length > 1 || errorMessage || isLoadingMessages)">
     <div class="toolbar-status" *ngIf="isLoadingMessages">
       <span class="material-symbols-outlined">sync</span>
-      <span>Sincronizando conversas...</span>
+      <span>Carregando mensagens...</span>
     </div>
 
     <div class="toolbar-right" *ngIf="instances.length > 1">
@@ -45,7 +45,15 @@
   <ng-template #loading>
     <div class="console-loading">
       <div class="loading-spinner"></div>
-      <p>{{ isLoadingContacts ? 'Carregando conversas...' : 'Conectando ao WhatsApp...' }}</p>
+      <p class="loading-title">{{ syncMessage || (isLoadingContacts ? 'Carregando conversas...' : 'Conectando ao WhatsApp...') }}</p>
+      <p class="loading-detail" *ngIf="syncDetail">{{ syncDetail }}</p>
+
+      <div class="loading-progress" *ngIf="syncTotalSteps > 0">
+        <div class="loading-progress-track">
+          <span class="loading-progress-fill" [style.width.%]="syncProgress"></span>
+        </div>
+        <small>{{ syncCurrentStep }}/{{ syncTotalSteps }}</small>
+      </div>
     </div>
   </ng-template>
 

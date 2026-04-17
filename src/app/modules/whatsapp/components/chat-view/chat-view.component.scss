@@ -7,6 +7,42 @@
   background: #efeae2;
 }
 
+.chat-sync-banner {
+  @apply flex items-center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #d8dbdf;
+  color: #41525d;
+}
+
+.chat-sync-banner .material-symbols-outlined {
+  font-size: 1.1rem;
+  color: #00a884;
+  animation: chat-sync-spin 1.1s linear infinite;
+}
+
+.chat-sync-banner strong,
+.chat-sync-banner small {
+  @apply block;
+}
+
+.chat-sync-banner strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #111b21;
+}
+
+.chat-sync-banner small {
+  font-size: 0.75rem;
+  color: #667781;
+}
+
+@keyframes chat-sync-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .chat-empty {
   @apply flex-1 flex flex-col items-center justify-center text-center p-8;
   color: #41525d;
