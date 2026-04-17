@@ -9,15 +9,11 @@
     (clearSelection)="onClearSelection()"
     (exitMode)="onExitSelectionMode()"
     (openBulkSend)="onOpenBulkSend()"
+    (openSchedule)="onScheduleFromSelection()"
   ></app-bulk-action-bar>
 
-  <header class="console-toolbar" *ngIf="!isSelectionMode && (instances.length > 1 || errorMessage || isLoadingMessages)">
-    <div class="toolbar-status" *ngIf="isLoadingMessages">
-      <span class="material-symbols-outlined">sync</span>
-      <span>Carregando mensagens...</span>
-    </div>
-
-    <div class="toolbar-right" *ngIf="instances.length > 1">
+  <header class="console-toolbar" *ngIf="!isSelectionMode && instances.length > 1">
+    <div class="toolbar-right">
       <label for="instance-select">Instância</label>
       <select
         id="instance-select"
@@ -38,7 +34,7 @@
   <p class="console-error" *ngIf="errorMessage">{{ errorMessage }}</p>
 
   <div class="console-body" *ngIf="!isInitialLoading; else loading">
-    <app-conversation-list class="console-sidebar" [disabled]="isUiBlocked"></app-conversation-list>
+    <app-conversation-list class="console-sidebar" [disabled]="isUiBlocked" (scheduleMessage)="onScheduleFromContact($event)"></app-conversation-list>
     <app-chat-view class="console-chat" [disabled]="isUiBlocked"></app-chat-view>
   </div>
 
@@ -66,4 +62,37 @@
     (close)="onCloseTemplateModal()"
     (save)="onSaveTemplate($event)"
   ></app-message-template-modal>
+
+  <app-schedule-modal
+    [isOpen]="isScheduleModalOpen"
+    (close)="isScheduleModalOpen = false"
+    (confirm)="onScheduleDateConfirm($event)"
+  ></app-schedule-modal>
+
+  <app-message-template-modal
+    [isOpen]="scheduleTemplateModalOpen"
+    [editorConfig]="scheduleTemplateConfig"
+    [initialTemplate]="scheduleEditInitialTemplate"
+    [initialImageDataUrl]="scheduleEditInitialImage"
+    (close)="onScheduleTemplateClose()"
+    (save)="onScheduleTemplateSave($event)"
+  ></app-message-template-modal>
+
+  <app-schedule-list-modal
+    [isOpen]="isScheduleListModalOpen"
+    [schedules]="schedules"
+    [availableContacts]="allContacts"
+    [contactsLoading]="isLoadingContacts || (isInitialLoading && allContacts.length === 0)"
+    (close)="onCloseScheduleList()"
+    (createNew)="onCreateNewSchedule($event)"
+    (editSchedule)="onEditSchedule($event)"
+    (deleteSchedule)="onDeleteSchedule($event)"
+  ></app-schedule-list-modal>
+
+  <app-schedule-notification
+    [schedule]="upcomingSchedule"
+    (action)="onNotificationAction($event)"
+    (dismiss)="onNotificationDismiss($event)"
+    (snooze)="onNotificationSnooze($event)"
+  ></app-schedule-notification>
 </section>

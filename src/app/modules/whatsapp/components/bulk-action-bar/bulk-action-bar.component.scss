@@ -69,3 +69,26 @@
 .btn-primary .material-symbols-outlined {
   font-size: 1.1rem;
 }
+
+.btn-secondary {
+  @apply inline-flex items-center border cursor-pointer font-medium;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 18px;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-secondary:disabled {
+  @apply opacity-55 cursor-not-allowed;
+}
+
+.btn-secondary .material-symbols-outlined {
+  font-size: 1.1rem;
+}

@@ -1,0 +1,66 @@
+<ng-container *ngIf="isOpen">
+  <div class="modal-backdrop" (click)="close.emit()"></div>
+  <section class="schedule-modal" aria-modal="true" role="dialog">
+    <header class="upload-modal-header">
+      <div>
+        <h2>Agendar mensagem</h2>
+        <p>Escolha a data, horário e se deseja que o envio se repita.</p>
+      </div>
+      <button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="schedule-form">
+      <div class="schedule-field">
+        <label class="schedule-label">Data</label>
+        <input
+          type="date"
+          class="schedule-input"
+          [(ngModel)]="dateValue"
+          [min]="minDate"
+        />
+      </div>
+
+      <div class="schedule-field">
+        <label class="schedule-label">Horário</label>
+        <input
+          type="time"
+          class="schedule-input"
+          [(ngModel)]="timeValue"
+        />
+      </div>
+
+      <div class="schedule-field">
+        <label class="schedule-label">Repetição</label>
+        <div class="recurrence-options">
+          <button
+            *ngFor="let opt of recurrenceOptions"
+            type="button"
+            class="recurrence-chip"
+            [class.active]="recurrence === opt.value"
+            (click)="recurrence = opt.value"
+          >{{ opt.label }}</button>
+        </div>
+      </div>
+
+      <div class="schedule-preview" *ngIf="scheduledAtPreview">
+        <span class="material-symbols-outlined schedule-preview-icon">event</span>
+        <span>{{ scheduledAtPreview }}</span>
+      </div>
+    </div>
+
+    <footer class="upload-modal-footer">
+      <button class="btn btn-outline" type="button" (click)="close.emit()">Cancelar</button>
+      <button
+        class="btn btn-icon"
+        type="button"
+        [disabled]="!isValid"
+        (click)="onConfirm()"
+      >
+        <span class="material-symbols-outlined btn-icon-symbol">arrow_forward</span>
+        Continuar
+      </button>
+    </footer>
+  </section>
+</ng-container>

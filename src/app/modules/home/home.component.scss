@@ -33,15 +33,6 @@ $border-radius-card: 8px;
   gap: 0.65rem;
 }
 
-.header-settings-btn {
-  padding-inline: 0.55rem;
-  min-width: 2.1rem;
-}
-
-.header-settings-btn .btn-icon-symbol {
-  margin-right: 0;
-}
-
 .content {
   @apply flex-1 flex flex-col gap-4 min-h-0;
   padding: 1.5rem;

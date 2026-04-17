@@ -1,0 +1,144 @@
+.schedule-notif {
+  position: fixed;
+  bottom: 5.75rem;
+  right: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #751013;
+  color: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(117, 16, 19, 0.35);
+  cursor: pointer;
+  animation: notif-enter 0.3s ease-out;
+  max-width: min(480px, calc(100vw - 3rem));
+}
+
+.schedule-notif-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.schedule-notif-icon .material-symbols-outlined {
+  font-size: 1.4rem;
+  animation: notif-bell 1.5s ease-in-out infinite;
+}
+
+.schedule-notif-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.schedule-notif-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.schedule-notif-detail {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.schedule-notif-action {
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.schedule-notif-action:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.schedule-notif-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0.15rem;
+  border-radius: 999px;
+  display: inline-flex;
+}
+
+.schedule-notif-dismiss:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.schedule-notif-dismiss .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
+.schedule-notif-confirm {
+  cursor: default;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.confirm-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.confirm-btn-primary {
+  background: #fff;
+  color: #751013;
+}
+
+.confirm-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.confirm-btn-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.confirm-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+@keyframes notif-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes notif-bell {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(12deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(6deg); }
+  60% { transform: rotate(0deg); }
+}

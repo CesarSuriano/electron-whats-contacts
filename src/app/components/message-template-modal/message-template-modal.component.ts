@@ -210,10 +210,14 @@ export class MessageTemplateModalComponent implements OnChanges {
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = this.editableTemplate.slice(start, end);
-    const replacement = `${prefix}${selectedText || 'texto'}${suffix}`;
+    const rawSelected = this.editableTemplate.slice(start, end);
+    const leadingSpaces = rawSelected.length - rawSelected.trimStart().length;
+    const trailingSpaces = rawSelected.length - rawSelected.trimEnd().length;
+    const inner = rawSelected.trim() || 'texto';
+    const replacement = `${' '.repeat(leadingSpaces)}${prefix}${inner}${suffix}${' '.repeat(trailingSpaces)}`;
+    const adjustedStart = start + leadingSpaces;
 
-    this.replaceRange(start, end, replacement, prefix.length, suffix.length, selectedText.length > 0);
+    this.replaceRange(start, end, replacement, leadingSpaces + prefix.length, suffix.length + trailingSpaces, rawSelected.trim().length > 0);
   }
 
   private insertText(text: string): void {

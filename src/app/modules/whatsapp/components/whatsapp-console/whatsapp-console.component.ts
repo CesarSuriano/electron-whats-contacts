@@ -3,9 +3,14 @@ import { Subject, combineLatest } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
 
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../../../models/message-template.model';
+import { ScheduledContact, ScheduledMessage, ScheduleRecurrence } from '../../../../models/scheduled-message.model';
 import { WhatsappContact, WhatsappInstance } from '../../../../models/whatsapp.model';
 import { PendingBulkSend, PendingBulkSendService } from '../../../../services/pending-bulk-send.service';
 import { MessageTemplateService } from '../../../../services/message-template.service';
+import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
+import { ScheduleResult } from '../../../../components/schedule-modal/schedule-modal.component';
+import { ScheduleCreateRequest, ScheduleEditRequest } from '../../../../components/schedule-list-modal/schedule-list-modal.component';
 import { BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
@@ -40,7 +45,25 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     description: 'Escreva a mensagem que será pré-preenchida para cada contato selecionado. Use {nome} para incluir o nome do contato.'
   };
 
-  private contacts: WhatsappContact[] = [];
+  isScheduleModalOpen = false;
+  isScheduleListModalOpen = false;
+  scheduleTemplateModalOpen = false;
+  scheduleContacts: WhatsappContact[] = [];
+  pendingScheduleDate = '';
+  pendingScheduleRecurrence: ScheduleRecurrence = 'none';
+  editingScheduleId: string | null = null;
+  schedules: ScheduledMessage[] = [];
+  upcomingSchedule: ScheduledMessage | null = null;
+
+  scheduleTemplateConfig: MessageTemplateEditorConfig = {
+    type: 'birthday',
+    title: 'Mensagem agendada',
+    description: 'Escreva a mensagem que será enviada. Use {nome} para incluir o nome do contato.'
+  };
+  scheduleEditInitialTemplate = '';
+  scheduleEditInitialImage: string | undefined;
+
+  allContacts: WhatsappContact[] = [];
   private selectedJidSet = new Set<string>();
   private destroy$ = new Subject<void>();
 
@@ -48,7 +71,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     private state: WhatsappStateService,
     private bulkSend: BulkSendService,
     private pendingBulkSendService: PendingBulkSendService,
-    private messageTemplateService: MessageTemplateService
+    private messageTemplateService: MessageTemplateService,
+    private scheduleListLauncher: ScheduleListLauncherService,
+    private scheduledMessageService: ScheduledMessageService
   ) {}
 
   ngOnInit(): void {
@@ -88,7 +113,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     combineLatest([this.state.contacts$, this.state.selectedJids$])
       .pipe(takeUntil(this.destroy$))
       .subscribe(([contacts, selectedJids]) => {
-        this.contacts = contacts;
+        this.allContacts = contacts;
         this.selectedJidSet = selectedJids;
         this.selectedCount = selectedJids.size;
         this.totalVisible = contacts.length;
@@ -106,6 +131,26 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         .subscribe(contacts => {
           this.processPendingBulk(pending, contacts);
         });
+    }
+
+    this.scheduledMessageService.schedules$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(schedules => (this.schedules = schedules));
+
+    this.scheduledMessageService.upcoming$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(upcoming => (this.upcomingSchedule = upcoming));
+
+    this.scheduleListLauncher.openRequests$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (this.scheduleListLauncher.consumePendingOpen()) {
+          this.isScheduleListModalOpen = true;
+        }
+      });
+
+    if (this.scheduleListLauncher.consumePendingOpen()) {
+      this.isScheduleListModalOpen = true;
     }
 
     this.state.loadInstances();
@@ -131,7 +176,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   onSelectAll(): void {
-    this.state.selectAll(this.contacts.map(c => c.jid));
+    this.state.selectAll(this.allContacts.map(c => c.jid));
   }
 
   onClearSelection(): void {
@@ -175,7 +220,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const selectedContacts = this.contacts.filter(c => this.selectedJidSet.has(c.jid));
+    const selectedContacts = this.allContacts.filter(c => this.selectedJidSet.has(c.jid));
     if (!selectedContacts.length) {
       return;
     }
@@ -183,6 +228,136 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.bulkSend.start(selectedContacts, trimmed, result.imageDataUrl);
     this.isTemplateModalOpen = false;
     this.state.exitSelectionMode();
+  }
+
+  // --- Scheduling ---
+
+  onScheduleFromContact(contact: WhatsappContact): void {
+    this.scheduleContacts = [contact];
+    this.editingScheduleId = null;
+    this.isScheduleModalOpen = true;
+  }
+
+  onScheduleFromSelection(): void {
+    if (!this.selectedCount || this.isUiBlocked) return;
+    this.scheduleContacts = this.allContacts.filter(c => this.selectedJidSet.has(c.jid));
+    this.editingScheduleId = null;
+    this.isScheduleModalOpen = true;
+  }
+
+  onScheduleDateConfirm(result: ScheduleResult): void {
+    this.pendingScheduleDate = result.scheduledAt;
+    this.pendingScheduleRecurrence = result.recurrence;
+    this.isScheduleModalOpen = false;
+    this.scheduleEditInitialTemplate = '';
+    this.scheduleEditInitialImage = undefined;
+    this.scheduleTemplateModalOpen = true;
+  }
+
+  onScheduleTemplateClose(): void {
+    this.scheduleTemplateModalOpen = false;
+  }
+
+  onScheduleTemplateSave(result: MessageTemplateSaveResult): void {
+    const text = result.text.trim();
+    if (!text) return;
+
+    const contacts: ScheduledContact[] = this.scheduleContacts.map(c => ({
+      jid: c.jid,
+      name: c.name || c.phone,
+      phone: c.phone
+    }));
+
+    if (this.editingScheduleId) {
+      this.scheduledMessageService.update(this.editingScheduleId, {
+        scheduledAt: this.pendingScheduleDate,
+        recurrence: this.pendingScheduleRecurrence,
+        template: text,
+        imageDataUrl: result.imageDataUrl,
+        contacts
+      });
+    } else {
+      this.scheduledMessageService.create({
+        scheduledAt: this.pendingScheduleDate,
+        recurrence: this.pendingScheduleRecurrence,
+        template: text,
+        imageDataUrl: result.imageDataUrl,
+        contacts
+      });
+    }
+
+    this.scheduleTemplateModalOpen = false;
+    this.state.exitSelectionMode();
+    this.editingScheduleId = null;
+  }
+
+  onOpenScheduleList(): void {
+    this.isScheduleListModalOpen = true;
+  }
+
+  onCloseScheduleList(): void {
+    this.isScheduleListModalOpen = false;
+  }
+
+  onCreateNewSchedule(request: ScheduleCreateRequest): void {
+    this.isScheduleListModalOpen = false;
+    this.editingScheduleId = null;
+    this.pendingScheduleDate = request.scheduledAt;
+    this.pendingScheduleRecurrence = request.recurrence;
+    this.scheduleContacts = request.contacts.map(sc =>
+      this.allContacts.find(c => c.jid === sc.jid) || { jid: sc.jid, name: sc.name, phone: sc.phone } as WhatsappContact
+    );
+    this.scheduleEditInitialTemplate = '';
+    this.scheduleEditInitialImage = undefined;
+    this.scheduleTemplateModalOpen = true;
+  }
+
+  onEditSchedule(request: ScheduleEditRequest): void {
+    const sch = request.schedule;
+    this.editingScheduleId = sch.id;
+    this.pendingScheduleDate = sch.scheduledAt;
+    this.pendingScheduleRecurrence = sch.recurrence;
+
+    const matchedContacts = sch.contacts.map(sc =>
+      this.allContacts.find(c => c.jid === sc.jid) || { jid: sc.jid, name: sc.name, phone: sc.phone, found: false } as WhatsappContact
+    );
+    this.scheduleContacts = matchedContacts;
+
+    if (request.mode === 'edit-message') {
+      this.scheduleEditInitialTemplate = sch.template;
+      this.scheduleEditInitialImage = sch.imageDataUrl;
+      this.isScheduleListModalOpen = false;
+      this.scheduleTemplateModalOpen = true;
+    } else {
+      this.scheduledMessageService.update(sch.id, {
+        scheduledAt: sch.scheduledAt,
+        recurrence: sch.recurrence,
+        contacts: sch.contacts
+      });
+    }
+  }
+
+  onDeleteSchedule(id: string): void {
+    this.scheduledMessageService.remove(id);
+  }
+
+  onNotificationAction(schedule: ScheduledMessage): void {
+    const matchedContacts = schedule.contacts
+      .map(sc => this.allContacts.find(c => c.jid === sc.jid))
+      .filter((c): c is WhatsappContact => c !== null);
+
+    if (matchedContacts.length) {
+      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl);
+    }
+    this.scheduledMessageService.markDone(schedule.id);
+  }
+
+  onNotificationDismiss(id: string): void {
+    this.scheduledMessageService.dismissNotification(id);
+  }
+
+  onNotificationSnooze(id: string): void {
+    this.scheduledMessageService.snoozeNotification(id);
   }
 
   private processPendingBulk(pending: PendingBulkSend, contacts: WhatsappContact[]): void {

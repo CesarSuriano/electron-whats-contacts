@@ -1,0 +1,175 @@
+<ng-container *ngIf="isOpen">
+  <div class="modal-backdrop" (click)="close.emit()"></div>
+  <section class="schedule-list-modal" aria-modal="true" role="dialog">
+
+    <!-- LIST VIEW -->
+    <ng-container *ngIf="view === 'list'">
+      <header class="upload-modal-header">
+        <div>
+          <h2>Agendamentos de mensagens</h2>
+          <p>Gerencie seus envios programados.</p>
+        </div>
+        <button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </header>
+
+      <div class="schedule-list-actions">
+        <button class="btn btn-icon" type="button" (click)="onStartCreate()">
+          <span class="material-symbols-outlined btn-icon-symbol">add</span>
+          Novo agendamento
+        </button>
+      </div>
+
+      <div class="schedule-list-scroll">
+        <div class="schedule-section" *ngIf="pendingSchedules.length">
+          <h3 class="schedule-section-title">Agendados</h3>
+          <div class="schedule-card" *ngFor="let sch of pendingSchedules">
+            <div class="schedule-card-main">
+              <div class="schedule-card-date">
+                <span class="material-symbols-outlined schedule-card-icon">event</span>
+                <span>{{ formatDate(sch.scheduledAt) }}</span>
+                <span class="schedule-recurrence-tag" *ngIf="sch.recurrence !== 'none'">{{ recurrenceLabel(sch.recurrence) }}</span>
+              </div>
+              <p class="schedule-card-preview">{{ previewTemplate(sch.template) }}</p>
+              <span class="schedule-card-contacts">{{ sch.contacts.length }} {{ sch.contacts.length === 1 ? 'contato' : 'contatos' }}</span>
+            </div>
+            <div class="schedule-card-actions">
+              <button type="button" class="schedule-action-btn" (click)="onEdit(sch)" title="Editar">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button type="button" class="schedule-action-btn schedule-action-delete" (click)="onDelete(sch.id)" title="Apagar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="schedule-section" *ngIf="doneSchedules.length">
+          <h3 class="schedule-section-title">Concluídos</h3>
+          <div class="schedule-card schedule-card-done" *ngFor="let sch of doneSchedules">
+            <div class="schedule-card-main">
+              <div class="schedule-card-date">
+                <span class="material-symbols-outlined schedule-card-icon">check_circle</span>
+                <span>{{ formatDate(sch.scheduledAt) }}</span>
+              </div>
+              <p class="schedule-card-preview">{{ previewTemplate(sch.template) }}</p>
+            </div>
+            <div class="schedule-card-actions">
+              <button type="button" class="schedule-action-btn schedule-action-delete" (click)="onDelete(sch.id)" title="Apagar">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="schedule-empty" *ngIf="!pendingSchedules.length && !doneSchedules.length">
+          Nenhum agendamento criado.
+        </p>
+      </div>
+    </ng-container>
+
+    <!-- EDIT / CREATE VIEW -->
+    <ng-container *ngIf="view === 'edit'">
+      <header class="upload-modal-header">
+        <div>
+          <h2>{{ editingSchedule ? 'Editar agendamento' : 'Novo agendamento' }}</h2>
+          <p>{{ editingSchedule ? 'Altere data, repetição, contatos ou mensagem.' : 'Defina data, repetição e contatos.' }}</p>
+        </div>
+        <button class="modal-close" type="button" (click)="onBackToList()" aria-label="Voltar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </header>
+
+      <div class="edit-form">
+        <div class="edit-row">
+          <div class="schedule-field">
+            <label class="schedule-label">Data</label>
+            <input type="date" class="schedule-input" [(ngModel)]="editDate" />
+          </div>
+          <div class="schedule-field">
+            <label class="schedule-label">Horário</label>
+            <input type="time" class="schedule-input" [(ngModel)]="editTime" />
+          </div>
+        </div>
+
+        <div class="schedule-field">
+          <label class="schedule-label">Repetição</label>
+          <div class="recurrence-options">
+            <button
+              *ngFor="let opt of recurrenceOptions"
+              type="button"
+              class="recurrence-chip"
+              [class.active]="editRecurrence === opt.value"
+              (click)="editRecurrence = opt.value"
+            >{{ opt.label }}</button>
+          </div>
+        </div>
+
+        <div class="schedule-field">
+          <label class="schedule-label">Contatos ({{ editSelectedCount }})</label>
+
+          <div class="selected-contacts-chips" *ngIf="selectedContactsList.length">
+            <div class="contact-chip" *ngFor="let c of selectedContactsList">
+              <div class="contact-chip-info">
+                <span class="contact-chip-name" *ngIf="c.name">{{ c.name }}</span>
+                <span class="contact-chip-phone">{{ formatPhone(c.phone || c.jid) }}</span>
+              </div>
+              <button type="button" class="contact-chip-remove" (click)="toggleContact(c.jid)">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="contact-autocomplete-wrapper">
+            <div class="contact-picker-search">
+              <span class="material-symbols-outlined contact-search-icon">search</span>
+              <input
+                type="text"
+                class="schedule-input contact-search-input"
+                placeholder="Buscar contato para adicionar..."
+                [(ngModel)]="contactSearch"
+                (focus)="onContactInputFocus()"
+                (blur)="onContactInputBlur()"
+              />
+            </div>
+            <div class="contact-autocomplete-dropdown" *ngIf="showAutocomplete">
+              <button
+                type="button"
+                class="contact-autocomplete-item"
+                *ngFor="let c of autocompleteResults"
+                (mousedown)="onSelectAutocomplete(c)"
+              >
+                <div class="contact-autocomplete-info">
+                  <span class="contact-autocomplete-name" *ngIf="c.name">{{ c.name }}</span>
+                  <span class="contact-autocomplete-phone">{{ formatPhone(c.phone) }}</span>
+                </div>
+              </button>
+              <div class="contact-autocomplete-empty" *ngIf="autocompleteMessage">
+                {{ autocompleteMessage }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="upload-modal-footer">
+        <button class="btn btn-outline" type="button" (click)="onBackToList()">Voltar</button>
+        <button class="btn btn-outline" type="button" *ngIf="editingSchedule" (click)="onEditMessage()">
+          <span class="material-symbols-outlined btn-icon-symbol">edit_note</span>
+          Editar mensagem
+        </button>
+        <button
+          class="btn btn-icon"
+          type="button"
+          [disabled]="editSelectedCount === 0 || !editDate || !editTime"
+          (click)="onSaveEdit()"
+        >
+          <span class="material-symbols-outlined btn-icon-symbol">{{ editingSchedule ? 'save' : 'check' }}</span>
+          {{ editingSchedule ? 'Salvar' : 'Continuar' }}
+        </button>
+      </footer>
+    </ng-container>
+
+  </section>
+</ng-container>

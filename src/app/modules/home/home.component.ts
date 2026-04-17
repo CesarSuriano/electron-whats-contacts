@@ -12,6 +12,9 @@ import { Cliente, ClientesLoadResult, SortColumn, SortDirection } from '../../mo
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult, MessageTemplateType, MessageTemplates } from '../../models/message-template.model';
 import { MessageTemplateService } from '../../services/message-template.service';
 import { PendingBulkSendService } from '../../services/pending-bulk-send.service';
+import { ScheduleListLauncherService } from '../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../services/scheduled-message.service';
+import { ScheduledMessage } from '../../models/scheduled-message.model';
 
 @Component({
   selector: 'app-home',
@@ -29,10 +32,10 @@ export class HomeComponent implements OnInit {
   isDraggingFile = false;
   isSavingUpload = false;
   isConfigMenuOpen = false;
-  isHeaderSettingsOpen = false;
   isMessageTemplateModalOpen = false;
   isSavingTemplate = false;
   isAboutModalOpen = false;
+  upcomingSchedule: ScheduledMessage | null = null;
 
   lastUpdated: string | null = null;
   storedFileName: string | null = null;
@@ -59,6 +62,8 @@ export class HomeComponent implements OnInit {
     private clientesDataService: ClientesDataService,
     private messageTemplateService: MessageTemplateService,
     private pendingBulkSendService: PendingBulkSendService,
+    private scheduleListLauncher: ScheduleListLauncherService,
+    private scheduledMessageService: ScheduledMessageService,
     private router: Router
   ) {
     this.messageTemplates = this.messageTemplateService.getTemplates();
@@ -66,6 +71,7 @@ export class HomeComponent implements OnInit {
 
   ngOnInit(): void {
     this.initializeClientes();
+    this.scheduledMessageService.upcoming$.subscribe(u => (this.upcomingSchedule = u));
   }
 
   @HostListener('window:dragover', ['$event'])
@@ -169,7 +175,6 @@ export class HomeComponent implements OnInit {
 
   openUploadModal(): void {
     this.isConfigMenuOpen = false;
-    this.isHeaderSettingsOpen = false;
     this.isUploadModalOpen = true;
     this.isDraggingFile = false;
     this.isSavingUpload = false;
@@ -179,7 +184,6 @@ export class HomeComponent implements OnInit {
   goToWhatsapp(): void {
     void this.router.navigate(['/whatsapp']);
     this.isConfigMenuOpen = false;
-    this.isHeaderSettingsOpen = false;
   }
 
   closeUploadModal(): void {
@@ -199,13 +203,7 @@ export class HomeComponent implements OnInit {
   }
 
   toggleConfigMenu(): void {
-    this.isHeaderSettingsOpen = false;
     this.isConfigMenuOpen = !this.isConfigMenuOpen;
-  }
-
-  toggleHeaderSettingsMenu(): void {
-    this.isConfigMenuOpen = false;
-    this.isHeaderSettingsOpen = !this.isHeaderSettingsOpen;
   }
 
   openTemplateEditor(type: MessageTemplateType): void {
@@ -216,7 +214,6 @@ export class HomeComponent implements OnInit {
 
   openAboutModal(): void {
     this.isConfigMenuOpen = false;
-    this.isHeaderSettingsOpen = false;
     this.isAboutModalOpen = true;
   }
 
@@ -325,6 +322,23 @@ export class HomeComponent implements OnInit {
     }
 
     return this.messageTemplateService.getTemplateImage(this.activeTemplateEditorConfig.type);
+  }
+
+  openScheduleList(): void {
+    this.scheduleListLauncher.requestOpen();
+    void this.router.navigate(['/whatsapp']);
+  }
+
+  onNotificationAction(_schedule: ScheduledMessage): void {
+    void this.router.navigate(['/whatsapp']);
+  }
+
+  onNotificationDismiss(id: string): void {
+    this.scheduledMessageService.dismissNotification(id);
+  }
+
+  onNotificationSnooze(id: string): void {
+    this.scheduledMessageService.snoozeNotification(id);
   }
 
   private initializeClientes(): void {

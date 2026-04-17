@@ -1,38 +1,18 @@
 <div class="whatsapp-page-shell">
-  <header class="app-header">
-    <div class="header-left">
-      <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
-    </div>
-    <div class="header-center">
-      <span class="app-title">WhatsApp</span>
-    </div>
-    <div class="header-right">
-      <button class="btn btn-outline" type="button" (click)="goToHome()">
-        <span class="material-symbols-outlined btn-icon-symbol">arrow_back</span>
-        <span class="btn-label">Clientes</span>
-      </button>
-
-      <div class="header-config-wrapper">
-        <button
-          class="btn btn-outline header-settings-btn"
-          type="button"
-          (click)="toggleHeaderSettingsMenu()"
-          aria-label="Configurações do app"
-        >
-          <span class="material-symbols-outlined btn-icon-symbol">settings</span>
-        </button>
-
-        <div class="header-config-menu" *ngIf="isHeaderSettingsOpen">
-          <button class="config-menu-item" type="button" (click)="onToggleSessionConnection()" [disabled]="isSessionActionLoading">
-            {{ connectActionLabel }}
-          </button>
-          <button class="config-menu-item" type="button" (click)="openAboutModal()">
-            Ver versão do app
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <app-page-header title="WhatsApp" navIcon="arrow_back" navLabel="Clientes" (navClick)="goToHome()">
+    <button class="config-menu-item" type="button" (click)="openScheduleList()">
+      <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
+      Agendamentos de mensagens
+    </button>
+    <button class="config-menu-item" type="button" (click)="onToggleSessionConnection()" [disabled]="isSessionActionLoading">
+      <span class="material-symbols-outlined config-menu-icon">{{ shouldShowDisconnectAction ? 'link_off' : 'link' }}</span>
+      {{ connectActionLabel }}
+    </button>
+    <button class="config-menu-item" type="button" (click)="openAboutModal()">
+      <span class="material-symbols-outlined config-menu-icon">info</span>
+      Ver versão do app
+    </button>
+  </app-page-header>
 
   <main class="whatsapp-page-content">
     <app-whatsapp-console *ngIf="isSessionReady"></app-whatsapp-console>
@@ -89,4 +69,5 @@
       </button>
     </footer>
   </section>
+
 </div>

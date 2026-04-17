@@ -1,0 +1,29 @@
+<header class="app-header">
+  <div class="header-left">
+    <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
+  </div>
+  <div class="header-center">
+    <span class="app-title">{{ title }}</span>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-outline" type="button" (click)="navClick.emit()">
+      <span class="material-symbols-outlined btn-icon-symbol">{{ navIcon }}</span>
+      <span class="btn-label">{{ navLabel }}</span>
+    </button>
+
+    <div class="header-config-wrapper">
+      <button
+        class="btn btn-outline header-settings-btn"
+        type="button"
+        (click)="toggleMenu()"
+        aria-label="Configurações do app"
+      >
+        <span class="material-symbols-outlined btn-icon-symbol">settings</span>
+      </button>
+
+      <div class="header-config-menu" *ngIf="isMenuOpen" (click)="closeMenu()">
+        <ng-content></ng-content>
+      </div>
+    </div>
+  </div>
+</header>

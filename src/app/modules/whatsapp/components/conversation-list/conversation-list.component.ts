@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -25,6 +25,7 @@ const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
 })
 export class ConversationListComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() disabled = false;
+  @Output() scheduleMessage = new EventEmitter<WhatsappContact>();
   @ViewChild('scrollContainer')
   set scrollContainerRef(value: ElementRef<HTMLDivElement> | undefined) {
     this.scrollContainer = value;
@@ -43,6 +44,10 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   isSelectionMode = false;
   selectedJids = new Set<string>();
   flashingJids = new Set<string>();
+  contextMenuVisible = false;
+  contextMenuX = 0;
+  contextMenuY = 0;
+  contextMenuContact: WhatsappContact | null = null;
   private labelColorMap = new Map<string, string>();
 
   private destroy$ = new Subject<void>();
@@ -255,6 +260,28 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
   trackByJid(_: number, contact: WhatsappContact): string {
     return contact.jid;
+  }
+
+  onContextMenu(event: MouseEvent, contact: WhatsappContact): void {
+    if (this.disabled || this.isSelectionMode) return;
+    event.preventDefault();
+    this.contextMenuContact = contact;
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+    this.contextMenuVisible = true;
+  }
+
+  onContextSchedule(): void {
+    if (this.contextMenuContact) {
+      this.scheduleMessage.emit(this.contextMenuContact);
+    }
+    this.closeContextMenu();
+  }
+
+  @HostListener('document:click')
+  closeContextMenu(): void {
+    this.contextMenuVisible = false;
+    this.contextMenuContact = null;
   }
 
   private applyFilter(): void {

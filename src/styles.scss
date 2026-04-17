@@ -80,6 +80,7 @@ app-root {
 }
 
 .config-menu-item {
+	@apply flex items-center gap-2;
 	border: none;
 	background: transparent;
 	text-align: left;
@@ -88,6 +89,10 @@ app-root {
 	color: #333;
 	cursor: pointer;
 	font-size: 0.9rem;
+}
+
+.config-menu-icon {
+	font-size: 1.15rem;
 }
 
 .config-menu-item:hover {

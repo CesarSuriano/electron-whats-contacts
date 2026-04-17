@@ -1,35 +1,14 @@
 <div class="app-container">
-  <header class="app-header">
-    <div class="header-left">
-      <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
-    </div>
-    <div class="header-center">
-      <span class="app-title">Clientes da Loja</span>
-    </div>
-    <div class="header-right">
-      <button class="btn btn-outline" type="button" (click)="goToWhatsapp()">
-        <span class="material-symbols-outlined btn-icon-symbol">chat</span>
-        <span class="btn-label">WhatsApp</span>
-      </button>
-
-      <div class="header-config-wrapper">
-        <button
-          class="btn btn-outline header-settings-btn"
-          type="button"
-          (click)="toggleHeaderSettingsMenu()"
-          aria-label="Configurações do app"
-        >
-          <span class="material-symbols-outlined btn-icon-symbol">settings</span>
-        </button>
-
-        <div class="header-config-menu" *ngIf="isHeaderSettingsOpen">
-          <button class="config-menu-item" type="button" (click)="openAboutModal()">
-            Ver versão do app
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <app-page-header title="Clientes da Loja" navIcon="chat" navLabel="WhatsApp" (navClick)="goToWhatsapp()">
+    <button class="config-menu-item" type="button" (click)="openScheduleList()">
+      <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
+      Agendamentos de mensagens
+    </button>
+    <button class="config-menu-item" type="button" (click)="openAboutModal()">
+      <span class="material-symbols-outlined config-menu-icon">info</span>
+      Ver versão do app
+    </button>
+  </app-page-header>
 
   <main class="content">
     <section class="legend-row">
@@ -164,6 +143,13 @@
     [whatsNew]="appWhatsNew"
     (close)="closeAboutModal()"
   ></app-about-modal>
+
+  <app-schedule-notification
+    [schedule]="upcomingSchedule"
+    (action)="onNotificationAction($event)"
+    (dismiss)="onNotificationDismiss($event)"
+    (snooze)="onNotificationSnooze($event)"
+  ></app-schedule-notification>
 
   <div class="app-toast" *ngIf="successToastMessage">
     <span class="material-symbols-outlined app-toast-icon">check_circle</span>

@@ -5,6 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 import * as QRCode from 'qrcode';
 
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
+import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 
@@ -16,7 +17,6 @@ import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 export class WhatsappPageComponent implements OnInit, OnDestroy {
   isCheckingSession = true;
   isSessionReady = false;
-  isHeaderSettingsOpen = false;
   isAboutModalOpen = false;
   isDisconnectModalOpen = false;
   isSessionActionLoading = false;
@@ -33,7 +33,8 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   constructor(
     private router: Router,
     private whatsappGatewayService: WhatsappWebjsGatewayService,
-    private ws: WhatsappWsService
+    private ws: WhatsappWsService,
+    private scheduleListLauncher: ScheduleListLauncherService
   ) {}
 
   ngOnInit(): void {
@@ -56,17 +57,15 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   goToHome(): void {
-    this.isHeaderSettingsOpen = false;
     void this.router.navigate(['/']);
   }
 
-  toggleHeaderSettingsMenu(): void {
-    this.isHeaderSettingsOpen = !this.isHeaderSettingsOpen;
+  openAboutModal(): void {
+    this.isAboutModalOpen = true;
   }
 
-  openAboutModal(): void {
-    this.isHeaderSettingsOpen = false;
-    this.isAboutModalOpen = true;
+  openScheduleList(): void {
+    this.scheduleListLauncher.requestOpen();
   }
 
   closeAboutModal(): void {
@@ -84,7 +83,6 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   onToggleSessionConnection(): void {
-    this.isHeaderSettingsOpen = false;
     if (this.isSessionActionLoading) {
       return;
     }

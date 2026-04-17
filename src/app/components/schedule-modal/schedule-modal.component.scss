@@ -1,0 +1,96 @@
+.schedule-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(480px, calc(100vw - 2rem));
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+  z-index: 21;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.schedule-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.schedule-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schedule-input {
+  border: 1px solid #d1d1d1;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: #333;
+  background: #fff;
+}
+
+.schedule-input:focus {
+  outline: 2px solid rgba(117, 16, 19, 0.18);
+  border-color: #751013;
+}
+
+.recurrence-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.recurrence-chip {
+  border: 1px solid #d1d1d1;
+  background: #fff;
+  color: #555;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.recurrence-chip:hover {
+  border-color: #751013;
+  color: #751013;
+}
+
+.recurrence-chip.active {
+  background: #751013;
+  border-color: #751013;
+  color: #fff;
+  font-weight: 500;
+}
+
+.schedule-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  background: #faf5f5;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: #4a4a4a;
+}
+
+.schedule-preview-icon {
+  font-size: 1.15rem;
+  color: #751013;
+}

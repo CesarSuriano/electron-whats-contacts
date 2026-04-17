@@ -1,0 +1,38 @@
+<div class="schedule-notif" *ngIf="schedule && !showConfirm" (click)="onAction()">
+  <div class="schedule-notif-icon">
+    <span class="material-symbols-outlined">notifications_active</span>
+  </div>
+  <div class="schedule-notif-body">
+    <span class="schedule-notif-title">Envio agendado</span>
+    <span class="schedule-notif-detail">
+      {{ timeLabel }} · {{ contactCount }} {{ contactCount === 1 ? 'contato' : 'contatos' }}
+    </span>
+  </div>
+  <button
+    type="button"
+    class="schedule-notif-action"
+    (click)="onAction(); $event.stopPropagation()"
+  >Enviar agora</button>
+  <button
+    type="button"
+    class="schedule-notif-dismiss"
+    (click)="showConfirm = true; $event.stopPropagation()"
+    aria-label="Fechar"
+  >
+    <span class="material-symbols-outlined">close</span>
+  </button>
+</div>
+
+<div class="schedule-notif schedule-notif-confirm" *ngIf="schedule && showConfirm">
+  <div class="schedule-notif-body">
+    <span class="schedule-notif-title">O que deseja fazer?</span>
+  </div>
+  <div class="confirm-actions">
+    <button type="button" class="confirm-btn confirm-btn-primary" (click)="onSnooze()">
+      Lembrar depois
+    </button>
+    <button type="button" class="confirm-btn confirm-btn-secondary" (click)="onDismiss()">
+      Não lembrar mais
+    </button>
+  </div>
+</div>

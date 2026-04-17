@@ -15,4 +15,5 @@ export class BulkActionBarComponent {
   @Output() clearSelection = new EventEmitter<void>();
   @Output() exitMode = new EventEmitter<void>();
   @Output() openBulkSend = new EventEmitter<void>();
+  @Output() openSchedule = new EventEmitter<void>();
 }

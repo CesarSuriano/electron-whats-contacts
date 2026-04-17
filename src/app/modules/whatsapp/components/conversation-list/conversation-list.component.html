@@ -58,6 +58,7 @@
       [class.flashing]="isFlashing(contact.jid)"
       [disabled]="disabled"
       (click)="onContactClick(contact)"
+      (contextmenu)="onContextMenu($event, contact)"
     >
       <span class="selection-checkbox" *ngIf="isSelectionMode">
         <span class="material-symbols-outlined">
@@ -98,4 +99,16 @@
       <p>Carregando conversas...</p>
     </div>
   </ng-template>
+
+  <div
+    class="context-menu"
+    *ngIf="contextMenuVisible"
+    [style.left.px]="contextMenuX"
+    [style.top.px]="contextMenuY"
+  >
+    <button type="button" class="context-menu-item" (click)="onContextSchedule()">
+      <span class="material-symbols-outlined">schedule_send</span>
+      Agendar mensagem
+    </button>
+  </div>
 </div>

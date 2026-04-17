@@ -1,0 +1,376 @@
+.schedule-list-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 2rem));
+  max-height: calc(100vh - 1.5rem);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
+  z-index: 21;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.schedule-list-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.schedule-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 64vh;
+}
+
+.schedule-section-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  padding-bottom: 0.35rem;
+}
+
+.schedule-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  margin-bottom: 0.45rem;
+  transition: border-color 0.15s;
+}
+
+.schedule-card:hover {
+  border-color: #ccc;
+}
+
+.schedule-card-done {
+  opacity: 0.55;
+}
+
+.schedule-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.schedule-card-date {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.schedule-card-icon {
+  font-size: 1.1rem;
+  color: #751013;
+}
+
+.schedule-card-done .schedule-card-icon {
+  color: #16a34a;
+}
+
+.schedule-recurrence-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #faf5f5;
+  color: #751013;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+
+.schedule-card-preview {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #666;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.schedule-card-contacts {
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.schedule-card-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.schedule-action-btn {
+  border: none;
+  background: transparent;
+  color: #666;
+  border-radius: 8px;
+  padding: 0.3rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.schedule-action-btn:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.schedule-action-delete:hover {
+  color: #b42318;
+  background: #fef2f2;
+}
+
+.schedule-action-btn .material-symbols-outlined {
+  font-size: 1.15rem;
+}
+
+.schedule-empty {
+  text-align: center;
+  color: #888;
+  padding: 2rem;
+  font-size: 0.92rem;
+}
+
+/* Edit view */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 64vh;
+  overflow-y: auto;
+}
+
+.edit-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.edit-row .schedule-field {
+  flex: 1;
+}
+
+.schedule-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.schedule-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schedule-input {
+  border: 1px solid #d1d1d1;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: #333;
+  background: #fff;
+}
+
+.schedule-input:focus {
+  outline: 2px solid rgba(117, 16, 19, 0.18);
+  border-color: #751013;
+}
+
+.recurrence-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.recurrence-chip {
+  border: 1px solid #d1d1d1;
+  background: #fff;
+  color: #555;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.recurrence-chip:hover {
+  border-color: #751013;
+  color: #751013;
+}
+
+.recurrence-chip.active {
+  background: #751013;
+  border-color: #751013;
+  color: #fff;
+  font-weight: 500;
+}
+
+/* Selected contacts chips */
+.selected-contacts-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #faf5f5;
+  border: 1px solid #e8d5d6;
+  border-radius: 12px;
+  padding: 0.3rem 0.35rem 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  color: #333;
+}
+
+.contact-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  max-width: 180px;
+}
+
+.contact-chip-name {
+  font-weight: 600;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #333;
+}
+
+.contact-chip-phone {
+  font-size: 0.72rem;
+  font-weight: 300;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-chip-remove {
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  padding: 0.1rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.contact-chip-remove:hover {
+  color: #751013;
+  background: rgba(117, 16, 19, 0.08);
+}
+
+.contact-chip-remove .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+/* Contact autocomplete */
+.contact-autocomplete-wrapper {
+  position: relative;
+}
+
+.contact-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.contact-search-icon {
+  position: absolute;
+  left: 0.65rem;
+  font-size: 1.1rem;
+  color: #999;
+  pointer-events: none;
+}
+
+.contact-search-input {
+  padding-left: 2.2rem !important;
+  width: 100%;
+}
+
+.contact-autocomplete-dropdown {
+  position: relative;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  margin-top: 0.35rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+.contact-autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: #333;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.contact-autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.contact-autocomplete-item:hover {
+  background: #faf5f5;
+}
+
+.contact-autocomplete-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.contact-autocomplete-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-autocomplete-phone {
+  font-size: 0.78rem;
+  font-weight: 300;
+  color: #888;
+}
+
+.contact-autocomplete-empty {
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+}
