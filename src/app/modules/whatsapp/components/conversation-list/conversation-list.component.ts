@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -15,13 +15,22 @@ interface ConversationFilterChip {
   hexColor?: string | null;
 }
 
+const PHOTO_VISIBLE_OVERSCAN = 6;
+const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
+
 @Component({
   selector: 'app-conversation-list',
   templateUrl: './conversation-list.component.html',
   styleUrls: ['./conversation-list.component.scss']
 })
-export class ConversationListComponent implements OnInit, OnDestroy {
+export class ConversationListComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() disabled = false;
+  @ViewChild('scrollContainer')
+  set scrollContainerRef(value: ElementRef<HTMLDivElement> | undefined) {
+    this.scrollContainer = value;
+    this.scheduleVisiblePhotoPrefetch();
+  }
+
   contacts: WhatsappContact[] = [];
   filteredContacts: WhatsappContact[] = [];
   selectedJid = '';
@@ -38,6 +47,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private prevOrderMap = new Map<string, number>();
+  private scrollContainer?: ElementRef<HTMLDivElement>;
+  private visiblePhotoTimer: number | null = null;
 
   constructor(
     private state: WhatsappStateService,
@@ -55,6 +66,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         this.selectedJid = jid;
         this.refreshLabelFilters();
         this.applyFilter();
+        this.scheduleVisiblePhotoPrefetch();
       });
 
     this.state.loadingState$
@@ -86,9 +98,20 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     });
   }
 
+  ngAfterViewInit(): void {
+    this.scheduleVisiblePhotoPrefetch();
+  }
+
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.visiblePhotoTimer !== null) {
+      window.clearTimeout(this.visiblePhotoTimer);
+    }
+  }
+
+  onScroll(): void {
+    this.scheduleVisiblePhotoPrefetch();
   }
 
   isFlashing(jid: string): boolean {
@@ -274,6 +297,38 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
       return digits.length > 0 && phone.includes(digits);
     });
+
+    this.scheduleVisiblePhotoPrefetch();
+  }
+
+  private scheduleVisiblePhotoPrefetch(): void {
+    if (this.visiblePhotoTimer !== null) {
+      window.clearTimeout(this.visiblePhotoTimer);
+    }
+
+    this.visiblePhotoTimer = window.setTimeout(() => {
+      this.visiblePhotoTimer = null;
+      this.requestVisiblePhotos();
+    }, 0);
+  }
+
+  private requestVisiblePhotos(): void {
+    const container = this.scrollContainer?.nativeElement;
+    if (!container || !this.filteredContacts.length) {
+      return;
+    }
+
+    const firstItem = container.querySelector('.conversation-item') as HTMLElement | null;
+    const itemHeight = Math.max(firstItem?.offsetHeight || PHOTO_FALLBACK_ITEM_HEIGHT, 1);
+    const visibleStart = Math.max(0, Math.floor(container.scrollTop / itemHeight));
+    const visibleCount = Math.ceil(container.clientHeight / itemHeight) + PHOTO_VISIBLE_OVERSCAN;
+    const visibleEnd = Math.min(this.filteredContacts.length, visibleStart + visibleCount);
+
+    for (const contact of this.filteredContacts.slice(visibleStart, visibleEnd)) {
+      if (!contact.isGroup) {
+        this.state.requestPhoto(contact.jid);
+      }
+    }
   }
 
   private refreshLabelFilters(): void {

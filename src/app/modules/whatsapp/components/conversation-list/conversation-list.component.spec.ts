@@ -31,7 +31,7 @@ describe('ConversationListComponent', () => {
     selectedJids$ = new BehaviorSubject<Set<string>>(new Set());
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection'
+      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection', 'requestPhoto'
     ], {
       contacts$: contacts$.asObservable(),
       selectedContactJid$: selectedJid$.asObservable(),
@@ -70,6 +70,29 @@ describe('ConversationListComponent', () => {
     const list = [makeContact('a@c.us', 'Ana')];
     contacts$.next(list);
     expect(component.contacts).toEqual(list);
+  });
+
+  it('requests photos for visible non-group contacts', () => {
+    const list = [
+      makeContact('a@c.us', 'Ana'),
+      makeContact('b@c.us', 'Bia'),
+      { ...makeContact('g@g.us', 'Grupo'), isGroup: true }
+    ];
+
+    contacts$.next(list);
+    fixture.detectChanges();
+
+    const container = fixture.nativeElement.querySelector('.list-scroll') as HTMLDivElement;
+    const firstItem = fixture.nativeElement.querySelector('.conversation-item') as HTMLButtonElement;
+    Object.defineProperty(container, 'clientHeight', { value: 160, configurable: true });
+    Object.defineProperty(container, 'scrollTop', { value: 0, configurable: true });
+    Object.defineProperty(firstItem, 'offsetHeight', { value: 80, configurable: true });
+
+    (component as any).requestVisiblePhotos();
+
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('a@c.us');
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('b@c.us');
+    expect(stateSpy.requestPhoto).not.toHaveBeenCalledWith('g@g.us');
   });
 
   it('tracks loading state', () => {

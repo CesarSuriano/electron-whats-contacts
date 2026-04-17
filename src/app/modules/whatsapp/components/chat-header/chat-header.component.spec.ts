@@ -1,7 +1,8 @@
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA, SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { WhatsappContact } from '../../../../models/whatsapp.model';
+import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ChatHeaderComponent } from './chat-header.component';
 
 const makeContact = (overrides: Partial<WhatsappContact> = {}): WhatsappContact => ({
@@ -15,10 +16,16 @@ const makeContact = (overrides: Partial<WhatsappContact> = {}): WhatsappContact 
 describe('ChatHeaderComponent', () => {
   let fixture: ComponentFixture<ChatHeaderComponent>;
   let component: ChatHeaderComponent;
+  let stateSpy: jasmine.SpyObj<WhatsappStateService>;
 
   beforeEach(async () => {
+    stateSpy = jasmine.createSpyObj('WhatsappStateService', ['requestPhoto']);
+
     await TestBed.configureTestingModule({
       declarations: [ChatHeaderComponent],
+      providers: [
+        { provide: WhatsappStateService, useValue: stateSpy }
+      ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
 
@@ -29,6 +36,26 @@ describe('ChatHeaderComponent', () => {
 
   it('creates the component', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('requests photo for selected contact when photo is still unknown', () => {
+    component.contact = makeContact({ photoUrl: undefined });
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('5511987654321@c.us');
+  });
+
+  it('does not request photo again when contact already has photoUrl', () => {
+    component.contact = makeContact({ photoUrl: 'data:image/jpeg;base64,abc' });
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    expect(stateSpy.requestPhoto).not.toHaveBeenCalled();
   });
 
   describe('phoneFormatted', () => {

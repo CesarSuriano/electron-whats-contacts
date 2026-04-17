@@ -48,7 +48,7 @@
     Sincronizando...
   </div>
 
-  <div class="list-scroll" *ngIf="!isLoading; else loadingState">
+  <div class="list-scroll" *ngIf="!isLoading; else loadingState" #scrollContainer (scroll)="onScroll()">
     <button
       *ngFor="let contact of filteredContacts; trackBy: trackByJid"
       type="button"

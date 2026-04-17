@@ -211,4 +211,33 @@ describe('WhatsappStateService', () => {
       expect(() => service.refresh()).not.toThrow();
     });
   });
+
+  describe('requestPhoto', () => {
+    it('retries photo fetch after previous null result cooldown expires', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        { ...mockContact, photoUrl: null }
+      ]);
+      (service as unknown as { photoRetryUntil: Map<string, number> }).photoRetryUntil.set(mockContact.jid, Date.now() - 1);
+
+      gateway.loadContactPhoto.calls.reset();
+
+      service.requestPhoto(mockContact.jid);
+      tick(151);
+
+      expect(gateway.loadContactPhoto).toHaveBeenCalledWith(mockContact.jid);
+    }));
+
+    it('skips photo fetch when contact already has a photoUrl string', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        { ...mockContact, photoUrl: 'data:image/jpeg;base64,abc' }
+      ]);
+
+      gateway.loadContactPhoto.calls.reset();
+
+      service.requestPhoto(mockContact.jid);
+      tick(151);
+
+      expect(gateway.loadContactPhoto).not.toHaveBeenCalled();
+    }));
+  });
 });

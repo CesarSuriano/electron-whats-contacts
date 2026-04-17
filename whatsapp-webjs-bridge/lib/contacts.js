@@ -398,6 +398,85 @@ export async function downloadAsDataUrl(url) {
   }
 }
 
+export async function tryGetPhotoDataUrlFromPage(targetId) {
+  if (!_client?.pupPage || !targetId) {
+    return null;
+  }
+
+  try {
+    return await withTimeout(
+      _client.pupPage.evaluate(async candidateId => {
+        const readAsDataUrl = blob => new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+          reader.readAsDataURL(blob);
+        });
+
+        try {
+          const chatWid = window.Store?.WidFactory?.createWid
+            ? window.Store.WidFactory.createWid(candidateId)
+            : candidateId;
+
+          let profilePic = null;
+          if (window.Store?.ProfilePicThumb?.get) {
+            profilePic = window.Store.ProfilePicThumb.get(chatWid) || null;
+          }
+          if (!profilePic && window.Store?.ProfilePicThumb?.find) {
+            try {
+              profilePic = await window.Store.ProfilePicThumb.find(chatWid);
+            } catch {
+              profilePic = null;
+            }
+          }
+
+          if (!profilePic && window.Store?.ProfilePic) {
+            try {
+              profilePic = typeof window.Store.ProfilePic.requestProfilePicFromServer === 'function'
+                ? await window.Store.ProfilePic.requestProfilePicFromServer(chatWid)
+                : (typeof window.Store.ProfilePic.profilePicFind === 'function'
+                  ? await window.Store.ProfilePic.profilePicFind(chatWid)
+                  : null);
+            } catch {
+              profilePic = null;
+            }
+          }
+
+          const imageUrl = profilePic?.img || profilePic?.eurl || null;
+          if (imageUrl) {
+            try {
+              const response = await fetch(imageUrl);
+              if (response.ok) {
+                const blob = await response.blob();
+                if (blob && blob.size > 0) {
+                  return await readAsDataUrl(blob);
+                }
+              }
+            } catch {
+              // fall through to helper fallback
+            }
+          }
+
+          if (window.WWebJS?.getProfilePicThumbToBase64) {
+            const base64 = await window.WWebJS.getProfilePicThumbToBase64(chatWid);
+            if (typeof base64 === 'string' && base64.length > 0) {
+              return `data:image/jpeg;base64,${base64}`;
+            }
+          }
+
+          return null;
+        } catch {
+          return null;
+        }
+      }, targetId),
+      12000,
+      `getProfilePicThumbToBase64(${targetId})`
+    );
+  } catch (err) {
+    console.log('[whatsapp-webjs-bridge] fallback no navegador falhou para', targetId, '-', err?.message || String(err));
+    return null;
+  }
+}
+
 export async function tryGetPhotoUrlForId(targetId) {
   if (!targetId) {
     return null;
@@ -512,17 +591,36 @@ export async function fetchProfilePhotoUrl(jid) {
     }
   }
 
-  if (!externalUrl) {
-    console.log('[whatsapp-webjs-bridge] sem foto para', jid, '(candidatos:', candidates.join(', ') + ')');
+  let dataUrl = null;
+  if (externalUrl) {
+    console.log('[whatsapp-webjs-bridge] foto obtida para', jid, 'via', usedCandidate, '— baixando...');
+    dataUrl = await downloadAsDataUrl(externalUrl);
+    if (!dataUrl) {
+      console.log('[whatsapp-webjs-bridge] falha ao baixar foto de', jid, externalUrl.slice(0, 100));
+    }
+  }
+
+  if (!dataUrl) {
+    const pageCandidates = usedCandidate
+      ? [usedCandidate, ...candidates.filter(candidate => candidate !== usedCandidate)]
+      : candidates;
+
+    for (const candidate of pageCandidates) {
+      dataUrl = await tryGetPhotoDataUrlFromPage(candidate);
+      if (dataUrl) {
+        usedCandidate = candidate;
+        console.log('[whatsapp-webjs-bridge] foto obtida no navegador para', jid, 'via', usedCandidate);
+        break;
+      }
+    }
+  }
+
+  if (!dataUrl) {
+    console.log('[whatsapp-webjs-bridge] fallback de navegador sem foto para', jid, '(candidatos:', candidates.join(', ') + ')');
     photosByJid.set(jid, { url: null, fetchedAt: Date.now() });
     return null;
   }
 
-  console.log('[whatsapp-webjs-bridge] foto obtida para', jid, 'via', usedCandidate, '— baixando...');
-  const dataUrl = await downloadAsDataUrl(externalUrl);
-  if (!dataUrl) {
-    console.log('[whatsapp-webjs-bridge] falha ao baixar foto de', jid, externalUrl.slice(0, 100));
-  }
   photosByJid.set(jid, { url: dataUrl, fetchedAt: Date.now() });
   return dataUrl;
 }

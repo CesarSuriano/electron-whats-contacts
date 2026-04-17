@@ -34,6 +34,8 @@ import {
 
 import {
   resolveChatLabelNames,
+  init as initContacts,
+  fetchProfilePhotoUrl,
 } from './lib/contacts.js';
 
 import {
@@ -341,6 +343,27 @@ describe('resolveChatLabelNames', () => {
   assert(
     JSON.stringify(resolveChatLabelNames(null, labelsMap)) === JSON.stringify([]),
     'null chat → empty array'
+  );
+});
+
+describe('fetchProfilePhotoUrl', async () => {
+  const fallbackJid = '5511999999999@c.us';
+
+  initContacts({
+    getProfilePicUrl: async () => undefined,
+    getContactById: async () => ({
+      getProfilePicUrl: async () => undefined
+    }),
+    getContacts: async () => [],
+    pupPage: {
+      evaluate: async () => 'data:image/png;base64,ZmFrZQ=='
+    }
+  }, { status: 'ready' }, { enableProfilePhotoFetch: true });
+
+  const photoUrl = await fetchProfilePhotoUrl(fallbackJid);
+  assert(
+    photoUrl === 'data:image/png;base64,ZmFrZQ==',
+    'returns browser-fetched data URL when external profile photo lookup fails'
   );
 });
 

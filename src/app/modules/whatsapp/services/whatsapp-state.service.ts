@@ -385,7 +385,7 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     const existing = this.getContact(jid);
-    if (existing && existing.photoUrl !== undefined) {
+    if (existing && typeof existing.photoUrl === 'string' && existing.photoUrl.length > 0) {
       return;
     }
 
