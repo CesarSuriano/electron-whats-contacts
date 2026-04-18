@@ -144,6 +144,8 @@ export class WhatsappStateService implements OnDestroy {
         return;
       }
 
+      this.ensureContactForEvent(event);
+
       const messages = this.mapEventsToMessages([event]);
       const merged = this.mergeServerMessages(messages);
       const withLocal = this.mergeWithLocal(merged);
@@ -410,10 +412,6 @@ export class WhatsappStateService implements OnDestroy {
 
     const lastMessageType = (contact.lastMessageType || '').trim().toLowerCase();
     if (NON_CONVERSATION_LAST_MESSAGE_TYPES.has(lastMessageType)) {
-      return false;
-    }
-
-    if (!lastMessageType && !(contact.lastMessagePreview || '').trim() && !contact.lastMessageHasMedia) {
       return false;
     }
 
@@ -1063,6 +1061,42 @@ export class WhatsappStateService implements OnDestroy {
 
     const sentAtMs = Date.parse(message.sentAt);
     return Number.isFinite(sentAtMs) ? sentAtMs : Number.NaN;
+  }
+
+  private ensureContactForEvent(event: WhatsappEvent): void {
+    const jid = event.chatJid;
+    if (!jid) {
+      return;
+    }
+
+    const current = this.contactsSubject.value;
+    if (current.some(contact => contact.jid === jid)) {
+      return;
+    }
+
+    const phone = (event.phone || jid.split('@')[0] || '').trim();
+    const synthesized: WhatsappContact = {
+      jid,
+      phone,
+      name: phone || jid,
+      found: true,
+      photoUrl: null,
+      lastMessageAt: event.receivedAt || new Date().toISOString(),
+      lastMessagePreview: typeof event.text === 'string' ? event.text : '',
+      lastMessageFromMe: !!event.isFromMe,
+      lastMessageAck: typeof event.ack === 'number' ? event.ack : null,
+      lastMessageType: '',
+      lastMessageHasMedia: false,
+      lastMessageMediaMimetype: '',
+      unreadCount: 0,
+      labels: [],
+      isGroup: jid.endsWith('@g.us'),
+      fromGetChats: false,
+      getChatsTimestampMs: 0
+    };
+
+    this.contactsSubject.next([synthesized, ...current]);
+    this.requestPhoto(jid);
   }
 
   private incrementUnreadCounts(newInbound: WhatsappMessage[]): void {

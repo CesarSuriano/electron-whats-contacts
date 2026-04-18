@@ -8,6 +8,7 @@
 /out-tsc
 /bazel-out
 *.tsbuildinfo
+whatsapp-webjs-bridge/dist/
 
 # Node
 /node_modules

@@ -12,7 +12,7 @@ function startWhatsappBridge() {
   }
 
   const bridgeDir = path.join(__dirname, 'whatsapp-webjs-bridge');
-  const bridgeEntry = path.join(bridgeDir, 'server.js');
+  const bridgeEntry = path.join(bridgeDir, 'dist', 'server.js');
 
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
     cwd: bridgeDir,
