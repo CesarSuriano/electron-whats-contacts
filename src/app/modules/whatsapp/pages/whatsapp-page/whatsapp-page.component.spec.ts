@@ -3,21 +3,26 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { EMPTY, of, throwError } from 'rxjs';
 
+import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 import { WhatsappPageComponent } from './whatsapp-page.component';
 
 const makeStatus = (status: string): WhatsappSessionStatus => ({
+  instanceName: 'inst',
   status,
-  ready: status === 'ready',
-  qrCode: status === 'qr_required' ? 'some-qr' : undefined
-} as unknown as WhatsappSessionStatus);
+  hasQr: status === 'qr_required',
+  qr: status === 'qr_required' ? 'some-qr' : null,
+  lastError: ''
+});
 
 describe('WhatsappPageComponent', () => {
   let fixture: ComponentFixture<WhatsappPageComponent>;
   let component: WhatsappPageComponent;
   let routerSpy: jasmine.SpyObj<Router>;
   let gatewaySpy: jasmine.SpyObj<WhatsappWebjsGatewayService>;
+  let wsSpy: jasmine.SpyObj<WhatsappWsService>;
+  let scheduleListLauncherSpy: jasmine.SpyObj<ScheduleListLauncherService>;
 
   beforeEach(async () => {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -28,17 +33,19 @@ describe('WhatsappPageComponent', () => {
     ]);
     gatewaySpy.loadSessionStatus.and.returnValue(of(makeStatus('initializing')));
 
-    const wsSpy = jasmine.createSpyObj('WhatsappWsService', ['on', 'connect', 'disconnect'], {
+    wsSpy = jasmine.createSpyObj('WhatsappWsService', ['on', 'connect', 'disconnect'], {
       connected$: of(false)
     });
     wsSpy.on.and.returnValue(EMPTY);
+    scheduleListLauncherSpy = jasmine.createSpyObj('ScheduleListLauncherService', ['requestOpen']);
 
     await TestBed.configureTestingModule({
       declarations: [WhatsappPageComponent],
       providers: [
         { provide: Router, useValue: routerSpy },
         { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy },
-        { provide: WhatsappWsService, useValue: wsSpy }
+        { provide: WhatsappWsService, useValue: wsSpy },
+        { provide: ScheduleListLauncherService, useValue: scheduleListLauncherSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -60,30 +67,23 @@ describe('WhatsappPageComponent', () => {
     expect(gatewaySpy.loadSessionStatus).toHaveBeenCalled();
   });
 
+  it('connects the websocket on init', () => {
+    expect(wsSpy.connect).toHaveBeenCalled();
+  });
+
   it('goToHome navigates to root', () => {
     component.goToHome();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
   });
 
-  it('goToHome closes header settings', () => {
-    component.isHeaderSettingsOpen = true;
-    component.goToHome();
-    expect(component.isHeaderSettingsOpen).toBeFalse();
-  });
-
-  it('toggleHeaderSettingsMenu flips the flag', () => {
-    expect(component.isHeaderSettingsOpen).toBeFalse();
-    component.toggleHeaderSettingsMenu();
-    expect(component.isHeaderSettingsOpen).toBeTrue();
-    component.toggleHeaderSettingsMenu();
-    expect(component.isHeaderSettingsOpen).toBeFalse();
-  });
-
-  it('openAboutModal opens modal and closes settings', () => {
-    component.isHeaderSettingsOpen = true;
+  it('openAboutModal opens modal', () => {
     component.openAboutModal();
     expect(component.isAboutModalOpen).toBeTrue();
-    expect(component.isHeaderSettingsOpen).toBeFalse();
+  });
+
+  it('openScheduleList requests opening the schedule list', () => {
+    component.openScheduleList();
+    expect(scheduleListLauncherSpy.requestOpen).toHaveBeenCalled();
   });
 
   it('closeAboutModal closes the modal', () => {
@@ -157,6 +157,25 @@ describe('WhatsappPageComponent', () => {
       component.confirmDisconnect();
       expect(component.sessionErrorMessage).toContain('desconectar');
       expect(component.isSessionActionLoading).toBeFalse();
+    });
+  });
+
+  describe('onToggleSessionConnection', () => {
+    it('opens the disconnect modal when the session is connected', () => {
+      component.currentSessionStatus = 'ready';
+      component.onToggleSessionConnection();
+      expect(component.isDisconnectModalOpen).toBeTrue();
+    });
+
+    it('starts a connection when the session is disconnected', () => {
+      gatewaySpy.connectSession.and.returnValue(of(makeStatus('authenticated')));
+      component.currentSessionStatus = 'disconnected';
+
+      component.onToggleSessionConnection();
+
+      expect(gatewaySpy.connectSession).toHaveBeenCalled();
+      expect(component.isSessionActionLoading).toBeFalse();
+      expect(component.currentSessionStatus).toBe('authenticated');
     });
   });
 });

@@ -2,8 +2,7 @@ import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
-import { MessageAck, WhatsappContact, WhatsappLabel } from '../../../../models/whatsapp.model';
-import { WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
+import { MessageAck, WhatsappContact } from '../../../../models/whatsapp.model';
 import { formatBrazilianPhone } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
@@ -12,7 +11,6 @@ type ConversationFilterId = 'all' | 'conversations' | 'unread' | `label:${string
 interface ConversationFilterChip {
   id: ConversationFilterId;
   label: string;
-  hexColor?: string | null;
 }
 
 const PHOTO_VISIBLE_OVERSCAN = 6;
@@ -48,17 +46,13 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuContact: WhatsappContact | null = null;
-  private labelColorMap = new Map<string, string>();
 
   private destroy$ = new Subject<void>();
   private prevOrderMap = new Map<string, number>();
   private scrollContainer?: ElementRef<HTMLDivElement>;
   private visiblePhotoTimer: number | null = null;
 
-  constructor(
-    private state: WhatsappStateService,
-    private gateway: WhatsappWebjsGatewayService
-  ) {}
+  constructor(private state: WhatsappStateService) {}
 
   ngOnInit(): void {
     this.rebuildFilterChips();
@@ -89,18 +83,6 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     this.state.selectedJids$
       .pipe(takeUntil(this.destroy$))
       .subscribe(jids => (this.selectedJids = jids));
-
-    this.gateway.loadLabels().subscribe({
-      next: labels => {
-        this.labelColorMap.clear();
-        labels.forEach(label => {
-          if (label.hexColor) {
-            this.labelColorMap.set(label.name, label.hexColor);
-          }
-        });
-      },
-      error: () => { /* silent */ }
-    });
   }
 
   ngAfterViewInit(): void {
@@ -186,7 +168,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   formatPhone(contact: WhatsappContact): string {
-    return formatBrazilianPhone(contact.phone || contact.jid);
+    return formatBrazilianPhone(this.resolvePhoneSource(contact));
   }
 
   formatLastMessagePreview(contact: WhatsappContact): string {
@@ -202,6 +184,15 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     }
 
     return this.formatPhone(contact);
+  }
+
+  private resolvePhoneSource(contact: WhatsappContact): string {
+    const phone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+    if (phone) {
+      return phone;
+    }
+
+    return contact.jid.endsWith('@lid') ? '' : contact.jid;
   }
 
   getPreviewMediaIcon(contact: WhatsappContact): string {
@@ -249,17 +240,6 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
   get filterChips(): ConversationFilterChip[] {
     return this.filterChipsCached;
-  }
-
-  getChipStyle(chip: ConversationFilterChip): Record<string, string> {
-    if (!chip.hexColor || this.activeFilter !== chip.id) {
-      return {};
-    }
-    return {
-      'background-color': chip.hexColor,
-      'border-color': chip.hexColor,
-      'color': '#fff'
-    };
   }
 
   getUnreadCount(contact: WhatsappContact): number {
@@ -412,8 +392,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
     const labelChips = this.labelFilters.map(label => ({
       id: `label:${encodeURIComponent(label)}` as ConversationFilterId,
-      label,
-      hexColor: this.labelColorMap.get(label) || null
+      label
     }));
 
     this.filterChipsCached = [...base, ...labelChips];

@@ -63,6 +63,18 @@ describe('WhatsappWebjsGatewayService', () => {
     expect(result).toEqual([mockContact]);
   });
 
+  it('loadContacts waitForRefresh=true – sends waitForRefresh=1', () => {
+    service.loadContacts('inst', { waitForRefresh: true }).subscribe();
+    const req = httpMock.expectOne(r =>
+      r.url === `${BASE}/contacts`
+      && r.params.get('instanceName') === 'inst'
+      && r.params.get('waitForRefresh') === '1'
+    );
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('waitForRefresh')).toBe('1');
+    req.flush({ instanceName: 'inst', contacts: [] });
+  });
+
   it('loadContactPhoto – uses URL-encoded JID and extracts photoUrl', () => {
     const jid = '5511@s.whatsapp.net';
     let result: string | null | undefined;
@@ -114,6 +126,8 @@ describe('WhatsappWebjsGatewayService', () => {
       r.url === `${BASE}/chats/${encoded}/messages` &&
       r.params.get('deep') === '1'
     );
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('deep')).toBe('1');
     req.flush({ instanceName: 'inst', events: [] });
   });
 

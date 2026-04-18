@@ -7,6 +7,7 @@ import {
   withTimeout,
   normalizePhone,
   isPersonalJid,
+  isValidPersonalJid,
   isPersonalOrLinkedJid,
   isGroupJid,
   isLinkedId,
@@ -15,12 +16,15 @@ import {
   toIsoFromUnixTimestamp,
   getContactName
 } from './utils.js';
-import { resolveIsFromMe, isSelfJid } from './jid.js';
+import { resolveIsFromMe, isSelfJid, registerSelfJid } from './jid.js';
 import { events, contactsByJid, lidByPhoneJid, pushEvent } from './events.js';
 
 const PHOTO_TTL_MS = 30 * 60 * 1000;
 const EVENT_SEED_CHAT_LIMIT = 80;
 const EVENT_SEED_COOLDOWN_MS = 60 * 1000;
+const LINKED_CHAT_CANONICAL_RESOLVE_LIMIT = 25;
+const LINKED_CHAT_CANONICAL_RESOLVE_TIMEOUT_MS = 2500;
+const LINKED_CHAT_CANONICAL_RESOLVE_CONCURRENCY = 4;
 
 let _client = null;
 let _sessionState = null;
@@ -114,27 +118,195 @@ export function resolveChatLabelNames(chat, labelsMap) {
   return Array.from(new Set(names));
 }
 
+function extractCanonicalJidFromContact(contact, fallbackJid = '') {
+  if (!contact) {
+    return '';
+  }
+
+  if (contact?.isMe === true) {
+    return '';
+  }
+
+  const serialized = contact?.id?._serialized || '';
+  if (isPersonalJid(serialized)) {
+    return isSelfJid(serialized) ? '' : serialized;
+  }
+
+  const lidUser = typeof contact?.id?.user === 'string'
+    ? contact.id.user
+    : normalizePhone(fallbackJid);
+  const number = typeof contact?.number === 'string' ? contact.number.trim() : '';
+  if (number.length < 8 || number === lidUser) {
+    return '';
+  }
+
+  const canonicalJid = `${number}@c.us`;
+  return isSelfJid(canonicalJid) ? '' : canonicalJid;
+}
+
+function isSelfContactEntry(jid, contact = null) {
+  if (isSelfJid(jid)) {
+    return true;
+  }
+
+  const phone = typeof contact?.phone === 'string' && contact.phone.trim()
+    ? contact.phone.trim()
+    : normalizePhone(jid);
+
+  return phone.length >= 8 && isSelfJid(`${phone}@c.us`);
+}
+
+function findCanonicalJidByLid(lidJid) {
+  if (!lidJid || !isLinkedId(lidJid)) {
+    return '';
+  }
+
+  for (const [canonicalJid, mappedLidJid] of lidByPhoneJid.entries()) {
+    if (mappedLidJid === lidJid) {
+      return canonicalJid;
+    }
+  }
+
+  return '';
+}
+
+async function resolveCanonicalJidForLinkedChat(chat) {
+  const lidJid = chat?.id?._serialized || '';
+  if (!lidJid || !isLinkedId(lidJid)) {
+    return '';
+  }
+
+  const knownCanonical = findCanonicalJidByLid(lidJid);
+  if (knownCanonical) {
+    return knownCanonical;
+  }
+
+  const resolvers = [];
+  if (typeof chat?.getContact === 'function') {
+    resolvers.push(() => chat.getContact());
+  }
+  if (typeof _client?.getContactById === 'function') {
+    resolvers.push(() => _client.getContactById(lidJid));
+  }
+
+  for (const resolveContact of resolvers) {
+    try {
+      const contact = await withTimeout(
+        resolveContact(),
+        LINKED_CHAT_CANONICAL_RESOLVE_TIMEOUT_MS,
+        `resolveCanonicalJidForLinkedChat(${lidJid})`
+      );
+      const canonicalJid = extractCanonicalJidFromContact(contact, lidJid);
+      if (canonicalJid) {
+        lidByPhoneJid.set(canonicalJid, lidJid);
+        return canonicalJid;
+      }
+    } catch {
+      // Fall through to the next resolution strategy.
+    }
+  }
+
+  return '';
+}
+
+async function resolveRecentLinkedChatCanonicals(chats) {
+  const candidates = (chats || [])
+    .filter(chat => !chat?.isGroup && isLinkedId(chat?.id?._serialized || ''))
+    .sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0))
+    .slice(0, LINKED_CHAT_CANONICAL_RESOLVE_LIMIT);
+
+  if (!candidates.length) {
+    return new Map();
+  }
+
+  const resolved = new Map();
+  let cursor = 0;
+
+  const runWorker = async () => {
+    while (cursor < candidates.length) {
+      const currentIndex = cursor;
+      cursor += 1;
+
+      const chat = candidates[currentIndex];
+      const lidJid = chat?.id?._serialized || '';
+      if (!lidJid) {
+        continue;
+      }
+
+      const canonicalJid = await resolveCanonicalJidForLinkedChat(chat);
+      if (canonicalJid) {
+        resolved.set(lidJid, canonicalJid);
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(LINKED_CHAT_CANONICAL_RESOLVE_CONCURRENCY, candidates.length) },
+      () => runWorker()
+    )
+  );
+
+  return resolved;
+}
+
 export async function refreshContactsFromChats(preloadedChats = null) {
   if (_sessionState.status !== 'ready') {
     return;
   }
 
+  const chatsPromise = preloadedChats
+    ? Promise.resolve(preloadedChats)
+    : _client.getChats();
+
   const [chats, contacts, labelsMap] = await Promise.all([
-    preloadedChats ? Promise.resolve(preloadedChats) : _client.getChats(),
+    chatsPromise,
     _client.getContacts(),
     loadLabelsMap()
   ]);
+  const resolvedCanonicalByLid = await resolveRecentLinkedChatCanonicals(chats);
   lastContactsRefreshAt = Date.now();
+
+  // Recompute this metadata on each refresh so only current getChats candidates stay marked.
+  for (const [jid, existing] of contactsByJid.entries()) {
+    contactsByJid.set(jid, {
+      ...existing,
+      fromGetChats: false,
+      getChatsTimestampMs: 0
+    });
+  }
+
+  contacts
+    .filter(contact =>
+      contact?.id?._serialized &&
+      isPersonalOrLinkedJid(contact.id._serialized) &&
+      contact.isMe === true
+    )
+    .forEach(contact => {
+      const rawJid = contact.id._serialized;
+      registerSelfJid(rawJid);
+
+      if (isPersonalJid(rawJid)) {
+        return;
+      }
+
+      const lidUser = typeof contact.id?.user === 'string' ? contact.id.user : normalizePhone(rawJid);
+      const number = typeof contact.number === 'string' ? contact.number.trim() : '';
+      if (number.length >= 8 && number !== lidUser) {
+        registerSelfJid(`${number}@c.us`);
+      }
+    });
 
   contacts
     .filter(contact =>
       contact?.id?._serialized &&
       isPersonalOrLinkedJid(contact.id._serialized) &&
       contact.isMyContact === true &&
-      !contact.isMe
+      contact.isMe !== true
     )
     .forEach(contact => {
       const rawJid = contact.id._serialized;
+
       // Para @lid: contact.id.user é a parte numérica do LID (ex: '152896658239610').
       // contact.number deveria ser o telefone real, MAS às vezes retorna o próprio LID.
       // Se number === lidUser, é dado falso — pular.
@@ -155,6 +327,14 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       }
 
       const canonicalJid = `${phone}@c.us`;
+      if (!isValidPersonalJid(canonicalJid)) {
+        return;
+      }
+
+      if (isSelfJid(canonicalJid)) {
+        return;
+      }
+
       const existing = contactsByJid.get(canonicalJid) || {};
       const displayName = getContactName(contact);
 
@@ -171,7 +351,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageMediaMimetype: typeof existing.lastMessageMediaMimetype === 'string' ? existing.lastMessageMediaMimetype : '',
         unreadCount: typeof existing.unreadCount === 'number' ? existing.unreadCount : 0,
         labels: Array.isArray(existing.labels) ? existing.labels : [],
-        isGroup: false
+        isGroup: false,
+        fromGetChats: false,
+        getChatsTimestampMs: 0
       });
 
       // Se este contato é @lid, guarde o mapeamento para uso em fotos.
@@ -182,7 +364,7 @@ export async function refreshContactsFromChats(preloadedChats = null) {
 
   chats
     // Chats @lid são tratados via getContacts() acima com JID canônico @c.us.
-    .filter(chat => !chat.isGroup && isPersonalJid(chat.id?._serialized) && !isSelfJid(chat.id?._serialized))
+    .filter(chat => !chat.isGroup && isValidPersonalJid(chat.id?._serialized) && !isSelfJid(chat.id?._serialized))
     .forEach(chat => {
       const serialized = chat.id?._serialized || '';
       if (!serialized) {
@@ -208,6 +390,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       }
 
       const displayName = chat.name && chat.name.trim() ? chat.name.trim() : '';
+      const getChatsTimestampMs = typeof chat.timestamp === 'number' && chat.timestamp > 0
+        ? chat.timestamp * 1000
+        : (typeof existing.getChatsTimestampMs === 'number' ? existing.getChatsTimestampMs : 0);
       const lastMessageAt = typeof chat.timestamp === 'number' && chat.timestamp > 0
         ? new Date(chat.timestamp * 1000).toISOString()
         : existing.lastMessageAt || null;
@@ -238,7 +423,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageMediaMimetype,
         unreadCount,
         labels,
-        isGroup: false
+        isGroup: false,
+        fromGetChats: true,
+        getChatsTimestampMs
       });
     });
 
@@ -251,6 +438,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
       }
 
       const existing = contactsByJid.get(serialized) || {};
+      const getChatsTimestampMs = typeof chat.timestamp === 'number' && chat.timestamp > 0
+        ? chat.timestamp * 1000
+        : (typeof existing.getChatsTimestampMs === 'number' ? existing.getChatsTimestampMs : 0);
       const lastMessageAt = typeof chat.timestamp === 'number' && chat.timestamp > 0
         ? new Date(chat.timestamp * 1000).toISOString()
         : existing.lastMessageAt || null;
@@ -281,7 +471,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageMediaMimetype,
         unreadCount,
         labels,
-        isGroup: true
+        isGroup: true,
+        fromGetChats: true,
+        getChatsTimestampMs
       });
     });
 
@@ -294,6 +486,9 @@ export async function refreshContactsFromChats(preloadedChats = null) {
   for (const [canonicalJid, lidJid] of lidByPhoneJid.entries()) {
     canonicalByLid.set(lidJid, canonicalJid);
   }
+  for (const [lidJid, canonicalJid] of resolvedCanonicalByLid.entries()) {
+    canonicalByLid.set(lidJid, canonicalJid);
+  }
 
   chats
     .filter(chat => !chat.isGroup && isLinkedId(chat.id?._serialized))
@@ -303,16 +498,16 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         return;
       }
 
-      const canonicalKey = canonicalByLid.get(lidJid);
-      if (!canonicalKey) {
-        return;
+      const canonicalKey = canonicalByLid.get(lidJid) || lidJid;
+      const existing = contactsByJid.get(canonicalKey) || contactsByJid.get(lidJid) || {};
+
+      if (canonicalKey !== lidJid && contactsByJid.has(lidJid)) {
+        contactsByJid.delete(lidJid);
       }
 
-      const existing = contactsByJid.get(canonicalKey);
-      if (!existing?.found) {
-        return;
-      }
-
+      const getChatsTimestampMs = typeof chat.timestamp === 'number' && chat.timestamp > 0
+        ? chat.timestamp * 1000
+        : (typeof existing.getChatsTimestampMs === 'number' ? existing.getChatsTimestampMs : 0);
       const lastMessageAt = typeof chat.timestamp === 'number' && chat.timestamp > 0
         ? new Date(chat.timestamp * 1000).toISOString()
         : existing.lastMessageAt || null;
@@ -329,9 +524,32 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageHasMedia,
         lastMessageMediaMimetype
       } = resolveLastMessageMetadata(chat?.lastMessage, existing);
+      const displayName = chat.name && chat.name.trim() ? chat.name.trim() : '';
+      const resolvedPhone = isLinkedId(canonicalKey)
+        ? ''
+        : normalizePhone(canonicalKey);
+
+      if (!isLinkedId(canonicalKey) && !isValidPersonalJid(canonicalKey)) {
+        contactsByJid.delete(lidJid);
+        if (canonicalKey !== lidJid) {
+          contactsByJid.delete(canonicalKey);
+        }
+        return;
+      }
+
+      if (isSelfContactEntry(canonicalKey, { phone: resolvedPhone })) {
+        contactsByJid.delete(lidJid);
+        if (canonicalKey !== lidJid) {
+          contactsByJid.delete(canonicalKey);
+        }
+        return;
+      }
 
       contactsByJid.set(canonicalKey, {
-        ...existing,
+        jid: canonicalKey,
+        phone: resolvedPhone,
+        name: existing.name || displayName || resolvedPhone || normalizePhone(canonicalKey),
+        found: true,
         lastMessageAt,
         lastMessagePreview,
         lastMessageFromMe,
@@ -339,9 +557,51 @@ export async function refreshContactsFromChats(preloadedChats = null) {
         lastMessageHasMedia,
         lastMessageMediaMimetype,
         unreadCount,
-        labels
+        labels,
+        isGroup: false,
+        fromGetChats: true,
+        getChatsTimestampMs
       });
     });
+
+  for (const [jid, existing] of contactsByJid.entries()) {
+    if (isPersonalJid(jid) && !isValidPersonalJid(jid)) {
+      contactsByJid.delete(jid);
+      continue;
+    }
+
+    if (isSelfContactEntry(jid, existing)) {
+      contactsByJid.delete(jid);
+    }
+  }
+
+  for (const [canonicalJid] of lidByPhoneJid.entries()) {
+    if (isSelfJid(canonicalJid)) {
+      lidByPhoneJid.delete(canonicalJid);
+    }
+  }
+
+  // Remove stale conversation metadata for contacts that are no longer present
+  // in the current getChats snapshot. This prevents old contacts without active
+  // chats from floating to the top with leftover unread counters.
+  for (const [jid, existing] of contactsByJid.entries()) {
+    if (existing?.fromGetChats) {
+      continue;
+    }
+
+    contactsByJid.set(jid, {
+      ...existing,
+      lastMessageAt: null,
+      lastMessagePreview: '',
+      lastMessageFromMe: false,
+      lastMessageAck: null,
+      lastMessageType: '',
+      lastMessageHasMedia: false,
+      lastMessageMediaMimetype: '',
+      unreadCount: 0,
+      labels: []
+    });
+  }
 }
 
 export async function seedEventsFromRecentChats(preloadedChats = null) {
@@ -374,7 +634,7 @@ export async function seedEventsFromRecentChats(preloadedChats = null) {
         if (chat.isGroup) {
           return isGroupJid(jid);
         }
-        return isPersonalJid(jid) && !isSelfJid(jid);
+        return isValidPersonalJid(jid) && !isSelfJid(jid);
       })
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       .slice(0, EVENT_SEED_CHAT_LIMIT);
@@ -599,7 +859,7 @@ export async function findLidByPhoneLookup(phoneJid) {
 }
 
 export async function fetchProfilePhotoUrl(jid) {
-  if (_sessionState.status !== 'ready' || !isPersonalJid(jid)) {
+  if (_sessionState.status !== 'ready' || !isPersonalOrLinkedJid(jid)) {
     return null;
   }
 
@@ -613,9 +873,18 @@ export async function fetchProfilePhotoUrl(jid) {
     return null;
   }
 
-  // Candidatos em ordem: @c.us, LID conhecido, e LID descoberto via varredura.
-  const candidates = [jid];
-  const knownLid = lidByPhoneJid.get(jid);
+  // Candidatos em ordem: canônico conhecido, JID pedido e alias LID conhecido.
+  const candidates = [];
+  const knownCanonical = isLinkedId(jid) ? findCanonicalJidByLid(jid) : '';
+  if (knownCanonical) {
+    candidates.push(knownCanonical);
+  }
+
+  if (!candidates.includes(jid)) {
+    candidates.push(jid);
+  }
+
+  const knownLid = isPersonalJid(jid) ? lidByPhoneJid.get(jid) : '';
   if (knownLid && !candidates.includes(knownLid)) {
     candidates.push(knownLid);
   }
@@ -632,7 +901,7 @@ export async function fetchProfilePhotoUrl(jid) {
   }
 
   // Último recurso: se ainda não achamos, varrer getContacts() para descobrir o LID.
-  if (!externalUrl && !knownLid) {
+  if (!externalUrl && isPersonalJid(jid) && !knownLid) {
     const discoveredLid = await findLidByPhoneLookup(jid);
     if (discoveredLid) {
       candidates.push(discoveredLid);

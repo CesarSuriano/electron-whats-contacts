@@ -1,8 +1,9 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 
 import { WhatsappStateService } from './whatsapp-state.service';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
+import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
 import { WhatsappContact, WhatsappInstance, WhatsappMessage } from '../../../models/whatsapp.model';
 
 const mockInstance: WhatsappInstance = { name: 'inst1', token: 'tok', connected: true, jid: 'jid', webhook: '' };
@@ -41,9 +42,18 @@ describe('WhatsappStateService', () => {
     TestBed.configureTestingModule({
       providers: [
         WhatsappStateService,
-        { provide: WhatsappWebjsGatewayService, useValue: stub }
+        { provide: WhatsappWebjsGatewayService, useValue: stub },
+        {
+          provide: WhatsappWsService,
+          useValue: jasmine.createSpyObj('WhatsappWsService', ['connect', 'disconnect', 'on'], {
+            connected$: EMPTY
+          })
+        }
       ]
     });
+
+    const ws = TestBed.inject(WhatsappWsService) as jasmine.SpyObj<WhatsappWsService>;
+    ws.on.and.returnValue(EMPTY);
 
     service = TestBed.inject(WhatsappStateService);
     gateway = TestBed.inject(WhatsappWebjsGatewayService) as jasmine.SpyObj<WhatsappWebjsGatewayService>;
@@ -52,6 +62,23 @@ describe('WhatsappStateService', () => {
   afterEach(() => service.ngOnDestroy());
 
   // ─── getContact ────────────────────────────────────────────────────────────
+
+  describe('syncing$', () => {
+    it('emits true immediately and delays false briefly', fakeAsync(() => {
+      const emitted: boolean[] = [];
+      service.syncing$.subscribe(value => emitted.push(value));
+
+      (service as any).syncingSubject.next(true);
+      expect(emitted).toEqual([true]);
+
+      (service as any).syncingSubject.next(false);
+      tick(149);
+      expect(emitted).toEqual([true]);
+
+      tick(1);
+      expect(emitted).toEqual([true, false]);
+    }));
+  });
 
   describe('getContact', () => {
     it('returns null when contacts list is empty', () => {
@@ -93,8 +120,31 @@ describe('WhatsappStateService', () => {
     it('starts loading contacts immediately for the selected instance', () => {
       service.loadInstances();
 
-      expect(gateway.loadContacts).toHaveBeenCalledWith(mockInstance.name);
+      expect(gateway.loadContacts).toHaveBeenCalledWith(mockInstance.name, { waitForRefresh: true });
     });
+
+    it('loads conversation context for each contact after contacts bootstrap', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(of([
+        {
+          ...mockContact,
+          lastMessagePreview: 'primeira',
+          getChatsTimestampMs: 2_000,
+          fromGetChats: true
+        },
+        {
+          ...secondMockContact,
+          lastMessagePreview: 'segunda',
+          getChatsTimestampMs: 1_000,
+          fromGetChats: true
+        }
+      ]));
+
+      service.loadInstances();
+      tick();
+
+      const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1]);
+      expect(calledJids).toEqual([mockContact.jid, secondMockContact.jid]);
+    }));
 
     it('sets error message on gateway failure', () => {
       gateway.loadInstances.and.returnValue(throwError(() => new Error('network')));
@@ -107,113 +157,6 @@ describe('WhatsappStateService', () => {
       expect(error).toBeTruthy();
     });
 
-    it('keeps syncing active until the background hydration window ends', fakeAsync(() => {
-      let syncing = false;
-      service.syncing$.subscribe(value => (syncing = value));
-
-      service.loadInstances();
-      tick(151);
-
-      expect(syncing).toBeTrue();
-
-      tick(90_000);
-
-      expect(syncing).toBeFalse();
-    }));
-
-    it('retries recent chats in background when the first history load is too shallow', fakeAsync(() => {
-      gateway.loadContacts.and.returnValue(of([mockContact, secondMockContact]));
-      gateway.loadEvents.and.returnValue(of([
-        {
-          id: 'recent-1',
-          chatJid: secondMockContact.jid,
-          text: 'mais recente',
-          receivedAt: '2024-01-01T00:02:00.000Z',
-          source: 'history'
-        },
-        {
-          id: 'recent-2',
-          chatJid: mockContact.jid,
-          text: 'anterior',
-          receivedAt: '2024-01-01T00:01:00.000Z',
-          source: 'history'
-        }
-      ] as never[]));
-
-      let secondContactAttempts = 0;
-      gateway.loadChatMessages.and.callFake((_instance, jid, _limit, _deep) => {
-        if (jid === mockContact.jid) {
-          return of([
-            {
-              id: 'selected-1',
-              chatJid: jid,
-              text: 'primeira',
-              receivedAt: '2024-01-01T00:00:00.000Z',
-              source: 'history'
-            },
-            {
-              id: 'selected-2',
-              chatJid: jid,
-              text: 'segunda',
-              receivedAt: '2024-01-01T00:00:01.000Z',
-              source: 'history'
-            }
-          ] as never[]);
-        }
-
-        secondContactAttempts += 1;
-
-        if (secondContactAttempts === 1) {
-          return of([
-            {
-              id: 'retry-1',
-              chatJid: jid,
-              text: 'ainda raso',
-              receivedAt: '2024-01-01T00:02:00.000Z',
-              source: 'history'
-            }
-          ] as never[]);
-        }
-
-        return of([
-          {
-            id: 'retry-1',
-            chatJid: jid,
-            text: 'ainda raso',
-            receivedAt: '2024-01-01T00:02:00.000Z',
-            source: 'history'
-          },
-          {
-            id: 'retry-2',
-            chatJid: jid,
-            text: 'agora completo',
-            receivedAt: '2024-01-01T00:02:01.000Z',
-            source: 'history'
-          }
-        ] as never[]);
-      });
-
-      service.loadInstances();
-      tick();
-
-      expect(secondContactAttempts).toBe(1);
-
-      tick(1499);
-      expect(secondContactAttempts).toBe(1);
-
-      tick(1);
-
-      const secondContactCalls = gateway.loadChatMessages.calls.all()
-        .filter(call => call.args[1] === secondMockContact.jid);
-
-      expect(secondContactAttempts).toBe(2);
-      expect(secondContactCalls.length).toBe(2);
-      expect(secondContactCalls[0].args).toEqual([mockInstance.name, secondMockContact.jid, 120, true]);
-      expect(secondContactCalls[1].args).toEqual([mockInstance.name, secondMockContact.jid, 120, true]);
-      expect(service.getMessagesFor(secondMockContact.jid).some(message => message.text === 'agora completo')).toBeTrue();
-
-      service.ngOnDestroy();
-    }));
   });
 
   // ─── selection mode ─────────────────────────────────────────────────────────
@@ -335,32 +278,31 @@ describe('WhatsappStateService', () => {
       (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([mockContact]);
     });
 
-    it('does not trigger a visible history fetch while the background hydration window is active', fakeAsync(() => {
+    it('loads history silently when the selected chat still needs server history', fakeAsync(() => {
       gateway.loadChatMessages.and.returnValue(of([]));
-      (service as unknown as { backgroundHydrationWindowUntil: number }).backgroundHydrationWindowUntil = Date.now() + 90_000;
-
-      service.selectContact(mockContact.jid);
-
-      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
-
-      tick();
-
-      expect(gateway.loadChatMessages).toHaveBeenCalledTimes(1);
-      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 120, true);
-
-      service.ngOnDestroy();
-    }));
-
-    it('loads history silently when the hydration window has expired', () => {
-      gateway.loadChatMessages.and.returnValue(of([]));
-      (service as unknown as { backgroundHydrationWindowUntil: number }).backgroundHydrationWindowUntil = Date.now() - 1;
 
       let loadingState = { instances: false, contacts: false, messages: false, sending: false };
       service.loadingState$.subscribe(state => (loadingState = state));
 
       service.selectContact(mockContact.jid);
 
+      tick();
+
       expect(gateway.loadChatMessages).toHaveBeenCalledTimes(1);
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 180, true);
+      expect(loadingState.messages).toBeFalse();
+    }));
+
+    it('skips history fetch when the chat history is already marked as loaded', () => {
+      gateway.loadChatMessages.and.returnValue(of([]));
+      (service as unknown as { loadedHistoryJids: Set<string> }).loadedHistoryJids.add(mockContact.jid);
+
+      let loadingState = { instances: false, contacts: false, messages: false, sending: false };
+      service.loadingState$.subscribe(state => (loadingState = state));
+
+      service.selectContact(mockContact.jid);
+
+      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
       expect(loadingState.messages).toBeFalse();
     });
 
@@ -447,6 +389,7 @@ describe('WhatsappStateService', () => {
           isFromMe: false,
           source: 'history',
           payload: {
+            type: 'image',
             hasMedia: true,
             mediaMimetype: 'image/jpeg'
           }

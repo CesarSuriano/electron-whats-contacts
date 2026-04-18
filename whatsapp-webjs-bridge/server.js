@@ -6,11 +6,11 @@ import { randomUUID } from 'crypto';
 import qrcodeTerminal from 'qrcode-terminal';
 import pkg from 'whatsapp-web.js';
 import {
+  withTimeout,
   normalizeJid,
   normalizePhone,
   normalizeRequestedChatJid,
   isSameConversationJid,
-  isBlankMessage,
   readMessageTimestampSeconds,
   readMessageText,
   readMessageInlineImageDataUrl,
@@ -48,13 +48,13 @@ const { Client, LocalAuth, MessageMedia } = pkg;
 dotenv.config();
 
 const app = express();
-const port = Number(process.env.PORT || 3344);
 const allowedOriginRaw = process.env.ALLOWED_ORIGIN || 'http://localhost:4200';
 const allowedOrigins = allowedOriginRaw
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
 const instanceName = process.env.INSTANCE_NAME || 'local-webjs';
+const port = Number(process.env.PORT || 3344);
 const enableHistoryEvents = String(process.env.WA_ENABLE_HISTORY_EVENTS || 'true').toLowerCase() !== 'false';
 const enableProfilePhotoFetch = String(process.env.WA_ENABLE_PROFILE_PHOTO_FETCH || 'true').toLowerCase() !== 'false';
 const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
@@ -65,6 +65,112 @@ const puppeteerArgs = String(process.env.PUPPETEER_ARGS || '--no-sandbox,--disab
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const CONTACTS_REFRESH_COOLDOWN_MS = 25 * 1000;
+const CONTACTS_REFRESH_TIMEOUT_MS = 20 * 1000;
+const CONTACTS_EMPTY_CACHE_WAIT_MS = 1500;
+
+let contactsRefreshPromise = null;
+
+function triggerContactsRefresh({ preloadedChats = null, reason = 'unspecified' } = {}) {
+  if (contactsRefreshPromise) {
+    return contactsRefreshPromise;
+  }
+
+  contactsRefreshPromise = (async () => {
+    try {
+      await withTimeout(
+        refreshContactsFromChats(preloadedChats),
+        CONTACTS_REFRESH_TIMEOUT_MS,
+        `refreshing contacts (${reason})`
+      );
+      broadcast('contacts_updated', { contacts: Array.from(contactsByJid.values()) });
+    } catch (error) {
+      console.warn('[whatsapp-webjs-bridge] Falha ao atualizar contatos:', error?.message || String(error));
+    } finally {
+      contactsRefreshPromise = null;
+    }
+  })();
+
+  return contactsRefreshPromise;
+}
+
+async function resolveHistoryImageDataUrl(message) {
+  const inlineImageDataUrl = readMessageInlineImageDataUrl(message);
+  if (inlineImageDataUrl) {
+    return inlineImageDataUrl;
+  }
+
+  const serializedId = getSerializedMessageId(message) || '';
+  let mediaMessage = message;
+
+  if (typeof mediaMessage?.downloadMedia !== 'function' && serializedId) {
+    try {
+      const hydrated = await withTimeout(
+        client.getMessageById(serializedId),
+        10000,
+        `getMessageById(${serializedId})`
+      );
+      if (hydrated) {
+        mediaMessage = hydrated;
+      }
+    } catch {
+      // Keep original serialized message when hydration fails.
+    }
+  }
+
+  const mediaMimetype = typeof mediaMessage?._data?.mimetype === 'string'
+    ? mediaMessage._data.mimetype.trim()
+    : (typeof message?._data?.mimetype === 'string' ? message._data.mimetype.trim() : '');
+  const isImageMessage = mediaMimetype.startsWith('image/')
+    || mediaMessage?.type === 'image'
+    || message?.type === 'image';
+
+  if (!isImageMessage || typeof mediaMessage?.downloadMedia !== 'function') {
+    return null;
+  }
+
+  try {
+    const media = await withTimeout(
+      mediaMessage.downloadMedia(),
+      15000,
+      `downloading history media (${serializedId || 'unknown'})`
+    );
+    if (!media?.data) {
+      return null;
+    }
+
+    const resolvedMimetype = media?.mimetype || mediaMimetype || 'image/jpeg';
+    return `data:${resolvedMimetype};base64,${media.data}`;
+  } catch {
+    return null;
+  }
+}
+
+function shouldIncludeHistoryMessage(message) {
+  if (!message || message.isNotification) {
+    return false;
+  }
+
+  if (readMessageText(message).trim()) {
+    return true;
+  }
+
+  if (readMessageInlineImageDataUrl(message)) {
+    return true;
+  }
+
+  const mediaMimetype = typeof message?._data?.mimetype === 'string' ? message._data.mimetype.trim().toLowerCase() : '';
+  const type = typeof message?.type === 'string' ? message.type : '';
+
+  return Boolean(message?.hasMedia)
+    || mediaMimetype.length > 0
+    || type === 'image'
+    || type === 'video'
+    || type === 'audio'
+    || type === 'ptt'
+    || type === 'document'
+    || type === 'sticker'
+    || type === 'revoked';
+}
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -139,9 +245,8 @@ client.on('ready', async () => {
 
   try {
     const chats = await client.getChats();
-    await refreshContactsFromChats(chats);
+    await triggerContactsRefresh({ preloadedChats: chats, reason: 'ready' });
     await seedEventsFromRecentChats(chats);
-    broadcast('contacts_updated', { contacts: Array.from(contactsByJid.values()) });
   } catch (error) {
     console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', error.message);
   }
@@ -234,11 +339,35 @@ app.get('/api/whatsapp/instances', (_, res) => {
   });
 });
 
-app.get('/api/whatsapp/contacts', async (_, res) => {
+app.get('/api/whatsapp/contacts', async (req, res) => {
   try {
-    if (sessionState.status === 'ready' && Date.now() - getLastContactsRefreshAt() >= CONTACTS_REFRESH_COOLDOWN_MS) {
-      await refreshContactsFromChats();
-      broadcast('contacts_updated', { contacts: Array.from(contactsByJid.values()) });
+    const waitForRefreshRaw = String(req.query.waitForRefresh || '').toLowerCase();
+    const waitForRefresh = waitForRefreshRaw === '1' || waitForRefreshRaw === 'true' || waitForRefreshRaw === 'yes';
+    const shouldRefresh =
+      sessionState.status === 'ready' &&
+      Date.now() - getLastContactsRefreshAt() >= CONTACTS_REFRESH_COOLDOWN_MS;
+
+    if (shouldRefresh) {
+      const refreshPromise = triggerContactsRefresh({ reason: 'contacts-endpoint' });
+      if (waitForRefresh) {
+        try {
+          await withTimeout(refreshPromise, CONTACTS_REFRESH_TIMEOUT_MS, 'waiting contacts refresh');
+        } catch {
+          // Fall back to current cache if refresh is still running or timed out.
+        }
+      } else if (contactsByJid.size === 0) {
+        try {
+          await withTimeout(refreshPromise, CONTACTS_EMPTY_CACHE_WAIT_MS, 'warming contacts cache');
+        } catch {
+          // Return immediately with current cache if warm-up is still in progress.
+        }
+      }
+    } else if (waitForRefresh && contactsRefreshPromise) {
+      try {
+        await withTimeout(contactsRefreshPromise, CONTACTS_REFRESH_TIMEOUT_MS, 'waiting contacts refresh');
+      } catch {
+        // Fall back to current cache if refresh is still running or timed out.
+      }
     }
 
     res.json({
@@ -443,10 +572,10 @@ app.get('/api/whatsapp/chats/:jid/messages', async (req, res) => {
       history.splice(0, history.length - limit);
     }
 
-    const eventsHistory = (history || [])
-      .filter(message => !message.isNotification && !isBlankMessage(message))
-      .map(message => {
-        const inlineImageDataUrl = readMessageInlineImageDataUrl(message);
+    const eventsHistory = (await Promise.all((history || [])
+      .filter(message => shouldIncludeHistoryMessage(message))
+      .map(async message => {
+        const inlineImageDataUrl = await resolveHistoryImageDataUrl(message);
         const mediaMimetypeFromData = typeof message?._data?.mimetype === 'string' ? message._data.mimetype.trim() : '';
         const mediaMimetypeFromInline = inlineImageDataUrl
           ? (inlineImageDataUrl.match(/^data:([^;,]+)/i)?.[1] || '')
@@ -481,7 +610,7 @@ app.get('/api/whatsapp/chats/:jid/messages', async (req, res) => {
             ack
           }
         };
-      })
+      })))
       .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
 
     return res.json({
@@ -573,13 +702,21 @@ app.post('/api/whatsapp/messages', async (req, res) => {
         phone,
         name: phone,
         found: true,
-        lastMessageAt: new Date().toISOString()
+        lastMessageAt: new Date().toISOString(),
+        lastMessagePreview: text,
+        lastMessageFromMe: true,
+        fromGetChats: true,
+        getChatsTimestampMs: Date.now()
       });
     } else {
       const existing = contactsByJid.get(chatId);
       contactsByJid.set(chatId, {
         ...existing,
-        lastMessageAt: new Date().toISOString()
+        lastMessageAt: new Date().toISOString(),
+        lastMessagePreview: text,
+        lastMessageFromMe: true,
+        fromGetChats: true,
+        getChatsTimestampMs: Date.now()
       });
     }
 
@@ -671,13 +808,21 @@ app.post('/api/whatsapp/messages/media', upload.single('file'), async (req, res)
         phone,
         name: phone,
         found: true,
-        lastMessageAt: new Date().toISOString()
+        lastMessageAt: new Date().toISOString(),
+        lastMessagePreview: caption,
+        lastMessageFromMe: true,
+        fromGetChats: true,
+        getChatsTimestampMs: Date.now()
       });
     } else {
       const existing = contactsByJid.get(chatId);
       contactsByJid.set(chatId, {
         ...existing,
-        lastMessageAt: new Date().toISOString()
+        lastMessageAt: new Date().toISOString(),
+        lastMessagePreview: caption,
+        lastMessageFromMe: true,
+        fromGetChats: true,
+        getChatsTimestampMs: Date.now()
       });
     }
 

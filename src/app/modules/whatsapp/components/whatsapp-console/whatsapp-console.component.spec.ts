@@ -6,8 +6,10 @@ import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../..
 import { WhatsappContact, WhatsappInstance } from '../../../../models/whatsapp.model';
 import { MessageTemplateService } from '../../../../services/message-template.service';
 import { PendingBulkSendService } from '../../../../services/pending-bulk-send.service';
+import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
 import { BulkSendService } from '../../services/bulk-send.service';
-import { WhatsappStateService } from '../../services/whatsapp-state.service';
+import { WhatsappStateService, WhatsappSyncStatus } from '../../services/whatsapp-state.service';
 import { WhatsappConsoleComponent } from './whatsapp-console.component';
 
 const makeContact = (jid: string): WhatsappContact => ({
@@ -21,22 +23,28 @@ describe('WhatsappConsoleComponent', () => {
   let bulkSpy: jasmine.SpyObj<BulkSendService>;
   let pendingBulkSpy: jasmine.SpyObj<PendingBulkSendService>;
   let templateServiceSpy: jasmine.SpyObj<MessageTemplateService>;
+  let scheduleListLauncherSpy: jasmine.SpyObj<ScheduleListLauncherService>;
+  let scheduledMessageServiceSpy: jasmine.SpyObj<ScheduledMessageService>;
 
   const instances$ = new BehaviorSubject<WhatsappInstance[]>([]);
   const selectedInstance$ = new BehaviorSubject<string>('');
   const errorMessage$ = new BehaviorSubject<string>('');
   const loadingState$ = new BehaviorSubject({ instances: false, contacts: false, messages: false, sending: false });
-  const syncStatus$ = new BehaviorSubject({
+  const syncStatus$ = new BehaviorSubject<WhatsappSyncStatus>({
     active: false,
-    mode: 'idle' as const,
+    mode: 'idle',
     message: '',
     detail: '',
     currentStep: 0,
-    totalSteps: 0
+    totalSteps: 0,
+    progressPercent: 0
   });
   const selectionMode$ = new BehaviorSubject<boolean>(false);
   const contacts$ = new BehaviorSubject<WhatsappContact[]>([]);
   const selectedJids$ = new BehaviorSubject<Set<string>>(new Set());
+  const schedules$ = new BehaviorSubject([]);
+  const upcoming$ = new BehaviorSubject(null);
+  const openRequests$ = new BehaviorSubject<void>(undefined);
 
   beforeEach(async () => {
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
@@ -57,6 +65,15 @@ describe('WhatsappConsoleComponent', () => {
     pendingBulkSpy.consume.and.returnValue(null);
     templateServiceSpy = jasmine.createSpyObj('MessageTemplateService', ['getTemplate']);
     templateServiceSpy.getTemplate.and.returnValue('');
+    scheduleListLauncherSpy = jasmine.createSpyObj('ScheduleListLauncherService', ['consumePendingOpen']);
+    scheduleListLauncherSpy.consumePendingOpen.and.returnValue(false);
+    Object.defineProperty(scheduleListLauncherSpy, 'openRequests$', {
+      value: openRequests$.asObservable()
+    });
+    scheduledMessageServiceSpy = jasmine.createSpyObj('ScheduledMessageService', [], {
+      schedules$: schedules$.asObservable(),
+      upcoming$: upcoming$.asObservable()
+    });
 
     await TestBed.configureTestingModule({
       declarations: [WhatsappConsoleComponent],
@@ -64,7 +81,9 @@ describe('WhatsappConsoleComponent', () => {
         { provide: WhatsappStateService, useValue: stateSpy },
         { provide: BulkSendService, useValue: bulkSpy },
         { provide: PendingBulkSendService, useValue: pendingBulkSpy },
-        { provide: MessageTemplateService, useValue: templateServiceSpy }
+        { provide: MessageTemplateService, useValue: templateServiceSpy },
+        { provide: ScheduleListLauncherService, useValue: scheduleListLauncherSpy },
+        { provide: ScheduledMessageService, useValue: scheduledMessageServiceSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -123,6 +142,25 @@ describe('WhatsappConsoleComponent', () => {
     it('is false when instances are not loading', () => {
       component.isLoadingInstances = false;
       expect(component.isUiBlocked).toBeFalse();
+    });
+  });
+
+  describe('syncProgress', () => {
+    it('uses the progress percent provided by sync status', () => {
+      syncStatus$.next({
+        active: true,
+        mode: 'initial',
+        message: 'Carregando contatos',
+        detail: '',
+        currentStep: 1,
+        totalSteps: 2,
+        progressPercent: 37
+      });
+
+      expect(component.syncProgress).toBe(37);
+      expect(component.syncMessage).toBe('Carregando contatos');
+      expect(component.syncCurrentStep).toBe(1);
+      expect(component.syncTotalSteps).toBe(2);
     });
   });
 

@@ -3,16 +3,62 @@
  * Call init(client) once the client object is available.
  */
 
-import { normalizeJid, normalizePhone, isSamePhoneJid } from './utils.js';
+import { normalizeJid, normalizePhone, isSamePhoneJid, isValidPersonalJid } from './utils.js';
 
 let _client = null;
+const knownSelfJids = new Set();
+
+function serializeWidLike(value) {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return normalizeJid(value);
+  }
+
+  if (typeof value?._serialized === 'string') {
+    return normalizeJid(value._serialized);
+  }
+
+  const user = typeof value?.user === 'string' ? value.user.trim() : '';
+  const server = typeof value?.server === 'string' ? value.server.trim() : '';
+  if (user && server) {
+    return normalizeJid(`${user}@${server}`);
+  }
+
+  return '';
+}
+
+function listOwnJids(client = _client) {
+  const candidates = [
+    serializeWidLike(client?.info?.wid),
+    serializeWidLike(client?.info?.me),
+    serializeWidLike(client?.info?.user)
+  ];
+
+  for (const jid of knownSelfJids) {
+    candidates.push(serializeWidLike(jid));
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
 
 export function init(client) {
   _client = client;
+  knownSelfJids.clear();
 }
 
 export function getOwnJid() {
-  return normalizeJid(_client?.info?.wid?._serialized || '');
+  const ownJids = listOwnJids();
+  return ownJids.find(isValidPersonalJid) || ownJids[0] || '';
+}
+
+export function registerSelfJid(jid) {
+  const normalized = serializeWidLike(jid);
+  if (normalized) {
+    knownSelfJids.add(normalized);
+  }
 }
 
 export function getSerializedMessageId(message) {
@@ -67,21 +113,21 @@ export function resolveIsFromMe(message) {
     }
   }
 
-  const ownJid = getOwnJid();
-  if (!ownJid) {
+  const ownJids = listOwnJids();
+  if (!ownJids.length) {
     return false;
   }
 
   const from = typeof message?.from === 'string' ? message.from : '';
   const author = typeof message?.author === 'string' ? message.author : '';
-  return isSamePhoneJid(from, ownJid) || isSamePhoneJid(author, ownJid);
+  return ownJids.some(ownJid => isSamePhoneJid(from, ownJid) || isSamePhoneJid(author, ownJid));
 }
 
 export function isSelfJid(jid) {
-  const ownJid = getOwnJid();
-  if (!ownJid || !jid) {
+  const ownJids = listOwnJids();
+  if (!ownJids.length || !jid) {
     return false;
   }
 
-  return isSamePhoneJid(ownJid, jid);
+  return ownJids.some(ownJid => isSamePhoneJid(ownJid, jid));
 }

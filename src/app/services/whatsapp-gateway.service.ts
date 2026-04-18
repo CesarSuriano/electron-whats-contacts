@@ -74,13 +74,6 @@ export class WhatsappGatewayService {
     }).pipe(map(response => response.result));
   }
 
-  loadLabels(instanceName: string): Observable<WhatsappLabel[]> {
-    const params = new HttpParams().set('instanceName', instanceName);
-    return this.http.get<LabelsResponse>(`${this.baseUrl}/labels`, { params }).pipe(
-      map(response => response.labels)
-    );
-  }
-
   createLabel(instanceName: string, name: string): Observable<WhatsappLabel[]> {
     return this.http.post<LabelsResponse>(`${this.baseUrl}/labels`, { instanceName, name }).pipe(
       map(response => response.labels)

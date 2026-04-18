@@ -31,16 +31,20 @@ import {
   pushEvent,
   events,
   contactsByJid,
+  lidByPhoneJid,
 } from './lib/events.js';
 
 import {
   resolveChatLabelNames,
   init as initContacts,
   fetchProfilePhotoUrl,
+  refreshContactsFromChats,
 } from './lib/contacts.js';
 
 import {
   getSerializedMessageId,
+  getOwnJid,
+  registerSelfJid,
   resolveIsFromMe,
   init as initJid,
 } from './lib/jid.js';
@@ -57,6 +61,7 @@ import {
 
 let passed = 0;
 let failed = 0;
+const testQueue = [];
 
 function assert(condition, label) {
   if (condition) {
@@ -69,8 +74,7 @@ function assert(condition, label) {
 }
 
 function describe(name, fn) {
-  console.log(`\n${name}`);
-  fn();
+  testQueue.push({ name, fn });
 }
 
 const RAW_JPEG_BASE64 = '/9j/' + 'A'.repeat(320);
@@ -326,12 +330,14 @@ describe('trackEventId', () => {
 });
 
 describe('resolveMessageChatJid', () => {
+  initJid({ info: { wid: { _serialized: '5511000000000@c.us' } } });
+
   assert(
-    resolveMessageChatJid({ from: '5511@c.us', to: 'me@c.us', id: { fromMe: false } }) === '5511@c.us',
+    resolveMessageChatJid({ from: '5511999999999@c.us', to: 'me@c.us', id: { fromMe: false } }) === '5511999999999@c.us',
     'inbound message → from JID'
   );
   assert(
-    resolveMessageChatJid({ from: 'me@c.us', to: '5522@c.us', id: { fromMe: true } }) === '5522@c.us',
+    resolveMessageChatJid({ from: 'me@c.us', to: '5522999999999@c.us', id: { fromMe: true } }) === '5522999999999@c.us',
     'outbound message → to JID'
   );
   assert(
@@ -345,6 +351,22 @@ describe('resolveMessageChatJid', () => {
   assert(
     resolveMessageChatJid(null) === '',
     'null message → empty'
+  );
+  assert(
+    resolveMessageChatJid({
+      id: { remote: { _serialized: '5522999999999@c.us' } },
+      from: '12345678901234@lid',
+      to: '5511000000000@c.us'
+    }) === '5522999999999@c.us',
+    'prefers remote chat jid over mirrored self fields'
+  );
+  assert(
+    resolveMessageChatJid({
+      id: { remote: { _serialized: '5511000000000@c.us' } },
+      from: '5511000000000@c.us',
+      to: '5511000000000@c.us'
+    }) === '',
+    'self conversation is ignored'
   );
 });
 
@@ -427,6 +449,63 @@ describe('fetchProfilePhotoUrl', async () => {
   );
 });
 
+describe('fetchProfilePhotoUrl with linked jid', async () => {
+  const linkedJid = '12345678901234@lid';
+
+  initContacts({
+    getProfilePicUrl: async () => undefined,
+    getContactById: async () => ({
+      number: '5511999999999',
+      id: { _serialized: linkedJid, user: '12345678901234' },
+      getProfilePicUrl: async () => undefined
+    }),
+    getContacts: async () => [],
+    pupPage: {
+      evaluate: async () => 'data:image/png;base64,ZmFrZQ=='
+    }
+  }, { status: 'ready' }, { enableProfilePhotoFetch: true });
+
+  const photoUrl = await fetchProfilePhotoUrl(linkedJid);
+  assert(
+    photoUrl === 'data:image/png;base64,ZmFrZQ==',
+    'accepts linked JIDs and falls back to browser-fetched data URL'
+  );
+});
+
+describe('refreshContactsFromChats', async () => {
+  contactsByJid.clear();
+  lidByPhoneJid.clear();
+
+  initJid({ info: { wid: { _serialized: '554498958521@c.us' } } });
+  initContacts({
+    getChats: async () => ([
+      {
+        id: { _serialized: '144873692885172@lid' },
+        isGroup: false,
+        name: 'Eu',
+        timestamp: 1713295905,
+        unreadCount: 0,
+        lastMessage: {
+          body: '123',
+          fromMe: true
+        }
+      }
+    ]),
+    getContacts: async () => ([
+      {
+        id: { _serialized: '144873692885172@lid', user: '144873692885172' },
+        isMe: true,
+        isMyContact: false,
+        number: '144873692885172'
+      }
+    ])
+  }, { status: 'ready' });
+
+  await refreshContactsFromChats();
+
+  assert(!contactsByJid.has('144873692885172@lid'), 'drops self linked-id chats from contacts refresh');
+});
+
 // ── jid.js ───────────────────────────────────────────────────────────────────
 
 // Init with a mock client so getOwnJid() returns a known value
@@ -440,7 +519,18 @@ describe('getSerializedMessageId', () => {
   assert(getSerializedMessageId(null) === '', 'returns empty for null message');
 });
 
+describe('getOwnJid / isSelfJid fallback', () => {
+  initJid({ info: { wid: { user: '5511888888888', server: 'c.us' } } });
+  assert(getOwnJid() === '5511888888888@c.us', 'reconstructs own jid from wid user/server');
+
+  initJid({ info: {} });
+  registerSelfJid('5511777777777@c.us');
+  assert(getOwnJid() === '5511777777777@c.us', 'falls back to registered self jid when client info is empty');
+});
+
 describe('resolveIsFromMe', () => {
+  initJid({ info: { wid: { _serialized: '5511000000000@c.us' } } });
+
   assert(resolveIsFromMe({ id: { fromMe: true } }) === true, 'fromMe: true → true');
   assert(resolveIsFromMe({ id: { fromMe: false } }) === false, 'fromMe: false → false');
   assert(resolveIsFromMe({ id: { _serialized: 'true_5511@c.us_abc' } }) === true, 'serialized id starting with true_ → true');
@@ -491,6 +581,16 @@ describe('registerHistoryFailure', () => {
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────
+
+for (const { name, fn } of testQueue) {
+  console.log(`\n${name}`);
+  try {
+    await fn();
+  } catch (error) {
+    console.error(`  ✗ ${name} threw: ${error?.message || String(error)}`);
+    failed++;
+  }
+}
 
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

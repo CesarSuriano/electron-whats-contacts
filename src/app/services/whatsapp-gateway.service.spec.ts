@@ -60,14 +60,6 @@ describe('WhatsappGatewayService', () => {
     expect((result as any)['ok']).toBe(true);
   });
 
-  it('loadLabels – sends instanceName and extracts labels', () => {
-    let result: WhatsappLabel[] | undefined;
-    service.loadLabels('inst1').subscribe(r => (result = r));
-    const req = httpMock.expectOne(r => r.url === `${BASE}/labels` && r.params.get('instanceName') === 'inst1');
-    req.flush({ instanceName: 'inst1', labels: [mockLabel] });
-    expect(result).toEqual([mockLabel]);
-  });
-
   it('createLabel – posts and extracts labels', () => {
     let result: WhatsappLabel[] | undefined;
     service.createLabel('inst1', 'Novo').subscribe(r => (result = r));

@@ -28,10 +28,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   isLoadingContacts = false;
   isLoadingMessages = false;
   isInitialSyncing = false;
-  syncMessage = 'Conectando ao WhatsApp...';
+  syncMessage = '';
   syncDetail = '';
   syncCurrentStep = 0;
   syncTotalSteps = 0;
+  syncProgressPercent = 0;
 
   isSelectionMode = false;
   selectedCount = 0;
@@ -97,10 +98,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
     this.state.syncStatus$.pipe(takeUntil(this.destroy$)).subscribe(status => {
       this.isInitialSyncing = status.active && status.mode === 'initial';
-      this.syncMessage = status.message || 'Conectando ao WhatsApp...';
+      this.syncMessage = status.message || '';
       this.syncDetail = status.detail || '';
       this.syncCurrentStep = status.currentStep || 0;
       this.syncTotalSteps = status.totalSteps || 0;
+      this.syncProgressPercent = status.progressPercent || 0;
     });
 
     this.state.selectionMode$.pipe(takeUntil(this.destroy$)).subscribe(mode => {
@@ -199,11 +201,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   get syncProgress(): number {
-    if (!this.syncTotalSteps) {
-      return 0;
-    }
-
-    return Math.max(0, Math.min(100, (this.syncCurrentStep / this.syncTotalSteps) * 100));
+    return Math.max(0, Math.min(100, this.syncProgressPercent));
   }
 
   get isUiBlocked(): boolean {

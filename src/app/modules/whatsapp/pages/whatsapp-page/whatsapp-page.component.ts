@@ -9,6 +9,10 @@ import { ScheduleListLauncherService } from '../../../../services/schedule-list-
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 
+const BRIDGE_STARTUP_GRACE_PERIOD_MS = 10_000;
+const SESSION_STATUS_RETRY_INTERVAL_MS = 1_000;
+const SESSION_CONNECT_RETRY_INTERVAL_MS = 1_500;
+
 @Component({
   selector: 'app-whatsapp-page',
   templateUrl: './whatsapp-page.component.html',
@@ -27,7 +31,9 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
-  private sessionPollId: number | null = null;
+  private sessionStatusRetryTimerId: number | null = null;
+  private connectRetryTimerId: number | null = null;
+  private sessionStatusErrorGraceUntil = 0;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -38,11 +44,13 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.startSessionPolling();
+    this.ws.connect();
+    this.startInitialSessionCheck();
 
     // Real-time session state via WebSocket
     this.ws.on<WhatsappSessionStatus>('session_state').pipe(takeUntil(this.destroy$)).subscribe(status => {
       if (status && status.status) {
+        this.stopSessionStatusRetry();
         this.isCheckingSession = false;
         this.sessionErrorMessage = '';
         this.updateSessionState(status);
@@ -53,7 +61,8 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.stopSessionPolling();
+    this.stopSessionStatusRetry();
+    this.stopConnectRetry();
   }
 
   goToHome(): void {
@@ -122,34 +131,73 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     });
   }
 
-  private startSessionPolling(): void {
-    this.stopSessionPolling();
+  private startInitialSessionCheck(): void {
+    this.stopSessionStatusRetry();
+    this.stopConnectRetry();
+    this.isCheckingSession = true;
+    this.sessionErrorMessage = '';
+    this.sessionStatusText = 'Verificando sessão do WhatsApp...';
+    this.sessionStatusErrorGraceUntil = Date.now() + BRIDGE_STARTUP_GRACE_PERIOD_MS;
     this.checkSession();
-
-    this.sessionPollId = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-
-      this.checkSession();
-    }, 10000);
   }
 
-  private stopSessionPolling(): void {
-    if (this.sessionPollId !== null) {
-      window.clearInterval(this.sessionPollId);
-      this.sessionPollId = null;
+  private scheduleSessionStatusRetry(): void {
+    if (this.sessionStatusRetryTimerId !== null) {
+      return;
+    }
+
+    this.sessionStatusRetryTimerId = window.setTimeout(() => {
+      this.sessionStatusRetryTimerId = null;
+      this.checkSession();
+    }, SESSION_STATUS_RETRY_INTERVAL_MS);
+  }
+
+  private stopSessionStatusRetry(): void {
+    if (this.sessionStatusRetryTimerId !== null) {
+      window.clearTimeout(this.sessionStatusRetryTimerId);
+      this.sessionStatusRetryTimerId = null;
+    }
+  }
+
+  private scheduleConnectRetry(): void {
+    if (this.connectRetryTimerId !== null || this.isSessionActionLoading || this.isSessionReady) {
+      return;
+    }
+
+    this.connectRetryTimerId = window.setTimeout(() => {
+      this.connectRetryTimerId = null;
+      if (!this.isSessionReady && !this.isSessionActionLoading) {
+        this.connectSession();
+      }
+    }, SESSION_CONNECT_RETRY_INTERVAL_MS);
+  }
+
+  private stopConnectRetry(): void {
+    if (this.connectRetryTimerId !== null) {
+      window.clearTimeout(this.connectRetryTimerId);
+      this.connectRetryTimerId = null;
     }
   }
 
   private checkSession(): void {
     this.whatsappGatewayService.loadSessionStatus().subscribe({
       next: status => {
+        this.stopSessionStatusRetry();
         this.isCheckingSession = false;
         this.sessionErrorMessage = '';
         this.updateSessionState(status);
       },
       error: () => {
+        if (Date.now() < this.sessionStatusErrorGraceUntil) {
+          this.isSessionReady = false;
+          this.qrCodeDataUrl = '';
+          this.isCheckingSession = true;
+          this.sessionStatusText = 'Aguardando a bridge do WhatsApp iniciar...';
+          this.sessionErrorMessage = '';
+          this.scheduleSessionStatusRetry();
+          return;
+        }
+
         this.isSessionReady = false;
         this.qrCodeDataUrl = '';
         this.isCheckingSession = false;
@@ -160,6 +208,10 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   private connectSession(): void {
+    if (this.isSessionActionLoading) {
+      return;
+    }
+
     this.isSessionActionLoading = true;
     this.sessionErrorMessage = '';
 
@@ -167,11 +219,11 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       next: status => {
         this.isSessionActionLoading = false;
         this.updateSessionState(status);
-        this.checkSession();
       },
       error: () => {
         this.isSessionActionLoading = false;
         this.sessionErrorMessage = 'Não foi possível iniciar a conexão do WhatsApp.';
+        this.scheduleConnectRetry();
       }
     });
   }
@@ -181,18 +233,21 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.isSessionReady = status.status === 'ready';
 
     if (this.isSessionReady) {
+      this.stopConnectRetry();
       this.qrCodeDataUrl = '';
       this.sessionStatusText = 'Sessão ativa. Carregando console...';
       return;
     }
 
     if (status.status === 'qr_required' && status.qr) {
+      this.stopConnectRetry();
       this.sessionStatusText = 'Escaneie o QR code para autenticar o WhatsApp.';
       void this.updateQrCode(status.qr);
       return;
     }
 
     if (status.status === 'authenticated') {
+      this.stopConnectRetry();
       this.sessionStatusText = 'Sessão autenticada. Aguardando WhatsApp ficar pronto...';
       this.qrCodeDataUrl = '';
       return;
@@ -201,12 +256,21 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     if (status.status === 'disconnected') {
       this.sessionStatusText = 'WhatsApp desconectado. Aguardando novo QR code...';
       this.qrCodeDataUrl = '';
+      this.scheduleConnectRetry();
       return;
     }
 
     if (status.status === 'auth_failure') {
       this.sessionStatusText = 'Falha de autenticação. Aguarde um novo QR code.';
       this.qrCodeDataUrl = '';
+      this.scheduleConnectRetry();
+      return;
+    }
+
+    if (status.status === 'init_error') {
+      this.sessionStatusText = 'Erro ao inicializar sessão. Tentando reconectar...';
+      this.qrCodeDataUrl = '';
+      this.scheduleConnectRetry();
       return;
     }
 

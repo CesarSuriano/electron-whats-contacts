@@ -22,6 +22,8 @@ export interface WhatsappContact {
   unreadCount?: number;
   labels?: string[];
   isGroup?: boolean;
+  fromGetChats?: boolean;
+  getChatsTimestampMs?: number;
 }
 
 export interface WhatsappEvent {

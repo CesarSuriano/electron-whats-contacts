@@ -31,14 +31,8 @@
       *ngFor="let chip of filterChips"
       [class.active]="activeFilter === chip.id"
       [disabled]="disabled"
-      [ngStyle]="getChipStyle(chip)"
       (click)="onFilterChange(chip.id)"
     >
-      <span
-        class="label-dot"
-        *ngIf="chip.hexColor && activeFilter !== chip.id"
-        [style.background-color]="chip.hexColor"
-      ></span>
       {{ chip.label }}
     </button>
   </div>

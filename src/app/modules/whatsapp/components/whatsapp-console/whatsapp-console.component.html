@@ -41,14 +41,13 @@
   <ng-template #loading>
     <div class="console-loading">
       <div class="loading-spinner"></div>
-      <p class="loading-title">{{ syncMessage || (isLoadingContacts ? 'Carregando conversas...' : 'Conectando ao WhatsApp...') }}</p>
+      <p class="loading-title">{{ syncMessage || (isLoadingContacts ? 'Carregando contatos' : 'Conectando ao WhatsApp...') }}</p>
       <p class="loading-detail" *ngIf="syncDetail">{{ syncDetail }}</p>
 
       <div class="loading-progress" *ngIf="syncTotalSteps > 0">
         <div class="loading-progress-track">
           <span class="loading-progress-fill" [style.width.%]="syncProgress"></span>
         </div>
-        <small>{{ syncCurrentStep }}/{{ syncTotalSteps }}</small>
       </div>
     </div>
   </ng-template>

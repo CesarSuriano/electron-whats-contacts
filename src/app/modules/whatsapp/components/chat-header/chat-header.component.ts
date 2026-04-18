@@ -27,6 +27,17 @@ export class ChatHeaderComponent implements OnChanges {
     if (!this.contact) {
       return '';
     }
-    return formatBrazilianPhone(this.contact.phone || this.contact.jid);
+
+    const phoneSource = this.resolvePhoneSource(this.contact);
+    return formatBrazilianPhone(phoneSource);
+  }
+
+  private resolvePhoneSource(contact: WhatsappContact): string {
+    const phone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+    if (phone) {
+      return phone;
+    }
+
+    return contact.jid.endsWith('@lid') ? '' : contact.jid;
   }
 }

@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappLabel } from '../models/whatsapp.model';
+import { WhatsappContact, WhatsappEvent, WhatsappInstance } from '../models/whatsapp.model';
 
 interface InstancesResponse {
   instances: WhatsappInstance[];
@@ -27,11 +27,6 @@ interface SendResponse {
 interface PhotoResponse {
   jid: string;
   photoUrl: string | null;
-}
-
-interface LabelsResponse {
-  instanceName: string;
-  labels: WhatsappLabel[];
 }
 
 interface SeenResponse {
@@ -73,8 +68,12 @@ export class WhatsappWebjsGatewayService {
     );
   }
 
-  loadContacts(instanceName: string): Observable<WhatsappContact[]> {
-    const params = new HttpParams().set('instanceName', instanceName);
+  loadContacts(instanceName: string, options: { waitForRefresh?: boolean } = {}): Observable<WhatsappContact[]> {
+    let params = new HttpParams().set('instanceName', instanceName);
+    if (options.waitForRefresh) {
+      params = params.set('waitForRefresh', '1');
+    }
+
     return this.http.get<ContactsResponse>(`${this.baseUrl}/contacts`, { params }).pipe(
       map(response => response.contacts)
     );
@@ -124,12 +123,6 @@ export class WhatsappWebjsGatewayService {
     const encoded = encodeURIComponent(jid);
     return this.http.post<SeenResponse>(`${this.baseUrl}/chats/${encoded}/seen`, {}).pipe(
       map(() => undefined)
-    );
-  }
-
-  loadLabels(): Observable<WhatsappLabel[]> {
-    return this.http.get<LabelsResponse>(`${this.baseUrl}/labels`).pipe(
-      map(response => response.labels)
     );
   }
 

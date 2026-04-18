@@ -15,7 +15,11 @@
       "Bash(node --check lib/events.js)",
       "Bash(node --check lib/contacts.js)",
       "Bash(node --check lib/utils.js)",
-      "Bash(node --check lib/jid.js)"
+      "Bash(node --check lib/jid.js)",
+      "WebSearch",
+      "WebFetch(domain:apidoc.tagplus.com.br)",
+      "WebFetch(domain:ajuda.tagplus.com.br)",
+      "WebFetch(domain:developers.tagplus.com.br)"
     ]
   }
 }

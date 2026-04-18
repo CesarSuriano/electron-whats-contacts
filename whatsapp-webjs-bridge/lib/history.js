@@ -15,7 +15,7 @@ import {
   resolveMessagePreviewText,
   toIsoFromUnixTimestamp
 } from './utils.js';
-import { resolveIsFromMe } from './jid.js';
+import { resolveIsFromMe, isSelfJid } from './jid.js';
 import { lidByPhoneJid } from './events.js';
 
 const HISTORY_CHAT_LIMIT = 40;
@@ -684,6 +684,7 @@ export async function loadRecentChatEvents(limit) {
 
   const personalChats = chats
     .filter(chat => !chat.isGroup && isValidPersonalJid(chat.id?._serialized))
+    .filter(chat => !isSelfJid(chat.id?._serialized || ''))
     .filter(chat => !isChatHistoryTemporarilyDisabled(chat.id?._serialized || '', now))
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
     .slice(0, HISTORY_CHAT_LIMIT);
