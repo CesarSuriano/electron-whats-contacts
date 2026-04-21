@@ -1,4 +1,8 @@
-<div class="avatar" [class.avatar-sm]="size === 'sm'" [class.avatar-lg]="size === 'lg'">
-  <img *ngIf="hasImage" [src]="photoUrl" [alt]="name || 'Contato'" (error)="onImageError()" />
-  <span *ngIf="!hasImage" class="avatar-initials">{{ initials }}</span>
+<div
+  class="contact-avatar"
+  [class.contact-avatar--small]="size === 'sm'"
+  [class.contact-avatar--large]="size === 'lg'"
+>
+  <img class="contact-avatar__image" *ngIf="hasImage" [src]="photoUrl" [alt]="name || 'Contato'" (error)="onImageError()" />
+  <span *ngIf="!hasImage" class="contact-avatar__initials">{{ initials }}</span>
 </div>

@@ -1,35 +1,41 @@
 <div class="conversation-list">
-  <div class="list-top">
-    <div class="search-bar">
-      <span class="material-symbols-outlined">search</span>
-      <input
-        type="text"
-        placeholder="Pesquisar ou começar nova conversa"
-        [ngModel]="searchTerm"
-        (ngModelChange)="onSearchChange($event)"
-        [disabled]="disabled"
-      />
+  <div class="list-header conversation-list__header">
+    <div class="conversation-list__header-copy">
+      <h2 class="conversation-list__title">Conversas</h2>
+      <p class="conversation-list__subtitle">Busque e organize seus chats recentes.</p>
     </div>
 
     <button
       type="button"
-      class="btn-select-mode"
+      class="conversation-list__select-button"
       *ngIf="!isSelectionMode && filteredContacts.length"
       (click)="enterSelectionMode()"
       [disabled]="disabled"
       aria-label="Selecionar conversas"
     >
-      <span class="material-symbols-outlined">check_box</span>
+      <span class="material-symbols-outlined conversation-list__select-button-icon">check_box</span>
       Selecionar
     </button>
   </div>
 
-  <div class="filter-chips" *ngIf="filterChips.length">
+  <div class="search-bar conversation-list__search">
+    <span class="material-symbols-outlined conversation-list__search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Pesquisar ou comecar nova conversa"
+      [ngModel]="searchTerm"
+      (ngModelChange)="onSearchChange($event)"
+      [disabled]="disabled"
+      class="conversation-list__search-input"
+    />
+  </div>
+
+  <div class="filter-chips conversation-list__filters" *ngIf="filterChips.length">
     <button
       type="button"
-      class="filter-chip"
+      class="filter-chip conversation-list__filter-chip"
       *ngFor="let chip of filterChips"
-      [class.active]="activeFilter === chip.id"
+      [class.conversation-list__filter-chip--active]="activeFilter === chip.id"
       [disabled]="disabled"
       (click)="onFilterChange(chip.id)"
     >
@@ -37,75 +43,81 @@
     </button>
   </div>
 
-  <div class="sync-bar" *ngIf="isSyncing">
-    <span class="sync-dot"></span>
-    Sincronizando...
+  <div class="sync-bar conversation-list__sync-bar" *ngIf="isSyncing; else syncedState">
+    <span class="conversation-list__sync-dot conversation-list__sync-dot--pulse"></span>
+    Sincronizando conversas...
   </div>
 
-  <div class="list-scroll" *ngIf="!isLoading; else loadingState" #scrollContainer (scroll)="onScroll()">
+  <ng-template #syncedState>
+    <div class="sync-bar conversation-list__sync-bar">
+      <span class="conversation-list__sync-dot"></span>
+      Sincronizado agora
+    </div>
+  </ng-template>
+
+  <div class="list-scroll conversation-list__scroll" *ngIf="!isLoading; else loadingState" #scrollContainer (scroll)="onScroll()">
     <button
       *ngFor="let contact of filteredContacts; trackBy: trackByJid"
       type="button"
-      class="conversation-item"
-      [class.active]="!isSelectionMode && contact.jid === selectedJid"
-      [class.selected]="isSelectionMode && selectedJids.has(contact.jid)"
-      [class.flashing]="isFlashing(contact.jid)"
+      class="conversation-item conversation-list__item"
+      [class.conversation-list__item--active]="!isSelectionMode && contact.jid === selectedJid"
+      [class.conversation-list__item--selected]="isSelectionMode && selectedJids.has(contact.jid)"
+      [class.conversation-list__item--flashing]="isFlashing(contact.jid)"
       [disabled]="disabled"
       (click)="onContactClick(contact)"
       (contextmenu)="onContextMenu($event, contact)"
     >
-      <span class="selection-checkbox" *ngIf="isSelectionMode">
-        <span class="material-symbols-outlined">
+      <span class="selection-checkbox conversation-list__selection-checkbox" *ngIf="isSelectionMode" [class.conversation-list__selection-checkbox--selected]="selectedJids.has(contact.jid)">
+        <span class="material-symbols-outlined conversation-list__selection-checkbox-icon">
           {{ selectedJids.has(contact.jid) ? 'check_box' : 'check_box_outline_blank' }}
         </span>
       </span>
 
       <app-contact-avatar [name]="contact.name" [photoUrl]="contact.photoUrl"></app-contact-avatar>
 
-      <div class="conversation-info">
-        <div class="conversation-row">
-          <span class="conversation-name">{{ contact.name || 'Sem nome' }}</span>
-          <span class="conversation-time">{{ formatLastMessageTime(contact) }}</span>
+      <div class="conversation-info conversation-list__info">
+        <div class="conversation-row conversation-list__row">
+          <span class="conversation-name conversation-list__name">{{ contact.name || 'Sem nome' }}</span>
+          <span class="conversation-time conversation-list__time">{{ formatLastMessageTime(contact) }}</span>
         </div>
-        <div class="conversation-row meta-row">
-          <span class="conversation-preview" [class.with-check]="contact.lastMessageFromMe">
+        <div class="conversation-row conversation-list__row conversation-list__row--meta">
+          <span class="conversation-preview conversation-list__preview" [class.with-check]="contact.lastMessageFromMe">
             <span
-              class="material-symbols-outlined preview-check"
+              class="material-symbols-outlined conversation-list__preview-ack"
               *ngIf="contact.lastMessageFromMe && getPreviewAckIcon(contact)"
-              [class.ack-read]="isPreviewAckRead(contact)"
-              [class.ack-pending]="!isPreviewAckRead(contact)"
+              [class.conversation-list__preview-ack--read]="isPreviewAckRead(contact)"
             >{{ getPreviewAckIcon(contact) }}</span>
             <span
-              class="material-symbols-outlined preview-media-icon"
+              class="material-symbols-outlined conversation-list__preview-media"
               *ngIf="getPreviewMediaIcon(contact) as mediaIcon"
             >{{ mediaIcon }}</span>
             {{ formatLastMessagePreview(contact) }}
           </span>
-          <span class="unread-badge" *ngIf="getUnreadCount(contact) > 0">{{ getUnreadCount(contact) }}</span>
+          <span class="unread-badge conversation-list__unread-badge" *ngIf="getUnreadCount(contact) > 0">{{ getUnreadCount(contact) }}</span>
         </div>
       </div>
     </button>
 
-    <p class="empty-state" *ngIf="!filteredContacts.length">
+    <p class="empty-state conversation-list__empty" *ngIf="!filteredContacts.length">
       Nenhuma conversa encontrada.
     </p>
   </div>
 
   <ng-template #loadingState>
-    <div class="loading-area">
+    <div class="loading-area conversation-list__loading">
       <div class="loading-spinner"></div>
       <p>Carregando conversas...</p>
     </div>
   </ng-template>
 
   <div
-    class="context-menu"
+    class="context-menu conversation-list__context-menu"
     *ngIf="contextMenuVisible"
     [style.left.px]="contextMenuX"
     [style.top.px]="contextMenuY"
   >
-    <button type="button" class="context-menu-item" (click)="onContextSchedule()">
-      <span class="material-symbols-outlined">schedule_send</span>
+    <button type="button" class="context-menu-item conversation-list__context-menu-item" (click)="onContextSchedule()">
+      <span class="material-symbols-outlined conversation-list__context-menu-icon">schedule_send</span>
       Agendar mensagem
     </button>
   </div>

@@ -1,137 +1,91 @@
 .schedule-notif {
-  position: fixed;
-  bottom: 5.75rem;
-  right: 1.25rem;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  background: #751013;
-  color: #fff;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(117, 16, 19, 0.35);
-  cursor: pointer;
-  animation: notif-enter 0.3s ease-out;
+  @apply fixed bottom-[5.75rem] right-5 z-50 flex cursor-pointer items-center gap-3 rounded-[14px] bg-[#751013] px-4 py-3.5 text-white;
   max-width: min(480px, calc(100vw - 3rem));
+  box-shadow: 0 12px 40px rgba(117, 16, 19, 0.35);
+  animation: notif-enter 0.3s ease-out;
 }
 
 .schedule-notif-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
+  @apply flex shrink-0 items-center;
 }
 
 .schedule-notif-icon .material-symbols-outlined {
-  font-size: 1.4rem;
+  @apply text-[1.4rem];
   animation: notif-bell 1.5s ease-in-out infinite;
 }
 
 .schedule-notif-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
+  @apply flex min-w-0 flex-1 flex-col gap-[0.1rem];
 }
 
 .schedule-notif-title {
-  font-weight: 600;
-  font-size: 0.9rem;
+  @apply text-[0.9rem] font-semibold;
 }
 
 .schedule-notif-detail {
-  font-size: 0.8rem;
-  opacity: 0.85;
+  @apply text-[0.8rem] opacity-85;
 }
 
 .schedule-notif-action {
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border-radius: 999px;
-  padding: 0.4rem 0.85rem;
+  @apply shrink-0 cursor-pointer rounded-full border border-white/50 bg-white/[0.15] px-3.5 py-1.5 text-[0.82rem] font-semibold text-white transition-colors;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
 .schedule-notif-action:hover {
-  background: rgba(255, 255, 255, 0.3);
+  @apply bg-white/30;
 }
 
 .schedule-notif-dismiss {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  padding: 0.15rem;
-  border-radius: 999px;
-  display: inline-flex;
+  @apply inline-flex shrink-0 cursor-pointer rounded-full border-none bg-transparent p-[0.15rem] text-white/70;
 }
 
 .schedule-notif-dismiss:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
+  @apply bg-white/[0.15] text-white;
 }
 
 .schedule-notif-dismiss .material-symbols-outlined {
-  font-size: 1.1rem;
+  @apply text-[1.1rem];
 }
 
 .schedule-notif-confirm {
-  cursor: default;
+  @apply cursor-default;
 }
 
 .confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  @apply flex shrink-0 gap-2;
 }
 
 .confirm-btn {
-  border: none;
-  border-radius: 999px;
-  padding: 0.45rem 0.9rem;
+  @apply cursor-pointer rounded-full border-none px-3.5 py-[0.45rem] text-[0.82rem] font-semibold transition-colors;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
 .confirm-btn-primary {
-  background: #fff;
-  color: #751013;
+  @apply bg-white text-[#751013];
 }
 
 .confirm-btn-primary:hover {
-  background: rgba(255, 255, 255, 0.85);
+  @apply bg-white/[0.85];
 }
 
 .confirm-btn-secondary {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  @apply border border-white/30 bg-white/[0.15] text-white/90;
 }
 
 .confirm-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  @apply bg-white/25 text-white;
 }
 
 @keyframes notif-enter {
   from {
-    opacity: 0;
-    transform: translateY(-12px);
+    @apply opacity-0 -translate-y-3;
   }
   to {
-    opacity: 1;
-    transform: translateY(0);
+    @apply opacity-100 translate-y-0;
   }
 }
 

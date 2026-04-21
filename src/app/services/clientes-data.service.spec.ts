@@ -59,6 +59,8 @@ describe('ClientesDataService', () => {
     });
 
     it('falls back to asset fetch when localStorage XML is corrupt', () => {
+      const consoleErrorSpy = spyOn(console, 'error');
+
       localStorage.setItem('clientesXmlContent', 'INVALID <<< XML');
       localStorage.setItem('clientesXmlFileName', 'bad.xml');
 
@@ -67,6 +69,8 @@ describe('ClientesDataService', () => {
 
       const req = httpMock.expectOne(r => r.url.includes('assets/clientes.xml'));
       req.flush(MINIMAL_XML);
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
       expect(result.clientes.length).toBe(1);
     });
   });

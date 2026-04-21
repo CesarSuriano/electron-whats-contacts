@@ -1,24 +1,19 @@
+:host {
+  @apply block;
+}
+
 .chat-header {
-  @apply flex items-center gap-3 border-b;
-  padding: 0.65rem 1rem;
-  background: #f0f2f5;
-  border-color: #e2e5e7;
-  min-height: 60px;
+  @apply flex min-h-[4.3rem] items-center gap-3 border-b border-border bg-wa-surface px-4 py-3;
 }
 
-.chat-header-info {
-  @apply flex flex-col min-w-0 flex-1;
-  gap: 0.15rem;
+.chat-header__copy {
+  @apply flex min-w-0 flex-1 flex-col gap-[0.15rem];
 }
 
-.chat-header-name {
-  @apply font-medium overflow-hidden whitespace-nowrap;
-  color: #111b21;
-  font-size: 1rem;
-  text-overflow: ellipsis;
+.chat-header__name {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap text-[1rem] font-medium text-txt-strong;
 }
 
-.chat-header-phone {
-  font-size: 0.78rem;
-  color: #667781;
+.chat-header__phone {
+  @apply text-[0.78rem] text-txt-muted;
 }

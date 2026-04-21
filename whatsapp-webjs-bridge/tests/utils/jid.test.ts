@@ -6,6 +6,8 @@ import {
   isPersonalJid,
   isGroupJid,
   isLinkedId,
+  isBroadcastJid,
+  isStatusBroadcastJid,
   isPersonalOrLinkedJid,
   isSameConversationJid,
   normalizeRequestedChatJid,
@@ -111,6 +113,26 @@ describe('isLinkedId', () => {
 
   it('rejects null', () => {
     assert.equal(isLinkedId(null), false);
+  });
+});
+
+describe('isBroadcastJid', () => {
+  it('accepts @broadcast', () => {
+    assert.equal(isBroadcastJid('status@broadcast'), true);
+  });
+
+  it('rejects personal jid', () => {
+    assert.equal(isBroadcastJid('5511@c.us'), false);
+  });
+});
+
+describe('isStatusBroadcastJid', () => {
+  it('accepts the WhatsApp status broadcast jid', () => {
+    assert.equal(isStatusBroadcastJid('status@broadcast'), true);
+  });
+
+  it('rejects other broadcast jids', () => {
+    assert.equal(isStatusBroadcastJid('list@broadcast'), false);
   });
 });
 

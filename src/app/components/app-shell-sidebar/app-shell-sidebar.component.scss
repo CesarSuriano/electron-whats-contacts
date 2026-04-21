@@ -1,0 +1,194 @@
+:host {
+  @apply block;
+}
+
+.app-shell-sidebar {
+  @apply relative flex h-screen flex-col overflow-hidden bg-surface;
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  transition: width .22s ease;
+}
+
+.app-shell-sidebar--expanded {
+  width: var(--sidebar-w-expanded);
+  min-width: var(--sidebar-w-expanded);
+}
+
+.app-shell-sidebar__brand {
+  @apply flex shrink-0 items-center justify-center px-3;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-shell-sidebar__brand-stack {
+  @apply relative flex h-[42px] w-full items-center justify-center;
+}
+
+.app-shell-sidebar__brand-image {
+  @apply absolute left-1/2 top-1/2 max-w-full w-auto -translate-x-1/2 -translate-y-1/2 origin-center object-contain opacity-0 pointer-events-none;
+  transform: translate(-50%, -50%) scale(0.92);
+  transition: opacity .22s ease, transform .22s ease, filter .22s ease;
+}
+
+.app-shell-sidebar__brand-image--full {
+  @apply h-[42px] max-w-[168px];
+}
+
+.app-shell-sidebar__brand-image--compact {
+  @apply h-[34px] max-w-[34px];
+}
+
+.app-shell-sidebar__brand-image--visible {
+  @apply opacity-100 saturate-100;
+}
+
+.app-shell-sidebar:not(.app-shell-sidebar--expanded) .app-shell-sidebar__brand-image--visible {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.app-shell-sidebar--expanded .app-shell-sidebar__brand-image--visible {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.app-shell-sidebar__section {
+  @apply flex flex-col gap-0.5 px-2 pb-1.5 pt-2.5;
+}
+
+.app-shell-sidebar__section + .app-shell-sidebar__section {
+  @apply mt-1 pt-2;
+  border-top: 1px solid var(--border);
+}
+
+.app-shell-sidebar__section--system {
+  @apply mt-auto;
+}
+
+.app-shell-sidebar__section-label {
+  @apply whitespace-nowrap px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-txt-subtle opacity-0;
+  transform: translateX(-6px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.app-shell-sidebar--expanded .app-shell-sidebar__section-label {
+  @apply opacity-100;
+  transform: translateX(0);
+}
+
+.app-shell-sidebar__item,
+.app-shell-sidebar__about,
+.app-shell-sidebar__toggle {
+  @apply relative inline-flex h-10 w-full cursor-pointer items-center gap-3 whitespace-nowrap rounded border-none bg-transparent px-3 text-left text-[13.5px] font-medium text-txt-muted;
+  transition: background-color .12s, color .12s, transform .12s ease;
+}
+
+.app-shell-sidebar__item:hover,
+.app-shell-sidebar__about:hover,
+.app-shell-sidebar__toggle:hover {
+  @apply bg-bg-subtle text-txt;
+}
+
+.app-shell-sidebar__item--active {
+  @apply font-semibold bg-accent-soft text-accent;
+}
+
+.app-shell-sidebar__item--active::before {
+  @apply absolute -left-2 bottom-2 top-2 w-[3px] bg-accent;
+  content: '';
+  border-radius: 0 2px 2px 0;
+}
+
+.app-shell-sidebar__item-icon {
+  @apply inline-flex w-6 shrink-0 items-center justify-center text-center text-[24px];
+}
+
+.app-shell-sidebar__item-icon--whatsapp {
+  @apply relative inline-flex h-6 w-6 items-center justify-center;
+}
+
+.app-shell-sidebar__item-icon-whatsapp-bubble,
+.app-shell-sidebar__item-icon-whatsapp-phone {
+  @apply absolute left-1/2 top-1/2;
+}
+
+.app-shell-sidebar__item-icon-whatsapp-bubble {
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.app-shell-sidebar__item-icon-whatsapp-phone {
+  transform: translate(-42%, -44%);
+  font-size: 10px;
+  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 20;
+}
+
+.app-shell-sidebar__item-text {
+  @apply min-w-0 flex-1 opacity-0;
+  transform: translateX(-4px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.app-shell-sidebar--expanded .app-shell-sidebar__item-text {
+  @apply opacity-100;
+  transform: translateX(0);
+}
+
+.app-shell-sidebar__item-badge {
+  @apply inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-[5px] text-[10.5px] font-semibold text-accent-text;
+}
+
+.app-shell-sidebar:not(.app-shell-sidebar--expanded) .app-shell-sidebar__item-badge {
+  @apply absolute right-1.5 top-1.5 min-w-[8px] w-2 h-2 p-0 text-[0px] text-transparent;
+}
+
+.app-shell-sidebar__footer {
+  @apply flex shrink-0 flex-col gap-1.5 p-2;
+  border-top: 1px solid var(--border);
+}
+
+.app-shell-sidebar__about {
+  @apply h-11 px-3;
+}
+
+.app-shell-sidebar__toggle {
+  @apply h-11 px-3 text-accent;
+}
+
+.app-shell-sidebar__toggle-icon {
+  transition: transform .22s ease, color .18s ease;
+}
+
+.app-shell-sidebar--expanded .app-shell-sidebar__toggle-icon {
+  @apply rotate-180;
+}
+
+@media (max-width: 767px) {
+  .app-shell-sidebar {
+    @apply h-auto w-full min-w-0 flex-row overflow-x-auto border-r-0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .app-shell-sidebar--expanded {
+    @apply w-full min-w-0;
+  }
+
+  .app-shell-sidebar__brand,
+  .app-shell-sidebar__section-label,
+  .app-shell-sidebar__footer {
+    @apply hidden;
+  }
+
+  .app-shell-sidebar__section,
+  .app-shell-sidebar__section--system {
+    @apply mt-0 flex-row border-t-0 p-2;
+  }
+
+  .app-shell-sidebar__item {
+    @apply w-auto min-w-[48px] justify-center;
+  }
+
+  .app-shell-sidebar__item-text {
+    @apply hidden;
+  }
+}

@@ -7,11 +7,14 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 })
 export class AppPageHeaderComponent {
   @Input() title = '';
+  @Input() subtitle = '';
   @Input() navIcon = '';
   @Input() navLabel = '';
+  @Input() showMenu = true;
   @Output() navClick = new EventEmitter<void>();
 
   isMenuOpen = false;
+  isDarkTheme = document.body.classList.contains('theme-dark');
 
   toggleMenu(): void {
     this.isMenuOpen = !this.isMenuOpen;
@@ -19,5 +22,10 @@ export class AppPageHeaderComponent {
 
   closeMenu(): void {
     this.isMenuOpen = false;
+  }
+
+  toggleTheme(): void {
+    this.isDarkTheme = !this.isDarkTheme;
+    document.body.classList.toggle('theme-dark', this.isDarkTheme);
   }
 }

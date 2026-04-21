@@ -1,8 +1,43 @@
-.header-settings-btn {
-  padding-inline: 0.55rem;
-  min-width: 2.1rem;
+:host {
+  @apply block;
 }
 
-.header-settings-btn .btn-icon-symbol {
-  margin-right: 0;
+.app-page-header {
+  @apply flex items-center justify-between gap-4 bg-surface px-6;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-page-header__copy {
+  @apply flex min-w-0 flex-1 flex-col justify-center;
+}
+
+.app-page-header__title {
+  @apply m-0 text-[15px] font-semibold tracking-[-0.005em] text-txt;
+}
+
+.app-page-header__subtitle {
+  @apply mt-0.5 text-xs text-txt-muted;
+}
+
+.app-page-header__actions {
+  @apply flex items-center gap-1.5;
+}
+
+.app-page-header__menu-button {
+  @apply inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded border border-transparent bg-transparent text-txt-muted transition-colors;
+}
+
+.app-page-header__menu-button:hover {
+  @apply bg-bg-subtle text-txt;
+}
+
+.app-page-header__menu-icon {
+  @apply text-[20px];
+}
+
+@media (max-width: 767px) {
+  .app-page-header {
+    @apply px-4;
+  }
 }

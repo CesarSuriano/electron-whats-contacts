@@ -1,7 +1,7 @@
 <header class="chat-header" *ngIf="contact">
   <app-contact-avatar [name]="contact.name" [photoUrl]="contact.photoUrl"></app-contact-avatar>
-  <div class="chat-header-info">
-    <span class="chat-header-name">{{ contact.name || 'Sem nome' }}</span>
-    <span class="chat-header-phone">{{ phoneFormatted }}</span>
+  <div class="chat-header__copy">
+    <span class="chat-header__name">{{ contact.name || 'Sem nome' }}</span>
+    <span class="chat-header__phone">{{ phoneFormatted }}</span>
   </div>
 </header>

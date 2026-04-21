@@ -1,5 +1,6 @@
 import type { RawChat, RawContact } from '../domain/types.js';
 import { normalizePhone } from './phone.js';
+import { isIgnoredWhatsappMessage } from './message.js';
 import { readMessageMediaMimetype, isLikelyInlineMediaBody, isLikelyMediaMessage } from './media.js';
 
 export function getContactName(contactData: RawContact | null | undefined): string {
@@ -20,6 +21,10 @@ export function getContactName(contactData: RawContact | null | undefined): stri
 export function extractLastMessagePreview(chat: RawChat | null | undefined): string {
   const lastMessage = chat?.lastMessage;
   if (!lastMessage) {
+    return '';
+  }
+
+  if (isIgnoredWhatsappMessage(lastMessage)) {
     return '';
   }
 

@@ -1,10 +1,10 @@
 <section class="chat-view" *ngIf="contact; else emptyState">
   <app-chat-header [contact]="contact"></app-chat-header>
-  <div class="chat-sync-banner" *ngIf="isSyncingMessages">
-    <span class="material-symbols-outlined">sync</span>
-    <div>
-      <strong>Carregando mensagens...</strong>
-      <small>A conversa fica pronta assim que a sincronização terminar.</small>
+  <div class="chat-view__sync-bar" *ngIf="isSyncingMessages">
+    <span class="material-symbols-outlined chat-view__sync-icon">sync</span>
+    <div class="chat-view__sync-copy">
+      <strong class="chat-view__sync-title">Carregando mensagens...</strong>
+      <small class="chat-view__sync-text">A conversa fica pronta assim que a sincronização terminar.</small>
     </div>
   </div>
   <app-message-list
@@ -21,9 +21,9 @@
 </section>
 
 <ng-template #emptyState>
-  <section class="chat-empty">
-    <span class="material-symbols-outlined">forum</span>
-    <h3>Selecione uma conversa</h3>
-    <p>Escolha um contato na lista ao lado para ver as mensagens.</p>
+  <section class="chat-view__empty">
+    <span class="material-symbols-outlined chat-view__empty-icon">forum</span>
+    <h3 class="chat-view__empty-title">Selecione uma conversa</h3>
+    <p class="chat-view__empty-text">Escolha um contato na lista ao lado para ver as mensagens.</p>
   </section>
 </ng-template>

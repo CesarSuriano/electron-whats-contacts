@@ -169,6 +169,22 @@ describe('IngestionService.ingestInboundMessage', () => {
     );
     assert.equal(eventStore.events.length, 0);
   });
+
+  it('discards status broadcast messages', async () => {
+    const { service, eventStore } = makeService();
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-status', fromMe: false },
+        from: 'status@broadcast',
+        to: '5511000000000@c.us',
+        body: 'Status',
+        timestamp: 1700000301,
+        type: 'status'
+      },
+      'webjs-inbound'
+    );
+    assert.equal(eventStore.events.length, 0);
+  });
 });
 
 describe('IngestionService.ingestOutboundFromCreate', () => {

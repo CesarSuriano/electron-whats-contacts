@@ -1,66 +1,39 @@
 :host {
-  @apply flex flex-1 min-h-0 min-w-0;
+  @apply flex min-h-0 min-w-0 flex-1;
 }
 
 .chat-view {
-  @apply flex flex-col flex-1 min-h-0 min-w-0;
-  background: #efeae2;
+  @apply flex min-h-0 min-w-0 flex-1 flex-col bg-wa-chat-bg;
 }
 
-.chat-sync-banner {
-  @apply flex items-center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.9rem;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #d8dbdf;
-  color: #41525d;
+.chat-view__sync-bar {
+  @apply flex items-center gap-3 border-b border-border bg-wa-surface px-4 py-2.5 text-txt-muted;
 }
 
-.chat-sync-banner .material-symbols-outlined {
-  font-size: 1.1rem;
-  color: #00a884;
-  animation: chat-sync-spin 1.1s linear infinite;
+.chat-view__sync-icon {
+  @apply animate-spin text-[1.1rem] text-accent;
 }
 
-.chat-sync-banner strong,
-.chat-sync-banner small {
-  @apply block;
+.chat-view__sync-title {
+  @apply block text-[0.84rem] font-semibold text-txt-strong;
 }
 
-.chat-sync-banner strong {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #111b21;
+.chat-view__sync-text {
+  @apply block text-[0.75rem] text-txt-muted;
 }
 
-.chat-sync-banner small {
-  font-size: 0.75rem;
-  color: #667781;
+.chat-view__empty {
+  @apply flex flex-1 flex-col items-center justify-center gap-3 bg-wa-chat-bg p-8 text-center text-txt-muted;
 }
 
-@keyframes chat-sync-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.chat-view__empty-icon {
+  @apply text-[4rem] text-txt-subtle;
 }
 
-.chat-empty {
-  @apply flex-1 flex flex-col items-center justify-center text-center p-8;
-  color: #41525d;
-  gap: 0.75rem;
-  background: #f0f2f5;
+.chat-view__empty-title {
+  @apply m-0 text-[1.4rem] font-normal text-txt-strong;
 }
 
-.chat-empty .material-symbols-outlined {
-  font-size: 4rem;
-  color: #a3afb8;
-}
-
-.chat-empty h3 {
-  @apply m-0 font-normal;
-  font-size: 1.4rem;
-}
-
-.chat-empty p {
-  @apply m-0 max-w-sm;
-  color: #667781;
+.chat-view__empty-text {
+  @apply m-0 max-w-sm text-txt-muted;
 }

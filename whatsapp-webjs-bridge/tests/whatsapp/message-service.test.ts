@@ -193,6 +193,12 @@ describe('MessageService.shouldIncludeHistoryMessage', () => {
     assert.equal(service.shouldIncludeHistoryMessage({ isNotification: true, body: 'x' }), false);
   });
 
+  it('excludes status broadcast messages', () => {
+    const fakeSend: FakeSend = { response: {} };
+    const { service } = buildService(fakeSend);
+    assert.equal(service.shouldIncludeHistoryMessage({ from: 'status@broadcast', body: 'status' }), false);
+  });
+
   it('includes text messages', () => {
     const fakeSend: FakeSend = { response: {} };
     const { service } = buildService(fakeSend);

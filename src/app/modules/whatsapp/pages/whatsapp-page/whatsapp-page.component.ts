@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import * as QRCode from 'qrcode';
 
+import { AppShellSection } from '../../../../components/app-shell-sidebar/app-shell-sidebar.component';
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
@@ -67,6 +68,16 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
 
   goToHome(): void {
     void this.router.navigate(['/']);
+  }
+
+  onShellSectionSelect(section: AppShellSection): void {
+    if (section === 'whatsapp') {
+      return;
+    }
+
+    void this.router.navigate(['/'], {
+      queryParams: { view: section }
+    });
   }
 
   openAboutModal(): void {

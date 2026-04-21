@@ -1,65 +1,64 @@
 <div class="composer">
-  <div class="attachment-preview" *ngIf="selectedFile">
-    <img *ngIf="filePreviewUrl" [src]="filePreviewUrl" alt="Pré-visualização" />
-    <div class="document-badge" *ngIf="!filePreviewUrl">
-      <span class="material-symbols-outlined">description</span>
+  <div class="composer__attachment" *ngIf="selectedFile">
+    <img class="composer__attachment-preview" *ngIf="filePreviewUrl" [src]="filePreviewUrl" alt="Pré-visualização" />
+    <div class="composer__attachment-placeholder" *ngIf="!filePreviewUrl">
+      <span class="material-symbols-outlined composer__attachment-placeholder-icon">description</span>
     </div>
 
-    <div class="attachment-meta">
-      <span class="attachment-name">{{ selectedFile.name }}</span>
-      <span class="attachment-size">{{ fileSizeLabel }}</span>
+    <div class="composer__attachment-copy">
+      <span class="composer__attachment-name">{{ selectedFile.name }}</span>
+      <span class="composer__attachment-size">{{ fileSizeLabel }}</span>
     </div>
 
-    <button type="button" class="btn-clear-attachment" (click)="clearAttachment()" aria-label="Remover anexo">
-      <span class="material-symbols-outlined">close</span>
+    <button type="button" class="composer__icon-button composer__icon-button--clear" (click)="clearAttachment()" aria-label="Remover anexo">
+      <span class="material-symbols-outlined composer__icon-button-symbol">close</span>
     </button>
   </div>
 
-  <p class="attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>
+  <p class="composer__attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>
 
-  <!-- Emoji picker panel -->
-  <div class="emoji-picker-panel" *ngIf="isEmojiPickerOpen">
-    <div class="emoji-grid">
+  <div class="composer__emoji-panel" *ngIf="isEmojiPickerOpen">
+    <div class="composer__emoji-grid">
       <button
         *ngFor="let emoji of emojiList"
         type="button"
-        class="emoji-grid-btn"
+        class="composer__emoji-button"
         (click)="insertEmoji(emoji)"
       >{{ emoji }}</button>
     </div>
   </div>
 
-  <div class="composer-row">
-    <div class="attach-wrapper">
+  <div class="composer__row">
+    <div class="composer__control-group">
       <button
         type="button"
-        class="btn-icon"
+        class="composer__icon-button composer__icon-button--plain"
         (click)="toggleEmojiPicker()"
         [disabled]="disabled || isSending"
         aria-label="Emojis"
       >
-        <span class="material-symbols-outlined">sentiment_satisfied</span>
+        <span class="material-symbols-outlined composer__icon-button-symbol">sentiment_satisfied</span>
       </button>
     </div>
 
-    <div class="attach-wrapper">
+    <div class="composer__control-group">
       <button
         type="button"
-        class="btn-icon"
+        class="composer__icon-button composer__icon-button--plain"
         (click)="toggleAttachMenu()"
         [disabled]="disabled || isSending"
         aria-label="Anexar arquivo"
       >
-        <span class="material-symbols-outlined">attach_file</span>
+        <span class="material-symbols-outlined composer__icon-button-symbol">attach_file</span>
       </button>
 
-      <div class="attach-menu" *ngIf="isAttachMenuOpen">
-        <button type="button" [disabled]="disabled || isSending" (click)="chooseFile('image')">
-          <span class="material-symbols-outlined">image</span>
+      <div class="composer__attach-menu" *ngIf="isAttachMenuOpen">
+        <button type="button" class="composer__attach-menu-item" [disabled]="disabled || isSending" (click)="chooseFile('image')">
+          <span class="material-symbols-outlined composer__attach-menu-icon">image</span>
           Imagem
         </button>
-        <button type="button" [disabled]="disabled || isSending" (click)="chooseFile('document')">
-          <span class="material-symbols-outlined">description</span>
+        <button type="button" class="composer__attach-menu-item" [disabled]="disabled || isSending" (click)="chooseFile('document')">
+          <span class="material-symbols-outlined composer__attach-menu-icon">description</span>
           Documento
         </button>
       </div>
@@ -76,16 +75,17 @@
       [placeholder]="selectedFile ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem'"
       [disabled]="disabled"
       rows="1"
+      class="composer__textarea"
     ></textarea>
 
     <button
       type="button"
-      class="btn-icon btn-send"
+      class="composer__icon-button composer__icon-button--send"
       [disabled]="!hasContent || isSending || disabled"
       (click)="onSubmit()"
       aria-label="Enviar"
     >
-      <span class="material-symbols-outlined">send</span>
+      <span class="material-symbols-outlined composer__icon-button-symbol">send</span>
     </button>
   </div>
 </div>

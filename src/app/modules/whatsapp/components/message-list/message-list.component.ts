@@ -84,9 +84,9 @@ export class MessageListComponent implements AfterViewChecked {
   getAckIcon(message: WhatsappMessage): string {
     if (!message.isFromMe) return '';
     const ack = message.ack ?? (message.payload?.['ack'] as number | undefined) ?? null;
-    if (ack === null || ack === undefined) return 'check';
+    if (ack === null || ack === undefined) return 'done';
     if (ack <= MessageAck.PENDING) return 'schedule';
-    if (ack === MessageAck.SERVER) return 'check';
+    if (ack === MessageAck.SERVER) return 'done';
     if (ack === MessageAck.DEVICE) return 'done_all';
     return 'done_all'; // READ or PLAYED
   }

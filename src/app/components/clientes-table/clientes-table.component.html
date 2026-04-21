@@ -1,77 +1,90 @@
-<table class="clients-table">
-	<thead>
+<table class="clientes-table">
+	<thead class="clientes-table__head">
 		<tr>
-			<th class="checkbox-column" *ngIf="selectionMode"></th>
-			<th (click)="requestSort('nome')">
+			<th class="clientes-table__head-cell clientes-table__head-cell--checkbox" *ngIf="selectionMode"></th>
+			<th class="clientes-table__head-cell" (click)="requestSort('nome')">
 				Nome
-				<span class="sort-arrow">{{ getSortArrow('nome') }}</span>
+				<span class="clientes-table__sort-arrow">{{ getSortArrow('nome') }}</span>
 			</th>
-			<th (click)="requestSort('cpf')">
+			<th class="clientes-table__head-cell clientes-table__hide-md" (click)="requestSort('cpf')">
 				CPF
-				<span class="sort-arrow">{{ getSortArrow('cpf') }}</span>
+				<span class="clientes-table__sort-arrow">{{ getSortArrow('cpf') }}</span>
 			</th>
-			<th (click)="requestSort('telefone')">
+			<th class="clientes-table__head-cell clientes-table__hide-md" (click)="requestSort('telefone')">
 				Telefone
-				<span class="sort-arrow">{{ getSortArrow('telefone') }}</span>
+				<span class="clientes-table__sort-arrow">{{ getSortArrow('telefone') }}</span>
 			</th>
-			<th (click)="requestSort('dataCadastro')">
+			<th class="clientes-table__head-cell clientes-table__hide-lg" (click)="requestSort('dataCadastro')">
 				Data de cadastro
-				<span class="sort-arrow">{{ getSortArrow('dataCadastro') }}</span>
+				<span class="clientes-table__sort-arrow">{{ getSortArrow('dataCadastro') }}</span>
 			</th>
-			<th (click)="requestSort('dataNascimento')">
+			<th class="clientes-table__head-cell" (click)="requestSort('dataNascimento')">
 				Data de aniversário
-				<span class="sort-arrow">{{ getSortArrow('dataNascimento') }}</span>
+				<span class="clientes-table__sort-arrow">{{ getSortArrow('dataNascimento') }}</span>
 			</th>
-			<th class="actions-column">Ações</th>
+			<th class="clientes-table__head-cell clientes-table__head-cell--actions">Ações</th>
 		</tr>
 	</thead>
 	<tbody>
 		<tr
-			*ngFor="let cliente of clientes; trackBy: trackByCliente"
-			[ngClass]="getRowClass(cliente)"
-			[class.row-selected]="selectionMode && selectedClienteIds.has(cliente.id)"
+			*ngFor="let cliente of clientes; let i = index; trackBy: trackByCliente"
+			class="clientes-table__row"
+			[class.clientes-table__row--selected]="selectionMode && selectedClienteIds.has(cliente.id)"
+			[class.clientes-table__row--today]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus === 'today'"
+			[class.clientes-table__row--upcoming]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus === 'upcoming'"
+			[class.clientes-table__row--striped]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus !== 'today' && cliente.birthdayStatus !== 'upcoming' && i % 2 === 1"
+			[class.clientes-table__row--selectable]="selectionMode"
 			(click)="selectionMode ? selectionToggle.emit(cliente.id) : null"
-			[class.row-selectable]="selectionMode"
 		>
-			<td class="checkbox-column" *ngIf="selectionMode" (click)="$event.stopPropagation(); selectionToggle.emit(cliente.id)">
-				<span class="material-symbols-outlined checkbox-icon">
-					{{ selectedClienteIds.has(cliente.id) ? 'check_box' : 'check_box_outline_blank' }}
-				</span>
+			<td class="clientes-table__cell clientes-table__cell--checkbox" *ngIf="selectionMode" (click)="$event.stopPropagation(); selectionToggle.emit(cliente.id)">
+				<span class="material-symbols-outlined clientes-table__checkbox-icon" [class.clientes-table__checkbox-icon--selected]="selectedClienteIds.has(cliente.id)">{{ selectedClienteIds.has(cliente.id) ? 'check_box' : 'check_box_outline_blank' }}</span>
 			</td>
-			<td>{{ cliente.nome }}</td>
-			<td>{{ cliente.cpf }}</td>
-			<td>{{ cliente.telefone }}</td>
-			<td>{{ cliente.dataCadastro }}</td>
-			<td>{{ cliente.dataNascimento }}</td>
-			<td class="actions-cell">
-				<button
-					class="btn btn-outline"
-					type="button"
-					[disabled]="actionsDisabled"
-					(click)="birthdayClick.emit(cliente)"
-				>
-					<span class="action-icon">🎉</span>
-					<span>Parabéns</span>
-				</button>
-				<button
-					class="btn btn-outline"
-					type="button"
-					[disabled]="actionsDisabled"
-					(click)="reviewClick.emit(cliente)"
-				>
-					<span class="action-icon">⭐</span>
-					<span>Avaliação</span>
-				</button>
-				<button
-					*ngIf="isYearEndButtonAvailable"
-					class="btn btn-outline"
-					type="button"
-					[disabled]="actionsDisabled"
-					(click)="yearEndClick.emit(cliente)"
-				>
-					<span class="action-icon">🎄</span>
-					<span>Natal</span>
-				</button>
+			<td class="clientes-table__cell clientes-table__cell--name">
+				<div class="clientes-table__identity">
+					<span class="clientes-table__initials">{{ getInitials(cliente.nome) }}</span>
+					<div class="clientes-table__identity-copy">
+						<strong class="clientes-table__name">{{ cliente.nome }}</strong>
+						<span class="clientes-table__birthday-label" [class.clientes-table__birthday-label--today]="cliente.birthdayStatus === 'today'" [class.clientes-table__birthday-label--upcoming]="cliente.birthdayStatus === 'upcoming'">
+							{{ getBirthdayLabel(cliente) }}
+						</span>
+					</div>
+				</div>
+			</td>
+			<td class="clientes-table__cell clientes-table__cell--text clientes-table__hide-md">{{ cliente.cpf }}</td>
+			<td class="clientes-table__cell clientes-table__cell--text clientes-table__hide-md">{{ cliente.telefone }}</td>
+			<td class="clientes-table__cell clientes-table__cell--text clientes-table__hide-lg">{{ cliente.dataCadastro }}</td>
+			<td class="clientes-table__cell clientes-table__cell--text">{{ cliente.dataNascimento }}</td>
+			<td class="clientes-table__cell">
+				<div class="clientes-table__actions">
+					<button
+						class="clientes-table__action clientes-table__action--primary"
+						type="button"
+						[disabled]="actionsDisabled"
+						(click)="$event.stopPropagation(); birthdayClick.emit(cliente)"
+					>
+						<span class="clientes-table__action-icon">🎉</span>
+						<span>Parabéns</span>
+					</button>
+					<button
+						class="clientes-table__action clientes-table__action--secondary"
+						type="button"
+						[disabled]="actionsDisabled"
+						(click)="$event.stopPropagation(); reviewClick.emit(cliente)"
+					>
+						<span class="clientes-table__action-icon">⭐</span>
+						<span>Avaliação</span>
+					</button>
+					<button
+						*ngIf="isYearEndButtonAvailable"
+						class="clientes-table__action clientes-table__action--secondary"
+						type="button"
+						[disabled]="actionsDisabled"
+						(click)="$event.stopPropagation(); yearEndClick.emit(cliente)"
+					>
+						<span class="clientes-table__action-icon">🎄</span>
+						<span>Natal</span>
+					</button>
+				</div>
 			</td>
 		</tr>
 	</tbody>

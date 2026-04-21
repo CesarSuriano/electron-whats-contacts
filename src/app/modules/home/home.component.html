@@ -1,116 +1,340 @@
-<div class="app-container">
-  <app-page-header title="Clientes da Loja" navIcon="chat" navLabel="WhatsApp" (navClick)="goToWhatsapp()">
-    <button class="config-menu-item" type="button" (click)="openScheduleList()">
-      <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
-      Agendamentos de mensagens
-    </button>
-    <button class="config-menu-item" type="button" (click)="openAboutModal()">
-      <span class="material-symbols-outlined config-menu-icon">info</span>
-      Ver versão do app
-    </button>
-  </app-page-header>
+<div class="home-shell">
+  <app-shell-sidebar
+    [activeSection]="activeSection"
+    [schedulesBadge]="pendingSchedules.length"
+    [whatsappBadge]="unreadConversations"
+    (sectionSelect)="onShellSectionSelect($event)"
+    (about)="openAboutModal()"
+  ></app-shell-sidebar>
 
-  <main class="content">
-    <section class="legend-row">
-      <div class="legend">
-        <div class="legend-item">
-          <span class="legend-color legend-today"></span>
-          <span class="legend-label">Aniversariantes de hoje</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-upcoming"></span>
-          <span class="legend-label">Aniversário nos próximos 7 dias</span>
-        </div>
-      </div>
-
-      <div class="legend-center">
-        <div class="toggle-group">
-          <span class="toggle-label">Enviar mensagem por</span>
-          <div class="whatsapp-mode-toggle">
-            <button
-              class="toggle-btn"
-              type="button"
-              [class.toggle-btn-active]="!useInternalWhatsapp"
-              (click)="toggleWhatsappMode('official')"
-            >WhatsApp Oficial</button>
-            <button
-              class="toggle-btn"
-              type="button"
-              [class.toggle-btn-active]="useInternalWhatsapp"
-              (click)="toggleWhatsappMode('internal')"
-            >Uniq WhatsApp</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="legend-actions">
-        <span class="last-updated" *ngIf="lastUpdated">
-          Última atualização: {{ lastUpdated }}
-        </span>
-
-        <button class="btn btn-icon" type="button" (click)="openUploadModal()">
-          <span class="material-symbols-outlined btn-icon-symbol">upload</span>
-          <span class="btn-label">Enviar arquivo</span>
-        </button>
-
-        <div class="header-config-wrapper">
-          <button class="btn btn-outline" type="button" (click)="toggleConfigMenu()">
-            <span class="material-symbols-outlined btn-icon-symbol">edit_note</span>
-            <span class="btn-label">Editar mensagens</span>
-          </button>
-
-          <div class="header-config-menu" *ngIf="isConfigMenuOpen">
-            <button class="config-menu-item" type="button" (click)="openTemplateEditor('birthday')">
-              Editar mensagem de parabéns
-            </button>
-            <button class="config-menu-item" type="button" (click)="openTemplateEditor('review')">
-              Editar mensagem de avaliação
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <div class="bulk-action-bar" *ngIf="useInternalWhatsapp">
-      <span class="bulk-count">
-        {{ selectionCount > 0 ? (selectionCount + ' cliente' + (selectionCount === 1 ? '' : 's') + ' selecionado' + (selectionCount === 1 ? '' : 's')) : 'Nenhum cliente selecionado' }}
-      </span>
-      <button class="btn btn-outline bulk-btn" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
-        <span class="action-icon">🎉</span> Enviar Parabéns
+  <div class="home-content">
+    <app-page-header [title]="pageTitle" [subtitle]="pageSubtitle">
+      <button class="config-menu-item" type="button" (click)="openUploadModal()">
+        <span class="material-symbols-outlined config-menu-icon">upload</span>
+        Atualizar clientes
       </button>
-      <button class="btn btn-outline bulk-btn" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
-        <span class="action-icon">⭐</span> Enviar Avaliação
+      <button class="config-menu-item" type="button" (click)="openTemplateEditor('birthday')">
+        <span class="material-symbols-outlined config-menu-icon">edit</span>
+        Editar mensagem de parabens
       </button>
-      <button class="bulk-cancel-btn" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar seleção</button>
-    </div>
+      <button class="config-menu-item" type="button" (click)="openTemplateEditor('review')">
+        <span class="material-symbols-outlined config-menu-icon">chat</span>
+        Editar mensagem de avaliacao
+      </button>
+      <button class="config-menu-item" type="button" (click)="openScheduleList()">
+        <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
+        Agendamentos de mensagens
+      </button>
+      <button class="config-menu-item" type="button" (click)="openAboutModal()">
+        <span class="material-symbols-outlined config-menu-icon">info</span>
+        Ver versao do app
+      </button>
+    </app-page-header>
 
-    <section class="table-card" *ngIf="sortedClientes.length; else loadingOrEmpty">
-      <app-clientes-table
-        [clientes]="sortedClientes"
-        [sortedColumn]="sortedColumn"
-        [sortDirection]="sortDirection"
-        [isYearEndButtonAvailable]="isYearEndButtonAvailable"
-        [selectionMode]="useInternalWhatsapp"
-        [selectedClienteIds]="selectedClienteIds"
-        [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
-        (sortChange)="changeSort($event)"
-        (birthdayClick)="openWhatsappBirthday($event)"
-        (reviewClick)="openWhatsappReview($event)"
-        (yearEndClick)="openWhatsappYearEnd($event)"
-        (selectionToggle)="toggleClienteSelection($event)"
-      ></app-clientes-table>
-    </section>
+    <main class="home-main">
+      <ng-container [ngSwitch]="activeSection">
+        <section class="home-dashboard" *ngSwitchCase="'dashboard'">
+          <section class="home-greeting">
+            <h2 class="home-greeting__title">{{ greetingLabel }} <span class="home-greeting__emoji">👋</span></h2>
+            <p class="home-greeting__description">Aqui está um resumo do que está rolando na loja hoje, {{ greetingDateLabel }}.</p>
+          </section>
 
-    <ng-template #loadingOrEmpty>
-      <section class="loading-state" *ngIf="isLoading">
-        <div class="loading-spinner"></div>
-        <p>Carregando clientes...</p>
-      </section>
-      <section class="empty-state" *ngIf="!isLoading && hasError">
-        <p>Nenhum cliente carregado.</p>
-      </section>
-    </ng-template>
-  </main>
+          <section class="home-metrics">
+            <article class="home-metric-card">
+              <span class="home-metric-card__label">Aniversariantes hoje</span>
+              <strong class="home-metric-card__value">{{ birthdaysToday.length }}</strong>
+              <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--rose">card_giftcard</span>
+            </article>
+
+            <article class="home-metric-card">
+              <span class="home-metric-card__label">Agendamentos ativos</span>
+              <strong class="home-metric-card__value">{{ pendingSchedules.length }}</strong>
+              <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--amber">calendar_today</span>
+            </article>
+
+            <article class="home-metric-card">
+              <span class="home-metric-card__label">Conversas não lidas</span>
+              <strong class="home-metric-card__value">{{ unreadConversations }}</strong>
+              <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--green">chat</span>
+            </article>
+
+            <article class="home-metric-card">
+              <span class="home-metric-card__label">Clientes cadastrados</span>
+              <strong class="home-metric-card__value">{{ clientes.length.toLocaleString('pt-BR') }}</strong>
+              <span class="home-metric-card__trend" *ngIf="clientesAddedThisWeek > 0">
+                <span class="material-symbols-outlined home-metric-card__trend-icon">trending_up</span>
+                +{{ clientesAddedThisWeek }} essa semana
+              </span>
+              <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--orange">group</span>
+            </article>
+          </section>
+
+          <section class="home-highlight-grid">
+            <article class="home-panel">
+              <header class="home-panel__header">
+                <div class="home-panel__heading">
+                  <h3 class="home-panel__title">
+                    <span class="material-symbols-outlined home-panel__title-icon">card_giftcard</span>
+                    Aniversariantes de hoje
+                  </h3>
+                  <p class="home-panel__subtitle">Envie uma mensagem de Parabéns com o cupom de 15%</p>
+                </div>
+                <button type="button" class="home-panel__link" (click)="onShellSectionSelect('clients')">
+                  Ver todos
+                  <span class="material-symbols-outlined home-panel__link-icon">arrow_forward</span>
+                </button>
+              </header>
+
+              <div class="home-highlight-list" *ngIf="birthdaysToday.length; else dashboardBirthdaysEmpty">
+                <article class="home-highlight-card" *ngFor="let cliente of birthdaysToday | slice:0:4">
+                  <div class="home-highlight-card__identity">
+                    <span class="home-highlight-card__initials">{{ getClienteInitials(cliente.nome) }}</span>
+                    <div class="home-highlight-card__copy">
+                      <strong class="home-highlight-card__title">{{ cliente.nome }}</strong>
+                      <p class="home-highlight-card__meta">{{ cliente.dataNascimento }} · {{ cliente.telefone }}</p>
+                    </div>
+                  </div>
+
+                  <div class="home-highlight-card__actions">
+                    <button class="btn btn-primary home-highlight-card__action" type="button" (click)="openWhatsappBirthday(cliente)">
+                      <span class="material-symbols-outlined home-highlight-card__action-icon">card_giftcard</span>
+                      Parabéns
+                    </button>
+                    <button class="home-highlight-card__favorite" type="button" aria-label="Favoritar">
+                      <span class="material-symbols-outlined">star</span>
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </article>
+
+            <article class="home-panel">
+              <header class="home-panel__header">
+                <div class="home-panel__heading">
+                  <h3 class="home-panel__title">
+                    <span class="material-symbols-outlined home-panel__title-icon">calendar_today</span>
+                    Próximos agendamentos
+                  </h3>
+                  <p class="home-panel__subtitle">Mensagens programadas para envio.</p>
+                </div>
+                <button type="button" class="home-panel__link home-panel__link--accent" (click)="openScheduleList()">
+                  <span class="material-symbols-outlined home-panel__link-icon">add</span>
+                  Novo
+                </button>
+              </header>
+
+              <div class="home-schedule-list" *ngIf="pendingSchedules.length; else dashboardSchedulesEmpty">
+                <article class="home-schedule-card" *ngFor="let schedule of pendingSchedules | slice:0:3">
+                  <span class="material-symbols-outlined home-schedule-card__icon">schedule</span>
+                  <div class="home-schedule-card__copy">
+                    <strong class="home-schedule-card__title">{{ formatScheduleTimestamp(schedule.scheduledAt) }}</strong>
+                    <p class="home-schedule-card__template">{{ schedule.template | slice:0:54 }}{{ schedule.template.length > 54 ? '...' : '' }}</p>
+                    <small class="home-schedule-card__meta">{{ formatScheduleContacts(schedule) }}</small>
+                  </div>
+                </article>
+              </div>
+
+              <button class="btn btn-outline home-panel__secondary-action" type="button" (click)="openScheduleList()">
+                Ver todos agendamentos
+              </button>
+            </article>
+          </section>
+
+          <section class="home-panel home-panel--quick-actions">
+            <header class="home-panel__header home-panel__header--compact">
+              <div class="home-panel__heading">
+                <h3 class="home-panel__title">
+                  <span class="material-symbols-outlined home-panel__title-icon">bolt</span>
+                  Ações rápidas
+                </h3>
+              </div>
+            </header>
+
+            <div class="home-quick-grid">
+              <button type="button" class="home-quick-action" (click)="goToWhatsapp()">
+                <span class="material-symbols-outlined home-quick-action__icon">chat</span>
+                <strong class="home-quick-action__title">Abrir WhatsApp</strong>
+                <small class="home-quick-action__description">Conversas ao vivo</small>
+              </button>
+
+              <button type="button" class="home-quick-action" (click)="onShellSectionSelect('clients')">
+                <span class="material-symbols-outlined home-quick-action__icon">card_giftcard</span>
+                <strong class="home-quick-action__title">Enviar parabéns</strong>
+                <small class="home-quick-action__description">Para aniversariantes</small>
+              </button>
+
+              <button type="button" class="home-quick-action" (click)="openScheduleList()">
+                <span class="material-symbols-outlined home-quick-action__icon">calendar_today</span>
+                <strong class="home-quick-action__title">Novo agendamento</strong>
+                <small class="home-quick-action__description">Programar mensagem</small>
+              </button>
+
+              <button type="button" class="home-quick-action" (click)="onShellSectionSelect('messages')">
+                <span class="material-symbols-outlined home-quick-action__icon">chat</span>
+                <strong class="home-quick-action__title">Editar templates</strong>
+                <small class="home-quick-action__description">Mensagens prontas</small>
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <section class="home-clients" *ngSwitchCase="'clients'">
+          <section class="home-clients-toolbar">
+            <div class="home-clients-toolbar__top">
+              <label class="home-search-field">
+                <span class="material-symbols-outlined home-search-field__icon">search</span>
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, CPF..."
+                  [ngModel]="clienteSearchTerm"
+                  (ngModelChange)="onClienteSearchChange($event)"
+                  class="home-search-field__input"
+                />
+              </label>
+
+              <div class="home-filter-group">
+                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'all'" (click)="setClientFilter('all')">Todos</button>
+                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'today'" (click)="setClientFilter('today')">Aniversariantes hoje</button>
+                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'upcoming'" (click)="setClientFilter('upcoming')">Proximos 7 dias</button>
+              </div>
+            </div>
+
+            <div class="home-clients-toolbar__bottom">
+              <div class="home-mode-control">
+                <span class="home-mode-control__label">Enviar via</span>
+                <div class="home-mode-switch">
+                  <button
+                    class="home-mode-switch__button"
+                    type="button"
+                    [class.home-mode-switch__button--active]="!useInternalWhatsapp"
+                    (click)="toggleWhatsappMode('official')"
+                  >WhatsApp Oficial</button>
+                  <button
+                    class="home-mode-switch__button"
+                    type="button"
+                    [class.home-mode-switch__button--active]="useInternalWhatsapp"
+                    (click)="toggleWhatsappMode('internal')"
+                  >Uniq WhatsApp</button>
+                </div>
+              </div>
+
+              <div class="home-clients-toolbar__actions">
+                <span class="home-status-pill" *ngIf="lastUpdated">Ultima sincronizacao: {{ lastUpdated }}</span>
+                <button class="btn btn-outline home-toolbar-button" type="button" (click)="openBirthdayTemplateQuickAction()">
+                  <span class="material-symbols-outlined btn-icon-symbol">edit</span>
+                  Editar mensagens
+                </button>
+                <button class="btn btn-primary home-toolbar-button" type="button" (click)="openUploadModal()">
+                  <span class="material-symbols-outlined btn-icon-symbol">upload_file</span>
+                  Enviar arquivo
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="home-bulk-bar" *ngIf="useInternalWhatsapp">
+            <span class="home-bulk-bar__count">
+              {{ selectionCount > 0 ? (selectionCount + ' cliente' + (selectionCount === 1 ? '' : 's') + ' selecionado' + (selectionCount === 1 ? '' : 's')) : 'Nenhum cliente selecionado' }}
+            </span>
+            <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
+              <span class="home-bulk-bar__emoji">🎉</span> Enviar Parabens
+            </button>
+            <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
+              <span class="home-bulk-bar__emoji">⭐</span> Enviar Avaliacao
+            </button>
+            <button class="home-bulk-bar__cancel" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar selecao</button>
+          </div>
+
+          <section class="home-table-shell" *ngIf="filteredClientes.length; else clientsLoadingOrEmpty">
+            <app-clientes-table
+              [clientes]="filteredClientes"
+              [sortedColumn]="sortedColumn"
+              [sortDirection]="sortDirection"
+              [isYearEndButtonAvailable]="isYearEndButtonAvailable"
+              [selectionMode]="useInternalWhatsapp"
+              [selectedClienteIds]="selectedClienteIds"
+              [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
+              (sortChange)="changeSort($event)"
+              (birthdayClick)="openWhatsappBirthday($event)"
+              (reviewClick)="openWhatsappReview($event)"
+              (yearEndClick)="openWhatsappYearEnd($event)"
+              (selectionToggle)="toggleClienteSelection($event)"
+            ></app-clientes-table>
+          </section>
+
+          <ng-template #clientsLoadingOrEmpty>
+            <section class="home-state-card" *ngIf="isLoading">
+              <div class="loading-spinner"></div>
+              <p class="home-state-card__text">Carregando clientes...</p>
+            </section>
+            <section class="home-state-card" *ngIf="!isLoading && hasError">
+              <p class="home-state-card__text">Nenhum cliente carregado.</p>
+            </section>
+            <section class="home-state-card" *ngIf="!isLoading && !hasError">
+              <p class="home-state-card__text">Nenhum cliente encontrado com os filtros atuais.</p>
+            </section>
+          </ng-template>
+        </section>
+
+        <section class="home-center-section" *ngSwitchCase="'messages'">
+          <article class="home-feature-card">
+            <span class="material-symbols-outlined home-feature-card__icon">chat</span>
+            <h2 class="home-feature-card__title">Templates de mensagens</h2>
+            <p class="home-feature-card__description">Edite os templates enviados pelos botoes de Parabens e Avaliacao.</p>
+            <div class="home-feature-card__actions">
+              <button class="btn btn-primary home-feature-card__action" type="button" (click)="openBirthdayTemplateQuickAction()">Editar mensagem de parabens</button>
+              <button class="btn btn-outline home-feature-card__action" type="button" (click)="openReviewTemplateQuickAction()">Editar mensagem de avaliacao</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="home-center-section" *ngSwitchCase="'schedules'">
+          <article class="home-feature-card">
+            <span class="material-symbols-outlined home-feature-card__icon">calendar_today</span>
+            <h2 class="home-feature-card__title">Agendamentos</h2>
+            <p class="home-feature-card__description">Veja e gerencie todos os envios programados.</p>
+            <div class="home-feature-card__actions">
+              <button class="btn btn-primary home-feature-card__action" type="button" (click)="openScheduleList()">Abrir agendamentos</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="home-settings" *ngSwitchCase="'settings'">
+          <div class="home-settings-grid">
+            <article class="home-settings-card">
+              <h3 class="home-settings-card__title">Fonte de dados</h3>
+              <p class="home-settings-card__text">Arquivo atual: <strong class="home-settings-card__text-strong">{{ storedFileName || 'clientes.xml (padrao)' }}</strong></p>
+              <small class="home-settings-card__meta" *ngIf="storedSavedAtLabel">Ultima atualizacao: {{ storedSavedAtLabel }}</small>
+              <button class="btn btn-primary home-settings-card__action" type="button" (click)="openUploadModal()">Atualizar arquivo XML</button>
+            </article>
+
+            <article class="home-settings-card">
+              <h3 class="home-settings-card__title">Mensagens e automacoes</h3>
+              <p class="home-settings-card__text">Organize os templates e acompanhe os envios programados da loja.</p>
+              <div class="home-settings-card__actions">
+                <button class="btn btn-outline home-settings-card__action" type="button" (click)="onShellSectionSelect('messages')">Abrir mensagens</button>
+                <button class="btn btn-outline home-settings-card__action" type="button" (click)="onShellSectionSelect('schedules')">Abrir agendamentos</button>
+              </div>
+            </article>
+
+            <article class="home-settings-card">
+              <h3 class="home-settings-card__title">Aplicativo</h3>
+              <p class="home-settings-card__text">Versao atual <strong class="home-settings-card__text-strong home-settings-card__text-strong--accent">{{ appVersion }}</strong></p>
+              <button class="btn btn-outline home-settings-card__action" type="button" (click)="openAboutModal()">Ver novidades</button>
+            </article>
+          </div>
+        </section>
+      </ng-container>
+    </main>
+  </div>
+
+  <ng-template #dashboardBirthdaysEmpty>
+    <div class="home-inline-empty">Nenhum aniversariante marcado para hoje.</div>
+  </ng-template>
+
+  <ng-template #dashboardSchedulesEmpty>
+    <div class="home-inline-empty">Nenhum agendamento pendente no momento.</div>
+  </ng-template>
 
   <app-upload-xml-modal
     [isOpen]="isUploadModalOpen"

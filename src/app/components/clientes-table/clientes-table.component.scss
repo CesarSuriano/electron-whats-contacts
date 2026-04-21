@@ -1,101 +1,173 @@
-.clients-table {
-  @apply w-full border-collapse;
-  table-layout: fixed;
+:host {
+  @apply block;
 }
 
-.clients-table thead {
-  background-color: #751013;
-  color: #fff;
+.clientes-table {
+  @apply w-full min-w-[980px] border-separate border-spacing-0 table-fixed text-[13.5px];
 }
 
-.clients-table thead th {
-  @apply sticky top-0 z-20;
-  background-color: #751013;
+.clientes-table__head {
+  @apply bg-surface-2;
 }
 
-.clients-table th,
-.clients-table td {
-  @apply text-left;
-  padding: 0.75rem 0.9rem;
-  font-size: 0.9rem;
+.clientes-table__head-cell {
+  @apply sticky top-0 z-20 cursor-pointer select-none whitespace-nowrap bg-surface-2 px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-txt-muted;
+  border-bottom: 1px solid var(--border);
 }
 
-.clients-table th {
-  @apply cursor-pointer select-none whitespace-nowrap;
+.clientes-table__head-cell--checkbox {
+  @apply w-11 cursor-default px-2 py-2.5;
 }
 
-.clients-table th.actions-column {
-  @apply text-center cursor-default;
-  width: 350px;
+.clientes-table__head-cell--actions {
+  @apply w-[22rem] cursor-default text-center;
 }
 
-.clients-table th.checkbox-column,
-.clients-table td.checkbox-column {
-  @apply cursor-default;
-  width: 2.5rem;
-  padding: 0.5rem 0.25rem 0.5rem 0.75rem;
+.clientes-table__sort-arrow {
+  @apply ml-1;
 }
 
-.row-selectable {
+.clientes-table__row {
+  border-top: 1px solid var(--border);
+  @apply transition-colors duration-[120ms];
+}
+
+.clientes-table__row:hover {
+  @apply bg-bg-subtle;
+}
+
+.clientes-table__row--selected {
+  @apply bg-accent-soft;
+}
+
+.clientes-table__row--today {
+  @apply bg-success-soft;
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.clientes-table__row--today:hover {
+  @apply bg-success-soft brightness-[0.98];
+}
+
+.clientes-table__row--upcoming {
+  @apply bg-warn-soft;
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.clientes-table__row--upcoming:hover {
+  @apply bg-warn-soft brightness-[0.98];
+}
+
+.clientes-table__row--striped {
+  @apply bg-surface;
+}
+
+.clientes-table__row--selectable {
   @apply cursor-pointer;
 }
 
-.row-selected {
-  background-color: #f0f7ff !important;
+.clientes-table__cell {
+  @apply px-3.5 py-2.5 text-txt;
 }
 
-.checkbox-icon {
-  @apply align-middle;
-  font-size: 1.35rem;
-  color: #54656f;
+.clientes-table__cell--checkbox {
+  @apply w-11 cursor-default px-2 py-2.5;
 }
 
-.row-selected .checkbox-icon {
-  color: #751013;
+.clientes-table__checkbox-icon {
+  @apply align-middle text-[20px] text-txt-subtle;
 }
 
-.clients-table tbody tr {
-  @apply border-t;
-  border-color: #eee;
-  transition: box-shadow 0.15s ease, filter 0.15s ease;
+.clientes-table__checkbox-icon--selected {
+  @apply text-accent;
 }
 
-.clients-table tbody tr:nth-child(even):not(.row-birthday-today):not(.row-birthday-upcoming) {
-  background-color: #f7f7f7;
+.clientes-table__cell--name {
+  @apply w-[20rem];
 }
 
-.clients-table tbody tr:hover {
-  @apply relative z-10;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  filter: brightness(0.97);
+.clientes-table__identity {
+  @apply flex min-w-0 items-center gap-2.5;
 }
 
-.row-birthday-today {
-  background-color: #e5f7e5;
+.clientes-table__initials {
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11.5px] font-semibold text-accent;
 }
 
-.row-birthday-upcoming {
-  background-color: #fff4d8;
+.clientes-table__identity-copy {
+  @apply flex min-w-0 flex-col gap-0.5;
 }
 
-.actions-cell {
-  @apply flex justify-center flex-wrap;
-  gap: 0.5rem;
+.clientes-table__name {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-txt;
+}
+
+.clientes-table__birthday-label {
+  @apply text-[11.5px] text-txt-muted;
+}
+
+.clientes-table__birthday-label--today {
+  @apply font-medium text-success;
+}
+
+.clientes-table__birthday-label--upcoming {
+  @apply font-medium text-warn;
+}
+
+.clientes-table__cell--text {
+  @apply text-[13px] text-txt-muted;
+}
+
+.clientes-table__actions {
+  @apply flex flex-wrap justify-center gap-1.5;
+}
+
+.clientes-table__action {
+  @apply inline-flex min-w-[6rem] cursor-pointer items-center justify-center gap-1 rounded-sm border border-transparent px-3 py-1.5 text-[12.5px] font-medium transition-colors duration-[120ms];
+}
+
+.clientes-table__action:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
+.clientes-table__action--primary {
+  @apply bg-accent text-accent-text border-accent;
+}
+
+.clientes-table__action--primary:hover:not(:disabled) {
+  @apply bg-accent-hover border-accent-hover;
+}
+
+.clientes-table__action--secondary {
+  @apply bg-surface text-txt border-border-strong;
+}
+
+.clientes-table__action--secondary:hover:not(:disabled) {
+  @apply bg-bg-subtle border-txt-subtle;
+}
+
+.clientes-table__action-icon {
+  @apply mr-1 text-[15px];
 }
 
 @media (max-width: 1300px) {
-  .actions-cell {
-    @apply flex-col items-center justify-center w-full;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.75rem;
+  .clientes-table__actions {
+    @apply flex-col items-center;
   }
 }
 
-@media (max-width: 600px) {
-  .clients-table th:nth-child(2),
-  .clients-table td:nth-child(2),
-  .clients-table th:nth-child(3),
-  .clients-table td:nth-child(3) {
+@media (max-width: 1023px) {
+  .clientes-table__hide-lg {
+    @apply hidden;
+  }
+}
+
+@media (max-width: 767px) {
+  .clientes-table__cell--name {
+    @apply w-auto;
+  }
+
+  .clientes-table__hide-md {
     @apply hidden;
   }
 }

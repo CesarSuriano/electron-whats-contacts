@@ -198,18 +198,12 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   getPreviewMediaIcon(contact: WhatsappContact): string {
     const kind = this.resolvePreviewMediaKind(contact);
     switch (kind) {
-      case 'image':
-        return 'image';
-      case 'video':
-        return 'videocam';
-      case 'audio':
-        return 'mic';
-      case 'sticker':
-        return 'mood';
-      case 'document':
-        return 'description';
-      default:
-        return '';
+      case 'image':    return 'image';
+      case 'video':    return 'videocam';
+      case 'audio':    return 'mic';
+      case 'sticker':  return 'sentiment_satisfied';
+      case 'document': return 'description';
+      default:         return '';
     }
   }
 
@@ -249,9 +243,9 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   getPreviewAckIcon(contact: WhatsappContact): string {
     if (!contact.lastMessageFromMe) return '';
     const ack = contact.lastMessageAck;
-    if (ack === null || ack === undefined) return 'check';
+    if (ack === null || ack === undefined) return 'done';
     if (ack <= MessageAck.PENDING) return 'schedule';
-    if (ack === MessageAck.SERVER) return 'check';
+    if (ack === MessageAck.SERVER) return 'done';
     if (ack === MessageAck.DEVICE) return 'done_all';
     return 'done_all'; // READ or PLAYED
   }

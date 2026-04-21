@@ -3,7 +3,6 @@ import { HttpClientModule } from '@angular/common/http';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { AboutModalComponent } from '../../components/about-modal/about-modal.component';
 import { ClientesTableComponent } from '../../components/clientes-table/clientes-table.component';
 import { UploadXmlModalComponent } from '../../components/upload-xml-modal/upload-xml-modal.component';
 import { SharedModule } from '../shared/shared.module';
@@ -14,8 +13,7 @@ import { HomeRoutingModule } from './home-routing.module';
   declarations: [
     HomeComponent,
     ClientesTableComponent,
-    UploadXmlModalComponent,
-    AboutModalComponent
+    UploadXmlModalComponent
   ],
   imports: [CommonModule, FormsModule, HttpClientModule, HomeRoutingModule, SharedModule]
 })

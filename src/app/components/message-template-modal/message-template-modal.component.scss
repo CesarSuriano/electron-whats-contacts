@@ -1,55 +1,32 @@
 .template-image-section {
-  @apply flex items-center border-b;
-  padding: 0.5rem 1.25rem;
-  border-color: #e9edef;
-  min-height: 3rem;
+  @apply flex min-h-[3rem] items-center border-b border-border py-2 px-[1.25rem];
 }
 
 .template-image-preview {
-  @apply relative flex items-center;
-  gap: 0.6rem;
+  @apply relative flex items-center gap-2.5;
 }
 
 .template-image-thumb {
-  @apply object-cover border;
-  width: 56px;
-  height: 56px;
-  border-radius: 6px;
-  border-color: #d1d7db;
+  @apply h-14 w-14 rounded-md border border-border-strong object-cover;
 }
 
 .template-image-warning {
-  @apply absolute flex items-center justify-center;
-  top: -6px;
-  left: -6px;
-  width: 1.35rem;
-  height: 1.35rem;
-  background: #f59e0b;
-  border-radius: 50%;
-  cursor: help;
-  z-index: 1;
+  @apply absolute -left-1.5 -top-1.5 z-[1] flex h-[1.35rem] w-[1.35rem] cursor-help items-center justify-center rounded-full bg-amber-500;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 
   .material-symbols-outlined {
-    font-size: 0.8rem;
-    color: #fff;
+    @apply text-[0.8rem] text-white;
   }
 }
 
 .template-image-remove {
-  @apply inline-flex items-center justify-center border cursor-pointer p-0;
-  background: #f5f6f6;
-  border-color: #d1d7db;
-  border-radius: 50%;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: #54656f;
+  @apply inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border-strong bg-bg-subtle p-0 text-txt-muted;
 }
 
 .template-image-remove:hover {
-  background: #e9edef;
+  @apply bg-border;
 }
 
 .template-image-remove .material-symbols-outlined {
-  font-size: 1rem;
+  @apply text-[1rem];
 }

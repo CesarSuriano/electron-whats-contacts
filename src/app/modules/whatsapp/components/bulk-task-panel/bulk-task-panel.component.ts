@@ -66,16 +66,11 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
 
   statusIcon(item: BulkItem): string {
     switch (item.status) {
-      case 'done':
-        return 'check_circle';
-      case 'current':
-        return 'play_circle';
-      case 'skipped':
-        return 'skip_next';
-      case 'error':
-        return 'error';
-      default:
-        return 'radio_button_unchecked';
+      case 'done':    return 'check_circle';
+      case 'current': return 'play_circle';
+      case 'skipped': return 'skip_next';
+      case 'error':   return 'error';
+      default:        return 'circle';
     }
   }
 

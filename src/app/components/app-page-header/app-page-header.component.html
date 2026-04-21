@@ -1,27 +1,30 @@
-<header class="app-header z-50">
-  <div class="header-left">
-    <img src="assets/logo-vermelha.png" alt="Logo da loja" class="logo" />
+<header class="app-page-header">
+  <div class="app-page-header__copy">
+    <h1 class="app-page-header__title">{{ title }}</h1>
+    <p class="app-page-header__subtitle" *ngIf="subtitle">{{ subtitle }}</p>
   </div>
-  <div class="header-center">
-    <span class="app-title">{{ title }}</span>
-  </div>
-  <div class="header-right">
-    <button class="btn btn-outline" type="button" (click)="navClick.emit()">
-      <span class="material-symbols-outlined btn-icon-symbol">{{ navIcon }}</span>
-      <span class="btn-label">{{ navLabel }}</span>
+
+  <div class="app-page-header__actions">
+    <button
+      class="app-page-header__menu-button"
+      type="button"
+      (click)="toggleTheme()"
+      [attr.aria-label]="isDarkTheme ? 'Ativar tema claro' : 'Ativar tema escuro'"
+    >
+      <span class="material-symbols-outlined app-page-header__menu-icon">{{ isDarkTheme ? 'light_mode' : 'dark_mode' }}</span>
     </button>
 
-    <div class="header-config-wrapper">
+    <div class="header-config-wrapper" *ngIf="showMenu">
       <button
-        class="btn btn-outline header-settings-btn"
+        class="app-page-header__menu-button"
         type="button"
         (click)="toggleMenu()"
         aria-label="Configurações do app"
       >
-        <span class="material-symbols-outlined btn-icon-symbol">settings</span>
+        <span class="material-symbols-outlined app-page-header__menu-icon">more_horiz</span>
       </button>
 
-      <div class="header-config-menu" *ngIf="isMenuOpen" (click)="closeMenu()">
+      <div class="header-config-menu" *ngIf="isMenuOpen">
         <ng-content></ng-content>
       </div>
     </div>

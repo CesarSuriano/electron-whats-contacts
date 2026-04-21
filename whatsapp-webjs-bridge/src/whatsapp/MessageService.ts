@@ -8,6 +8,7 @@ import { SelfJidResolver } from './SelfJidResolver.js';
 import { isGroupJid, isValidPersonalJid, normalizeJid } from '../utils/jid.js';
 import { toIsoFromUnixTimestamp, withTimeout } from '../utils/time.js';
 import { readMessageInlineImageDataUrl } from '../utils/media.js';
+import { isIgnoredWhatsappMessage } from '../utils/message.js';
 
 const { MessageMedia } = pkg;
 
@@ -263,7 +264,7 @@ export class MessageService {
   }
 
   shouldIncludeHistoryMessage(message: RawMessage | null | undefined): boolean {
-    if (!message || message.isNotification) {
+    if (!message || isIgnoredWhatsappMessage(message)) {
       return false;
     }
 

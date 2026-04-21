@@ -1,5 +1,7 @@
-import { Component, HostListener, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 import { ClientesDataService } from '../../services/clientes-data.service';
 import { compareClientes } from '../../helpers/cliente-date.helper';
@@ -14,17 +16,24 @@ import { MessageTemplateService } from '../../services/message-template.service'
 import { PendingBulkSendService } from '../../services/pending-bulk-send.service';
 import { ScheduleListLauncherService } from '../../services/schedule-list-launcher.service';
 import { ScheduledMessageService } from '../../services/scheduled-message.service';
-import { ScheduledMessage } from '../../models/scheduled-message.model';
+import { RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
+
+type HomeSection = 'dashboard' | 'clients' | 'messages' | 'schedules' | 'settings';
+type ClientFilter = 'all' | 'today' | 'upcoming';
 
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']
 })
-export class HomeComponent implements OnInit {
+export class HomeComponent implements OnInit, OnDestroy {
   clientes: Cliente[] = [];
   sortedColumn: SortColumn = 'dataNascimento';
   sortDirection: SortDirection = 'asc';
+  activeSection: HomeSection = 'dashboard';
+  clienteSearchTerm = '';
+  activeClientFilter: ClientFilter = 'all';
+  scheduledMessages: ScheduledMessage[] = [];
 
   isLoading = false;
   hasError = false;
@@ -51,12 +60,14 @@ export class HomeComponent implements OnInit {
   useInternalWhatsapp = false;
   selectedClienteIds = new Set<number>();
 
-  readonly primaryColor = '#751013';
-  readonly googleReviewUrl = '';
+  unreadConversations = 0;
+  clientesAddedThisWeek = 0;
+
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
   private readonly yearEndButtonDeadline = new Date(2025, 11, 26, 23, 59, 59, 999);
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private clientesDataService: ClientesDataService,
@@ -64,14 +75,27 @@ export class HomeComponent implements OnInit {
     private pendingBulkSendService: PendingBulkSendService,
     private scheduleListLauncher: ScheduleListLauncherService,
     private scheduledMessageService: ScheduledMessageService,
+    private route: ActivatedRoute,
     private router: Router
   ) {
     this.messageTemplates = this.messageTemplateService.getTemplates();
   }
 
   ngOnInit(): void {
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe(params => {
+      this.activeSection = this.parseSectionParam(params.get('view'));
+    });
+
     this.initializeClientes();
-    this.scheduledMessageService.upcoming$.subscribe(u => (this.upcomingSchedule = u));
+    this.scheduledMessageService.upcoming$.pipe(takeUntil(this.destroy$)).subscribe(u => (this.upcomingSchedule = u));
+    this.scheduledMessageService.schedules$.pipe(takeUntil(this.destroy$)).subscribe(list => {
+      this.scheduledMessages = list;
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   @HostListener('window:dragover', ['$event'])
@@ -117,10 +141,101 @@ export class HomeComponent implements OnInit {
     return today <= this.yearEndButtonDeadline;
   }
 
+  get pageTitle(): string {
+    switch (this.activeSection) {
+      case 'clients':
+        return 'Clientes da Loja';
+      case 'messages':
+        return 'Mensagens';
+      case 'schedules':
+        return 'Agendamentos';
+      case 'settings':
+        return 'Configuracoes';
+      default:
+        return 'Inicio';
+    }
+  }
+
+  get pageSubtitle(): string {
+    switch (this.activeSection) {
+      case 'clients':
+        return `Base completa • ${this.clientes.length.toLocaleString('pt-BR')} cadastros`;
+      case 'messages':
+        return 'Templates para envio rapido';
+      case 'schedules':
+        return 'Mensagens programadas';
+      case 'settings':
+        return 'Preferencias e atalhos do sistema';
+      default:
+        return 'Visao geral da loja';
+    }
+  }
+
+  get greetingLabel(): string {
+    const hour = new Date().getHours();
+
+    if (hour < 12) {
+      return 'Bom dia, Uniq';
+    }
+
+    if (hour < 18) {
+      return 'Boa tarde, Uniq';
+    }
+
+    return 'Boa noite, Uniq';
+  }
+
+  get greetingDateLabel(): string {
+    const formatted = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'long'
+    }).format(new Date());
+
+    return formatted;
+  }
+
   get sortedClientes(): Cliente[] {
     const clientesCopy = [...this.clientes];
     clientesCopy.sort((a, b) => this.compareClientes(a, b));
     return clientesCopy;
+  }
+
+  get filteredClientes(): Cliente[] {
+    const normalizedTerm = this.clienteSearchTerm.trim().toLocaleLowerCase('pt-BR');
+
+    return this.sortedClientes.filter(cliente => {
+      if (this.activeClientFilter !== 'all' && cliente.birthdayStatus !== this.activeClientFilter) {
+        return false;
+      }
+
+      if (!normalizedTerm) {
+        return true;
+      }
+
+      const haystack = [cliente.nome, cliente.cpf, cliente.telefone]
+        .join(' ')
+        .toLocaleLowerCase('pt-BR');
+
+      return haystack.includes(normalizedTerm);
+    });
+  }
+
+  get birthdaysToday(): Cliente[] {
+    return this.sortedClientes.filter(cliente => cliente.birthdayStatus === 'today');
+  }
+
+  get birthdaysUpcoming(): Cliente[] {
+    return this.sortedClientes.filter(cliente => cliente.birthdayStatus === 'upcoming');
+  }
+
+  get pendingSchedules(): ScheduledMessage[] {
+    return [...this.scheduledMessages]
+      .filter(schedule => schedule.status === 'pending' || schedule.status === 'notified')
+      .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime());
+  }
+
+  get nextSchedule(): ScheduledMessage | null {
+    return this.pendingSchedules[0] ?? null;
   }
 
   changeSort(column: SortColumn): void {
@@ -134,6 +249,29 @@ export class HomeComponent implements OnInit {
 
   get selectionCount(): number {
     return this.selectedClienteIds.size;
+  }
+
+  get reviewTemplatePreview(): string {
+    return this.messageTemplates.review;
+  }
+
+  onShellSectionSelect(section: HomeSection | 'whatsapp'): void {
+    this.isConfigMenuOpen = false;
+
+    if (section === 'whatsapp') {
+      this.goToWhatsapp();
+      return;
+    }
+
+    this.setActiveSection(section);
+  }
+
+  onClienteSearchChange(term: string): void {
+    this.clienteSearchTerm = term;
+  }
+
+  setClientFilter(filter: ClientFilter): void {
+    this.activeClientFilter = filter;
   }
 
   toggleWhatsappMode(mode: 'official' | 'internal'): void {
@@ -210,6 +348,14 @@ export class HomeComponent implements OnInit {
     this.isConfigMenuOpen = false;
     this.activeTemplateEditorConfig = MESSAGE_TEMPLATE_EDITOR_CONFIG[type];
     this.isMessageTemplateModalOpen = true;
+  }
+
+  openBirthdayTemplateQuickAction(): void {
+    this.openTemplateEditor('birthday');
+  }
+
+  openReviewTemplateQuickAction(): void {
+    this.openTemplateEditor('review');
   }
 
   openAboutModal(): void {
@@ -329,6 +475,37 @@ export class HomeComponent implements OnInit {
     void this.router.navigate(['/whatsapp']);
   }
 
+  formatScheduleTimestamp(isoDate: string): string {
+    const date = new Date(isoDate);
+
+    if (!Number.isFinite(date.getTime())) {
+      return 'Horario indefinido';
+    }
+
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  formatScheduleContacts(schedule: ScheduledMessage): string {
+    const count = schedule.contacts.length;
+    return `${count} contato${count === 1 ? '' : 's'} • ${RECURRENCE_LABELS[schedule.recurrence]}`;
+  }
+
+  getClienteInitials(name: string): string {
+    const tokens = name
+      .split(' ')
+      .map(token => token.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    return tokens.map(token => token[0]?.toUpperCase() ?? '').join('');
+  }
+
   onNotificationAction(_schedule: ScheduledMessage): void {
     void this.router.navigate(['/whatsapp']);
   }
@@ -429,5 +606,26 @@ export class HomeComponent implements OnInit {
     return new Promise(resolve => {
       window.setTimeout(resolve, ms);
     });
+  }
+
+  private setActiveSection(section: HomeSection): void {
+    this.activeSection = section;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { view: section },
+      replaceUrl: true
+    });
+  }
+
+  private parseSectionParam(value: string | null): HomeSection {
+    switch (value) {
+      case 'clients':
+      case 'messages':
+      case 'schedules':
+      case 'settings':
+        return value;
+      default:
+        return 'dashboard';
+    }
   }
 }

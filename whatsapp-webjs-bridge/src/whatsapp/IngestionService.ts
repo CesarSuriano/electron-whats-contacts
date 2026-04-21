@@ -14,7 +14,7 @@ import {
   isValidPersonalJid
 } from '../utils/jid.js';
 import { getContactName, extractLastMessagePreview } from '../utils/contact.js';
-import { resolveMessagePreviewText } from '../utils/message.js';
+import { isIgnoredWhatsappMessage, resolveMessagePreviewText } from '../utils/message.js';
 import { toIsoFromUnixTimestamp } from '../utils/time.js';
 
 const EVENT_SEED_CHAT_LIMIT = 80;
@@ -191,7 +191,7 @@ export class IngestionService {
   }
 
   async ingestInboundMessage(message: RawMessage | null | undefined, source: string): Promise<void> {
-    if (!message || this.selfJidResolver.resolveIsFromMe(message)) {
+    if (!message || isIgnoredWhatsappMessage(message) || this.selfJidResolver.resolveIsFromMe(message)) {
       return;
     }
 
@@ -318,7 +318,7 @@ export class IngestionService {
    * acks, and /events endpoint picks these up via getChats during refresh.
    */
   async ingestOutboundFromCreate(message: RawMessage | null | undefined, source: string): Promise<void> {
-    if (!message || !this.selfJidResolver.resolveIsFromMe(message)) {
+    if (!message || isIgnoredWhatsappMessage(message) || !this.selfJidResolver.resolveIsFromMe(message)) {
       return;
     }
 

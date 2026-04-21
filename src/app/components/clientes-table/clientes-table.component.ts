@@ -39,6 +39,28 @@ export class ClientesTableComponent {
     return getBirthdayRowClass(cliente);
   }
 
+  getInitials(name: string): string {
+    return name
+      .split(' ')
+      .map(token => token.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(token => token[0]?.toUpperCase() ?? '')
+      .join('');
+  }
+
+  getBirthdayLabel(cliente: Cliente): string {
+    if (cliente.birthdayStatus === 'today') {
+      return 'Aniversario hoje';
+    }
+
+    if (cliente.birthdayStatus === 'upcoming') {
+      return 'Proximos 7 dias';
+    }
+
+    return 'Cadastro ativo';
+  }
+
   trackByCliente(_: number, cliente: Cliente): number {
     return cliente.id;
   }

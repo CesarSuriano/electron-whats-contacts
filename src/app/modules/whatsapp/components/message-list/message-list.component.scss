@@ -1,107 +1,79 @@
 :host {
-  @apply flex flex-1 min-h-0;
+  @apply flex min-h-0 flex-1;
 }
 
-.messages-wrapper {
-  @apply flex-1 overflow-y-auto flex flex-col;
-  padding: 1rem 4%;
-  gap: 0.45rem;
-  background-color: #efeae2;
-  background-image:
-    radial-gradient(circle at 10% 15%, rgba(255, 255, 255, 0.35), transparent 35%),
-    radial-gradient(circle at 85% 85%, rgba(255, 255, 255, 0.35), transparent 40%);
+.message-list {
+  @apply flex flex-1 flex-col gap-2 overflow-y-auto bg-wa-chat-bg px-[4%] py-4;
 }
 
-.message-bubble {
-  @apply flex flex-col self-start relative;
-  max-width: 65%;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem 0.3rem;
-  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
-  gap: 0.2rem;
+.message-list__empty {
+  @apply m-auto px-8 py-8 text-center text-[0.9rem] text-txt-muted;
 }
 
-.message-bubble.from-me {
-  @apply self-end;
-  background: #d9fdd3;
+.message-list__bubble {
+  @apply relative flex max-w-[88%] flex-col gap-1 self-start rounded-2xl bg-wa-surface px-3 py-2;
+  box-shadow: 0 12px 24px rgba(84, 49, 37, 0.08);
 }
 
-.message-bubble p {
-  @apply m-0;
-  font-size: 0.92rem;
-  color: #111b21;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+.message-list__bubble--from-me {
+  @apply self-end bg-wa-sent;
 }
 
-.media-block {
-  @apply flex flex-col;
-  gap: 0.35rem;
+.message-list__media {
+  @apply flex flex-col gap-1.5;
 }
 
-.media-image {
-  @apply w-full object-cover;
-  max-width: 290px;
-  max-height: 280px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+.message-list__image {
+  @apply max-h-[280px] w-full max-w-[290px] rounded-lg border border-black/10 object-cover;
 }
 
-.media-file {
-  @apply flex items-center;
-  gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  padding: 0.45rem 0.55rem;
+.message-list__file {
+  @apply flex items-center gap-2 rounded-lg bg-[rgba(126,32,48,0.06)] px-3 py-2;
 }
 
-.media-file .material-symbols-outlined {
-  font-size: 1.3rem;
-  color: #54656f;
+.message-list__file-icon {
+  @apply text-[1.3rem] text-accent;
 }
 
-.media-file-meta {
-  @apply flex flex-col min-w-0;
+.message-list__file-copy {
+  @apply flex min-w-0 flex-col;
 }
 
-.media-file-meta strong,
-.media-file-meta small {
-  @apply overflow-hidden whitespace-nowrap;
-  text-overflow: ellipsis;
+.message-list__file-label,
+.message-list__file-name {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
-.media-file-meta strong {
-  font-size: 0.84rem;
-  color: #1f2b33;
+.message-list__file-label {
+  @apply text-[0.84rem] text-txt-strong;
 }
 
-.media-file-meta small {
-  font-size: 0.75rem;
-  color: #667781;
+.message-list__file-name {
+  @apply text-[0.75rem] text-txt-muted;
 }
 
-.message-footer {
+.message-list__text {
+  @apply m-0 whitespace-pre-wrap break-words text-[0.92rem] text-txt-strong;
+}
+
+.message-list__footer {
   @apply flex items-center justify-end gap-1;
 }
 
-.message-bubble time {
-  font-size: 0.68rem;
-  color: #667781;
+.message-list__time {
+  @apply text-[0.68rem] text-txt-muted;
 }
 
-.ack-icon {
-  font-size: 0.92rem;
-  color: #667781;
+.message-list__ack {
+  @apply text-[0.92rem] text-txt-muted;
 }
 
-.ack-read {
-  color: #53bdeb;
+.message-list__ack--read {
+  @apply text-[#2f9bd4];
 }
 
-.empty-state {
-  @apply m-auto text-center;
-  color: #667781;
-  font-size: 0.9rem;
-  padding: 2rem;
+@media (min-width: 768px) {
+  .message-list__bubble {
+    @apply max-w-[65%];
+  }
 }

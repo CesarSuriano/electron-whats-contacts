@@ -1,94 +1,65 @@
 .bulk-bar {
-  @apply flex items-center gap-3 border-b;
-  padding: 0.55rem 0.75rem;
-  background: #00a884;
-  color: #ffffff;
-  border-color: rgba(0, 0, 0, 0.05);
+  @apply flex items-center gap-3 border-b border-black/5 bg-[#00a884] py-[0.55rem] px-3 text-white;
 }
 
 .btn-icon {
-  @apply flex items-center justify-center border-none cursor-pointer;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: transparent;
-  color: #ffffff;
+  @apply flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-white;
 }
 
 .btn-icon:hover {
-  background: rgba(255, 255, 255, 0.15);
+  @apply bg-white/[0.15];
 }
 
 .btn-icon:disabled,
 .btn-link:disabled,
 .btn-primary:disabled {
-  @apply opacity-55 cursor-not-allowed;
+  @apply cursor-not-allowed opacity-55;
 }
 
 .bulk-count {
-  @apply font-medium flex-1;
-  font-size: 0.95rem;
+  @apply flex-1 text-[0.95rem] font-medium;
 }
 
 .bulk-actions {
-  @apply inline-flex items-center;
-  gap: 0.55rem;
+  @apply inline-flex items-center gap-2;
 }
 
 .btn-link {
-  @apply border-none cursor-pointer underline;
-  background: transparent;
-  color: #ffffff;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
+  @apply cursor-pointer rounded-md border-none bg-transparent px-2 py-[0.3rem] text-[0.85rem] text-white underline;
 }
 
 .btn-link:hover {
-  background: rgba(255, 255, 255, 0.12);
+  @apply bg-white/[0.12];
 }
 
 .btn-link:disabled:hover {
-  background: transparent;
+  @apply bg-transparent;
 }
 
 .btn-primary {
-  @apply inline-flex items-center border-none font-medium cursor-pointer;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 18px;
-  background: #ffffff;
-  color: #00755a;
-  font-size: 0.9rem;
+  @apply inline-flex cursor-pointer items-center gap-[0.4rem] rounded-[18px] border-none bg-white px-3.5 py-[0.45rem] text-[0.9rem] font-medium text-[#00755a];
 }
 
 .btn-primary:disabled {
-  @apply opacity-55 cursor-not-allowed;
+  @apply cursor-not-allowed opacity-55;
 }
 
 .btn-primary .material-symbols-outlined {
-  font-size: 1.1rem;
+  @apply text-[1.1rem];
 }
 
 .btn-secondary {
-  @apply inline-flex items-center border cursor-pointer font-medium;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border-radius: 18px;
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.6);
-  color: #ffffff;
-  font-size: 0.9rem;
+  @apply inline-flex cursor-pointer items-center gap-[0.4rem] rounded-[18px] border border-white/60 bg-transparent px-3.5 py-[0.45rem] text-[0.9rem] font-medium text-white;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
+  @apply bg-white/[0.12];
 }
 
 .btn-secondary:disabled {
-  @apply opacity-55 cursor-not-allowed;
+  @apply cursor-not-allowed opacity-55;
 }
 
 .btn-secondary .material-symbols-outlined {
-  font-size: 1.1rem;
+  @apply text-[1.1rem];
 }

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 
 import { HomeComponent } from './home.component';
@@ -9,6 +9,8 @@ import { MessageTemplateService } from '../../services/message-template.service'
 import { PendingBulkSendService } from '../../services/pending-bulk-send.service';
 import { MessageTemplates } from '../../models/message-template.model';
 import { Cliente } from '../../models/cliente.model';
+import { ScheduleListLauncherService } from '../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../services/scheduled-message.service';
 
 function makeCliente(id: number, nome = 'Test'): Cliente {
   return { id, nome, cpf: '', telefone: '', dataCadastro: '2020-01-01', dataNascimento: '1990-05-15', birthdayStatus: 'none' };
@@ -23,6 +25,8 @@ describe('HomeComponent', () => {
   let mockTemplateService: jasmine.SpyObj<MessageTemplateService>;
   let mockPendingBulk: jasmine.SpyObj<PendingBulkSendService>;
   let mockRouter: jasmine.SpyObj<Router>;
+  let mockScheduleListLauncher: jasmine.SpyObj<ScheduleListLauncherService>;
+  let mockScheduledMessages: jasmine.SpyObj<ScheduledMessageService>;
 
   beforeEach(async () => {
     mockClientesData = jasmine.createSpyObj('ClientesDataService', ['loadClientes', 'saveUploadedXml', 'clearStoredXml']);
@@ -41,6 +45,11 @@ describe('HomeComponent', () => {
     mockTemplateService.saveCustomEmoji.and.returnValue([]);
 
     mockPendingBulk = jasmine.createSpyObj('PendingBulkSendService', ['set', 'take']);
+    mockScheduleListLauncher = jasmine.createSpyObj('ScheduleListLauncherService', ['requestOpen']);
+    mockScheduledMessages = jasmine.createSpyObj('ScheduledMessageService', [], {
+      upcoming$: of(null),
+      schedules$: of([])
+    });
 
     mockRouter = jasmine.createSpyObj('Router', ['navigate']);
     mockRouter.navigate.and.returnValue(Promise.resolve(true));
@@ -51,6 +60,9 @@ describe('HomeComponent', () => {
         { provide: ClientesDataService, useValue: mockClientesData },
         { provide: MessageTemplateService, useValue: mockTemplateService },
         { provide: PendingBulkSendService, useValue: mockPendingBulk },
+        { provide: ScheduleListLauncherService, useValue: mockScheduleListLauncher },
+        { provide: ScheduledMessageService, useValue: mockScheduledMessages },
+        { provide: ActivatedRoute, useValue: { queryParamMap: of(convertToParamMap({})) } },
         { provide: Router, useValue: mockRouter }
       ],
       schemas: [NO_ERRORS_SCHEMA]

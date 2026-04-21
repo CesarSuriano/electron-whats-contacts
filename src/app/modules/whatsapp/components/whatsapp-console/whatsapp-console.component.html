@@ -1,4 +1,4 @@
-<section class="console-shell">
+<section class="whatsapp-console">
   <app-bulk-action-bar
     *ngIf="isSelectionMode"
     [selectedCount]="selectedCount"
@@ -12,41 +12,42 @@
     (openSchedule)="onScheduleFromSelection()"
   ></app-bulk-action-bar>
 
-  <header class="console-toolbar" *ngIf="!isSelectionMode && instances.length > 1">
-    <div class="toolbar-right">
-      <label for="instance-select">Instância</label>
+  <header class="whatsapp-console__toolbar" *ngIf="!isSelectionMode && instances.length > 1">
+    <div class="whatsapp-console__toolbar-group">
+      <label for="instance-select" class="whatsapp-console__toolbar-label">Instância</label>
       <select
         id="instance-select"
         [ngModel]="selectedInstanceName"
         (ngModelChange)="onInstanceChange($event)"
         [disabled]="isUiBlocked"
+        class="whatsapp-console__select"
       >
         <option *ngFor="let instance of instances" [ngValue]="instance.name">
           {{ instance.name }}{{ instance.connected ? ' (conectada)' : '' }}
         </option>
       </select>
-      <button type="button" class="btn-refresh" (click)="onRefresh()" [disabled]="isUiBlocked" aria-label="Atualizar">
-        <span class="material-symbols-outlined">refresh</span>
+      <button type="button" class="whatsapp-console__refresh" (click)="onRefresh()" [disabled]="isUiBlocked" aria-label="Atualizar">
+        <span class="material-symbols-outlined whatsapp-console__refresh-icon">refresh</span>
       </button>
     </div>
   </header>
 
-  <p class="console-error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p class="whatsapp-console__error" *ngIf="errorMessage">{{ errorMessage }}</p>
 
-  <div class="console-body" *ngIf="!isInitialLoading; else loading">
+  <div class="whatsapp-console__body" *ngIf="!isInitialLoading; else loading">
     <app-conversation-list class="console-sidebar" [disabled]="isUiBlocked" (scheduleMessage)="onScheduleFromContact($event)"></app-conversation-list>
     <app-chat-view class="console-chat" [disabled]="isUiBlocked"></app-chat-view>
   </div>
 
   <ng-template #loading>
-    <div class="console-loading">
+    <div class="whatsapp-console__loading">
       <div class="loading-spinner"></div>
-      <p class="loading-title">{{ syncMessage || (isLoadingContacts ? 'Carregando contatos' : 'Conectando ao WhatsApp...') }}</p>
-      <p class="loading-detail" *ngIf="syncDetail">{{ syncDetail }}</p>
+      <p class="whatsapp-console__loading-title">{{ syncMessage || (isLoadingContacts ? 'Carregando contatos' : 'Conectando ao WhatsApp...') }}</p>
+      <p class="whatsapp-console__loading-detail" *ngIf="syncDetail">{{ syncDetail }}</p>
 
-      <div class="loading-progress" *ngIf="syncTotalSteps > 0">
-        <div class="loading-progress-track">
-          <span class="loading-progress-fill" [style.width.%]="syncProgress"></span>
+      <div class="whatsapp-console__progress" *ngIf="syncTotalSteps > 0">
+        <div class="whatsapp-console__progress-track">
+          <span class="whatsapp-console__progress-fill" [style.width.%]="syncProgress"></span>
         </div>
       </div>
     </div>

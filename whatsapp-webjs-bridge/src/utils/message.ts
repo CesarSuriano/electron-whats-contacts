@@ -1,9 +1,63 @@
 import type { RawMessage } from '../domain/types.js';
+import { isBroadcastJid, isStatusBroadcastJid } from './jid.js';
 import {
   readMessageMediaMimetype,
   isLikelyMediaMessage,
   isLikelyInlineMediaBody
 } from './media.js';
+
+function readJidCandidate(candidate: unknown): string {
+  if (typeof candidate === 'string') {
+    return candidate.trim();
+  }
+
+  if (candidate && typeof candidate === 'object') {
+    const record = candidate as { _serialized?: unknown };
+    if (typeof record._serialized === 'string') {
+      return record._serialized.trim();
+    }
+  }
+
+  return '';
+}
+
+function collectMessageJids(message: RawMessage | null | undefined): string[] {
+  if (!message) {
+    return [];
+  }
+
+  return [
+    readJidCandidate(message.from),
+    readJidCandidate(message.to),
+    readJidCandidate(message.author),
+    readJidCandidate(message.chatId),
+    readJidCandidate(message.chat?.id),
+    readJidCandidate(typeof message.id === 'object' ? message.id?.remote : undefined),
+    readJidCandidate(message._data?.from),
+    readJidCandidate(message._data?.to)
+  ].filter(Boolean);
+}
+
+export function isIgnoredWhatsappMessage(message: RawMessage | null | undefined): boolean {
+  if (!message) {
+    return true;
+  }
+
+  const type = typeof message.type === 'string' ? message.type.trim().toLowerCase() : '';
+  if (
+    message.isNotification
+    || type === 'e2e_notification'
+    || type === 'notification_template'
+    || type === 'call_log'
+    || type === 'protocol'
+    || type === 'status'
+    || type === 'status_notification'
+  ) {
+    return true;
+  }
+
+  return collectMessageJids(message).some(jid => isStatusBroadcastJid(jid) || isBroadcastJid(jid));
+}
 
 export function isBlankMessage(message: RawMessage | null | undefined): boolean {
   const body = typeof message?.body === 'string' ? message.body.trim() : '';
@@ -49,6 +103,10 @@ export function readMessageText(message: RawMessage | null | undefined): string 
 }
 
 export function resolveMessagePreviewText(message: RawMessage | null | undefined): string {
+  if (isIgnoredWhatsappMessage(message)) {
+    return '';
+  }
+
   const body = typeof message?.body === 'string' ? message.body.trim() : '';
   const mediaMimetype = readMessageMediaMimetype(message);
   const hasMedia = isLikelyMediaMessage(message);

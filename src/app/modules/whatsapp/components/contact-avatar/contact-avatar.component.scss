@@ -1,28 +1,24 @@
-.avatar {
-  @apply flex items-center justify-center overflow-hidden flex-shrink-0 text-white font-semibold select-none;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3d8b6e 0%, #2a5f4e 100%);
-  font-size: 1rem;
+:host {
+  @apply block;
 }
 
-.avatar img {
-  @apply w-full h-full object-cover block;
+.contact-avatar {
+  @apply flex h-12 w-12 shrink-0 select-none items-center justify-center overflow-hidden rounded-full text-[1rem] font-semibold text-white;
+  background: linear-gradient(to bottom right, #3d8b6e, #2a5f4e);
 }
 
-.avatar-initials {
-  letter-spacing: 0.02em;
+.contact-avatar--small {
+  @apply h-9 w-9 text-[0.82rem];
 }
 
-.avatar.avatar-sm {
-  width: 36px;
-  height: 36px;
-  font-size: 0.82rem;
+.contact-avatar--large {
+  @apply h-16 w-16 text-[1.25rem];
 }
 
-.avatar.avatar-lg {
-  width: 64px;
-  height: 64px;
-  font-size: 1.25rem;
+.contact-avatar__image {
+  @apply block h-full w-full object-cover;
+}
+
+.contact-avatar__initials {
+  @apply tracking-[0.02em];
 }

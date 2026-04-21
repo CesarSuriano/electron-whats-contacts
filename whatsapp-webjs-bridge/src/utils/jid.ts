@@ -35,6 +35,14 @@ export function isLinkedId(jid: unknown): jid is string {
   return typeof jid === 'string' && jid.endsWith('@lid');
 }
 
+export function isBroadcastJid(jid: unknown): jid is string {
+  return typeof jid === 'string' && jid.endsWith('@broadcast');
+}
+
+export function isStatusBroadcastJid(jid: unknown): jid is string {
+  return jid === 'status@broadcast';
+}
+
 export function isPersonalOrLinkedJid(jid: unknown): jid is string {
   return isPersonalJid(jid) || isLinkedId(jid);
 }

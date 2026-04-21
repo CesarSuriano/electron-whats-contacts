@@ -4,7 +4,15 @@
       "Bash(npx tsx *)",
       "Bash(npm test *)",
       "Bash(npm run *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(curl -sS -o /tmp/design-response.txt -w \"HTTP %{http_code}\\\\nFinal URL: %{url_effective}\\\\n\" -L \"https://api.anthropic.com/v1/design/h/a1WiVwBQFtUvFjO2XmhSag?open_file=Uniq+System+Redesign.html\")",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p /tmp/design-bundle)",
+      "Bash(cp \"C:\\\\Users\\\\cesar\\\\.claude\\\\projects\\\\d--uniq-uniq-system\\\\6041ce92-3c99-46a5-83cb-7fe618c6f2dc\\\\tool-results\\\\webfetch-1776532430376-rxq6rw.bin\" ./bundle.gz)",
+      "Bash(gunzip -k bundle.gz)",
+      "Bash(mkdir -p extracted)",
+      "Bash(tar -xf bundle -C extracted)"
     ]
   }
 }

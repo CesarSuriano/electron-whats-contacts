@@ -16,7 +16,7 @@ import {
   isSameConversationJid,
   isValidPersonalJid
 } from '../utils/jid.js';
-import { isBlankMessage, resolveMessagePreviewText } from '../utils/message.js';
+import { isBlankMessage, isIgnoredWhatsappMessage, resolveMessagePreviewText } from '../utils/message.js';
 import { withTimeout } from '../utils/time.js';
 
 export interface HistoryServiceOptions {
@@ -738,7 +738,7 @@ export class HistoryService {
           `fetching history for ${chatJid}`
         );
         recent
-          .filter(message => !message.isNotification && !isBlankMessage(message))
+          .filter(message => !isIgnoredWhatsappMessage(message) && !isBlankMessage(message))
           .forEach(message => {
             const mediaMimetype = typeof message?._data?.mimetype === 'string' ? message._data.mimetype : '';
             const mediaFilename = typeof message?._data?.filename === 'string' ? message._data.filename : '';

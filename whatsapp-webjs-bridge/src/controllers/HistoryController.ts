@@ -46,9 +46,10 @@ export class HistoryController {
 
       const chats = await this.historyService.resolveChatsForHistory(requestedJid);
       if (!chats.length) {
+        const fallbackEvents = this.readFallbackEventsForChat(requestedJid, limit);
         res.json({
           instanceName: this.instanceName,
-          events: [],
+          events: fallbackEvents,
           ...(debug
             ? {
               debug: {
@@ -56,7 +57,9 @@ export class HistoryController {
                 deep,
                 limit,
                 resolvedChats: [],
-                stages: []
+                stages: [],
+                fallbackSource: 'event-store',
+                fallbackCount: fallbackEvents.length
               }
             }
             : {})
@@ -182,15 +185,19 @@ export class HistoryController {
       );
       res.json({
         instanceName: this.instanceName,
-        events: this.eventStore.events
-          .filter(event => isSameConversationJid(event.chatJid, requestedJid))
-          .slice(0, Math.max(1, Math.min(300, Number(req.query.limit || 120))))
-          .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))
+        events: this.readFallbackEventsForChat(requestedJid, Math.max(1, Math.min(300, Number(req.query.limit || 120))))
       });
     } finally {
       this.historyService.releaseHistorySlot();
     }
   };
+
+  private readFallbackEventsForChat(requestedJid: string, limit: number): WhatsappEvent[] {
+    return this.eventStore.events
+      .filter(event => isSameConversationJid(event.chatJid, requestedJid))
+      .slice(0, Math.max(1, Math.min(300, Number(limit || 120))))
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+  }
 
   private readBooleanFlag(value: unknown): boolean {
     const normalized = String(value || '').toLowerCase();

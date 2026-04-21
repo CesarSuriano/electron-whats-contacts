@@ -1,32 +1,32 @@
-<div class="messages-wrapper" #scrollContainer>
-  <div class="empty-state" *ngIf="!messages.length">
+<div class="message-list" #scrollContainer>
+  <div class="message-list__empty" *ngIf="!messages.length">
     Ainda não há mensagens nesta conversa.
   </div>
 
   <article
     *ngFor="let message of messages; trackBy: trackById"
-    class="message-bubble"
-    [class.from-me]="message.isFromMe"
+    class="message-list__bubble"
+    [class.message-list__bubble--from-me]="message.isFromMe"
   >
-    <div class="media-block" *ngIf="isMediaMessage(message)">
-      <img class="media-image" *ngIf="isImageMessage(message)" [src]="imagePreviewUrl(message)" alt="Imagem anexada" />
+    <div class="message-list__media" *ngIf="isMediaMessage(message)">
+      <img class="message-list__image" *ngIf="isImageMessage(message)" [src]="imagePreviewUrl(message)" alt="Imagem anexada" />
 
-      <div class="media-file" *ngIf="!isImageMessage(message)">
-        <span class="material-symbols-outlined">description</span>
-        <div class="media-file-meta">
-          <strong>{{ mediaLabel(message) }}</strong>
-          <small>{{ mediaFilename(message) }}</small>
+      <div class="message-list__file" *ngIf="!isImageMessage(message)">
+        <span class="material-symbols-outlined message-list__file-icon">description</span>
+        <div class="message-list__file-copy">
+          <strong class="message-list__file-label">{{ mediaLabel(message) }}</strong>
+          <small class="message-list__file-name">{{ mediaFilename(message) }}</small>
         </div>
       </div>
     </div>
 
-    <p *ngIf="messageText(message) as text">{{ text }}</p>
-    <div class="message-footer">
-      <time>{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
+    <p class="message-list__text" *ngIf="messageText(message) as text">{{ text }}</p>
+    <div class="message-list__footer">
+      <time class="message-list__time">{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
       <span
         *ngIf="message.isFromMe && getAckIcon(message)"
-        class="material-symbols-outlined ack-icon"
-        [class.ack-read]="isAckRead(message)"
+        class="material-symbols-outlined message-list__ack"
+        [class.message-list__ack--read]="isAckRead(message)"
       >{{ getAckIcon(message) }}</span>
     </div>
   </article>
