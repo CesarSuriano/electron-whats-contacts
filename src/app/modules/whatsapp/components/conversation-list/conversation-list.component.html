@@ -36,35 +36,39 @@
       class="filter-chip conversation-list__filter-chip"
       *ngFor="let chip of filterChips"
       [class.conversation-list__filter-chip--active]="activeFilter === chip.id"
+      [class.conversation-list__filter-chip--colored]="!!chip.color"
+      [style.--chip-color]="chip.color || null"
       [disabled]="disabled"
       (click)="onFilterChange(chip.id)"
     >
+      <span
+        *ngIf="chip.color"
+        class="conversation-list__filter-chip-dot"
+        [style.background]="chip.color"
+      ></span>
       {{ chip.label }}
     </button>
   </div>
 
-  <div class="sync-bar conversation-list__sync-bar" *ngIf="isSyncing; else syncedState">
+  <div class="sync-bar conversation-list__sync-bar" *ngIf="isSyncing">
     <span class="conversation-list__sync-dot conversation-list__sync-dot--pulse"></span>
     Sincronizando conversas...
   </div>
 
-  <ng-template #syncedState>
-    <div class="sync-bar conversation-list__sync-bar">
-      <span class="conversation-list__sync-dot"></span>
-      Sincronizado agora
-    </div>
-  </ng-template>
-
   <div class="list-scroll conversation-list__scroll" *ngIf="!isLoading; else loadingState" #scrollContainer (scroll)="onScroll()">
-    <button
+    <div
       *ngFor="let contact of filteredContacts; trackBy: trackByJid"
-      type="button"
       class="conversation-item conversation-list__item"
       [class.conversation-list__item--active]="!isSelectionMode && contact.jid === selectedJid"
       [class.conversation-list__item--selected]="isSelectionMode && selectedJids.has(contact.jid)"
       [class.conversation-list__item--flashing]="isFlashing(contact.jid)"
-      [disabled]="disabled"
+      [class.conversation-list__item--disabled]="disabled"
+      [attr.aria-disabled]="disabled"
+      [attr.tabindex]="disabled ? -1 : 0"
+      role="button"
       (click)="onContactClick(contact)"
+      (keydown.enter)="onContactClick(contact)"
+      (keydown.space)="onContactClick(contact); $event.preventDefault()"
       (contextmenu)="onContextMenu($event, contact)"
     >
       <span class="selection-checkbox conversation-list__selection-checkbox" *ngIf="isSelectionMode" [class.conversation-list__selection-checkbox--selected]="selectedJids.has(contact.jid)">
@@ -95,8 +99,24 @@
           </span>
           <span class="unread-badge conversation-list__unread-badge" *ngIf="getUnreadCount(contact) > 0">{{ getUnreadCount(contact) }}</span>
         </div>
+
+        <div class="conversation-row conversation-list__row conversation-list__row--labels" *ngIf="getAppLabelsForContact(contact).length">
+          <button
+            *ngFor="let label of getAppLabelsForContact(contact)"
+            type="button"
+            class="conversation-list__label-chip"
+            [class.conversation-list__label-chip--active]="isAppLabelFilterActive(label.id)"
+            [style.--label-color]="label.color"
+            [title]="isAppLabelFilterActive(label.id) ? 'Remover filtro da etiqueta ' + label.name : 'Filtrar por etiqueta ' + label.name"
+            [disabled]="disabled || isSelectionMode"
+            (click)="onAppLabelChipClick(label, $event)"
+          >
+            <span class="conversation-list__label-chip-dot" [style.background]="label.color"></span>
+            <span class="conversation-list__label-chip-text">{{ label.name }}</span>
+          </button>
+        </div>
       </div>
-    </button>
+    </div>
 
     <p class="empty-state conversation-list__empty" *ngIf="!filteredContacts.length">
       Nenhuma conversa encontrada.
@@ -119,6 +139,10 @@
     <button type="button" class="context-menu-item conversation-list__context-menu-item" (click)="onContextSchedule()">
       <span class="material-symbols-outlined conversation-list__context-menu-icon">schedule_send</span>
       Agendar mensagem
+    </button>
+    <button type="button" class="context-menu-item conversation-list__context-menu-item" (click)="onContextManageLabels()">
+      <span class="material-symbols-outlined conversation-list__context-menu-icon">sell</span>
+      Gerenciar etiquetas
     </button>
   </div>
 </div>

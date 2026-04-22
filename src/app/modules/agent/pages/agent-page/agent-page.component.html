@@ -1,0 +1,121 @@
+<div class="agent-page">
+  <app-shell-sidebar
+    activeSection="agent"
+    (sectionSelect)="onShellSectionSelect($event)"
+  ></app-shell-sidebar>
+
+  <div class="agent-page__content">
+    <app-page-header
+      title="Configuração do agente"
+      subtitle="Defina o link do agente, a conta Google e o modo de resposta."
+    >
+      <button header-actions type="button" class="btn btn-primary btn-sm" (click)="openAgentWindow()" [disabled]="isOpeningWindow || !isAgentConfigured">
+        <span class="material-symbols-outlined btn-icon-symbol">open_in_new</span>
+        {{ isOpeningWindow ? 'Abrindo...' : 'Abrir agente' }}
+      </button>
+
+      <button class="config-menu-item" type="button" (click)="goToDashboard()">
+        <span class="material-symbols-outlined config-menu-icon">space_dashboard</span>
+        Voltar para a central
+      </button>
+      <button class="config-menu-item" type="button" (click)="goToWhatsapp()">
+        <app-whatsapp-icon class="config-menu-icon"></app-whatsapp-icon>
+        Testar no WhatsApp
+      </button>
+    </app-page-header>
+
+    <main class="agent-page__main">
+      <section class="agent-page__layout">
+        <article class="card agent-page__panel agent-page__panel--main">
+          <header class="card-header">
+            <div>
+              <div class="card-title">
+                <span class="material-symbols-outlined">link</span>
+                Agente
+              </div>
+              <p class="card-subtitle">Configure o agente que será usado nas sugestões do WhatsApp.</p>
+            </div>
+          </header>
+
+          <label class="agent-page__field">
+            <span class="agent-page__field-label">Link do agente</span>
+            <input
+              class="input"
+              type="url"
+              autocomplete="off"
+              [(ngModel)]="draftSettings.gemUrl"
+              name="gemUrl"
+              placeholder="Cole aqui a URL do seu agente"
+            />
+          </label>
+
+          <section class="agent-page__account-box">
+            <div>
+              <span class="agent-page__mini-label">Conta Google autenticada</span>
+              <strong class="agent-page__account-title">{{ activeGoogleAccountLabel }}</strong>
+              <p class="agent-page__account-text">{{ activeGoogleAccountMeta }}</p>
+            </div>
+
+            <button type="button" class="btn btn-outline btn-sm" (click)="authenticateGoogleAccount()" [disabled]="isOpeningWindow || !isAgentConfigured">
+              <span class="material-symbols-outlined btn-icon-symbol">account_circle</span>
+              {{ isOpeningWindow ? 'Abrindo...' : (hasAuthenticatedGoogleAccount ? 'Mudar de conta' : 'Autenticar conta Google') }}
+            </button>
+          </section>
+
+          <div class="agent-page__mode-grid">
+            <button
+              *ngFor="let option of responseModeOptions"
+              type="button"
+              class="agent-page__mode-card"
+              [class.agent-page__mode-card--active]="draftSettings.responseMode === option.value"
+              (click)="draftSettings.responseMode = option.value"
+            >
+              <strong>{{ option.label }}</strong>
+              <span>{{ option.description }}</span>
+            </button>
+          </div>
+
+          <div class="agent-page__actions">
+            <button type="button" class="btn btn-outline" (click)="saveSettings()" [disabled]="isSavingSettings">
+              <span class="material-symbols-outlined btn-icon-symbol">save</span>
+              {{ isSavingSettings ? 'Salvando...' : 'Salvar configuração' }}
+            </button>
+          </div>
+
+          <p class="agent-page__feedback" [class.agent-page__feedback--error]="feedbackVariant === 'error'" *ngIf="feedbackMessage">
+            {{ feedbackMessage }}
+          </p>
+        </article>
+
+        <article class="card agent-page__panel agent-page__panel--aside">
+          <header class="card-header">
+            <div>
+              <div class="card-title">
+                <span class="material-symbols-outlined">checklist</span>
+                Como usar
+              </div>
+              <p class="card-subtitle">Fluxo curto para deixar tudo funcionando.</p>
+            </div>
+          </header>
+
+          <div class="agent-page__steps">
+            <article class="agent-page__step" *ngFor="let step of flowSteps; let index = index">
+              <span class="agent-page__step-index">{{ index + 1 }}</span>
+              <div>
+                <strong>{{ step.title }}</strong>
+                <p>{{ step.description }}</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="agent-page__notes">
+            <div class="agent-page__note">
+              <span class="material-symbols-outlined">shield</span>
+              <p>Este app mantém uma única autenticação Google para o agente nesta máquina.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+</div>

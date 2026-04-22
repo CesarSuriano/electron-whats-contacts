@@ -48,6 +48,32 @@ describe('ChatHeaderComponent', () => {
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('5511987654321@c.us');
   });
 
+  it('requests photo when the selected contact carries null photoUrl', () => {
+    component.contact = makeContact({ photoUrl: null });
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('5511987654321@c.us');
+  });
+
+  it('requests photo for selected group when photo is still unknown', () => {
+    component.contact = makeContact({
+      jid: '120363000000000000@g.us',
+      phone: '',
+      name: 'Grupo de trabalho',
+      isGroup: true,
+      photoUrl: undefined
+    });
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('120363000000000000@g.us');
+  });
+
   it('does not request photo again when contact already has photoUrl', () => {
     component.contact = makeContact({ photoUrl: 'data:image/jpeg;base64,abc' });
 

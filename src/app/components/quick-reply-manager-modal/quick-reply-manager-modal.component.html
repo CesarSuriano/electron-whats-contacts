@@ -1,0 +1,113 @@
+<ng-container *ngIf="isOpen">
+  <div class="modal-backdrop" (click)="close.emit()"></div>
+  <section class="quick-reply-manager-modal" role="dialog" aria-modal="true">
+    <header class="upload-modal-header">
+      <div>
+        <h2>Mensagens rápidas</h2>
+        <p>Crie atalhos como <strong>/precos</strong> para enviar respostas prontas. Use <strong>{{ '{nome}' }}</strong> para incluir o nome do contato.</p>
+      </div>
+      <button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <section class="quick-reply-manager-modal__body">
+      <aside class="quick-reply-manager-modal__list-pane">
+        <div class="quick-reply-manager-modal__list-header">
+          <h3>Cadastradas</h3>
+          <button type="button" class="btn btn-primary btn-sm" (click)="startCreate()">
+            <span class="material-symbols-outlined btn-icon-symbol">add</span>
+            Nova
+          </button>
+        </div>
+
+        <ul class="quick-reply-manager-modal__list" *ngIf="items.length; else listEmpty">
+          <li
+            *ngFor="let item of items"
+            class="quick-reply-manager-modal__list-item"
+            [class.quick-reply-manager-modal__list-item--active]="editingId === item.id"
+          >
+            <button type="button" class="quick-reply-manager-modal__list-button" (click)="startEdit(item)">
+              <span class="quick-reply-manager-modal__list-shortcode">/{{ item.shortcode }}</span>
+              <span class="quick-reply-manager-modal__list-title">{{ item.title || item.content }}</span>
+            </button>
+            <button type="button" class="quick-reply-manager-modal__list-remove" (click)="remove(item)" aria-label="Excluir">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </li>
+        </ul>
+
+        <ng-template #listEmpty>
+          <p class="quick-reply-manager-modal__list-empty">Nenhuma mensagem rápida ainda.</p>
+        </ng-template>
+      </aside>
+
+      <section class="quick-reply-manager-modal__form-pane">
+        <ng-container *ngIf="isFormOpen; else placeholder">
+          <div class="quick-reply-manager-modal__field">
+            <label>Atalho</label>
+            <div class="quick-reply-manager-modal__shortcode-field">
+              <span class="quick-reply-manager-modal__slash">/</span>
+              <input
+                type="text"
+                [ngModel]="draftShortcode"
+                (ngModelChange)="onShortcodeInput($event)"
+                placeholder="precos"
+                maxlength="32"
+              />
+            </div>
+            <small>Letras, números, hífen ou underline. Exemplo: <strong>/precos</strong>.</small>
+          </div>
+
+          <div class="quick-reply-manager-modal__field">
+            <label>Título (opcional)</label>
+            <input type="text" [(ngModel)]="draftTitle" placeholder="Tabela de preços" maxlength="60" />
+          </div>
+
+          <div class="quick-reply-manager-modal__field">
+            <label>Mensagem</label>
+            <textarea [(ngModel)]="draftContent" rows="6" placeholder="Olá {nome}, segue nossa tabela..."></textarea>
+            <button type="button" class="btn btn-outline btn-sm quick-reply-manager-modal__token" (click)="insertNameToken()">
+              <span class="material-symbols-outlined">badge</span>
+              Inserir {{ '{nome}' }}
+            </button>
+          </div>
+
+          <div class="quick-reply-manager-modal__field">
+            <label>Imagem (opcional)</label>
+            <input type="file" accept="image/*" #imageInput hidden (change)="onImageSelected($event)" />
+            <div class="quick-reply-manager-modal__image-row">
+              <div class="quick-reply-manager-modal__image-preview" *ngIf="draftImageDataUrl">
+                <img [src]="draftImageDataUrl" alt="Pré-visualização" />
+                <button type="button" class="quick-reply-manager-modal__image-remove" (click)="clearImage()" aria-label="Remover imagem">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <button type="button" class="btn btn-outline" (click)="chooseImage()">
+                <span class="material-symbols-outlined">image</span>
+                {{ draftImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem' }}
+              </button>
+            </div>
+          </div>
+
+          <p class="quick-reply-manager-modal__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+          <footer class="quick-reply-manager-modal__form-actions">
+            <button class="btn btn-outline" type="button" (click)="cancelEdit()">Cancelar</button>
+            <button class="btn btn-primary" type="button" (click)="save()">
+              <span class="material-symbols-outlined btn-icon-symbol">save</span>
+              Salvar mensagem
+            </button>
+          </footer>
+        </ng-container>
+
+        <ng-template #placeholder>
+          <div class="quick-reply-manager-modal__placeholder">
+            <span class="material-symbols-outlined quick-reply-manager-modal__placeholder-icon">bolt</span>
+            <p>Selecione uma mensagem ao lado para editar ou clique em <strong>Nova</strong> para começar.</p>
+          </div>
+        </ng-template>
+      </section>
+    </section>
+  </section>
+</ng-container>

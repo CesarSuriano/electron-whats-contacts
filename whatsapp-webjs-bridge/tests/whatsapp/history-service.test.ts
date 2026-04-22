@@ -61,3 +61,43 @@ describe('HistoryService concurrency control', () => {
     service.releaseHistorySlot();
   });
 });
+
+describe('HistoryService history recovery', () => {
+  it('tries store fallback when fetch recovery still returns fewer than 10 messages', async () => {
+    const sparseHistory = Array.from({ length: 2 }, (_, index) => ({ id: { _serialized: `sparse-${index}` }, timestamp: index + 1 }));
+    const recoveredHistory = Array.from({ length: 10 }, (_, index) => ({ id: { _serialized: `store-${index}` }, timestamp: index + 1 }));
+
+    const client = {
+      info: { wid: { _serialized: '5511000000000@c.us' } },
+      getChatById: async () => ({
+        fetchMessages: async () => sparseHistory
+      })
+    } as unknown as WebJsClient;
+
+    const selfJidResolver = new SelfJidResolver(client);
+    const sessionState = new SessionState('test', () => selfJidResolver.getOwnJid());
+    sessionState.status = 'ready';
+    const lidMap = new LidMap();
+    const service = new HistoryService(client, sessionState, lidMap, selfJidResolver);
+    let storeFallbackCalled = false;
+    (service as unknown as { fetchMessagesFromStore: (chatId: string, limit: number) => Promise<unknown[]> }).fetchMessagesFromStore = async () => {
+      storeFallbackCalled = true;
+      return recoveredHistory;
+    };
+
+    const chat = {
+      id: { _serialized: '5511999999999@c.us' },
+      fetchMessages: async () => sparseHistory,
+      syncHistory: async () => undefined
+    };
+
+    const history = await service.fetchChatHistoryWithRecovery(
+      chat as never,
+      '5511999999999@c.us',
+      10
+    );
+
+    assert.equal(storeFallbackCalled, true);
+    assert.equal(history.length, 10);
+  });
+});

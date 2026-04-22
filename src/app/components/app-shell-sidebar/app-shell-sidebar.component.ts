@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-export type AppShellSection = 'dashboard' | 'clients' | 'messages' | 'schedules' | 'settings' | 'whatsapp';
+export type AppShellSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings' | 'whatsapp' | 'agent';
 
 interface SidebarItem {
   id: AppShellSection;
@@ -14,7 +14,7 @@ interface SidebarItem {
   styleUrls: ['./app-shell-sidebar.component.scss']
 })
 export class AppShellSidebarComponent {
-  @Input() activeSection: AppShellSection = 'dashboard';
+  @Input() activeSection: AppShellSection = 'home';
   @Input() whatsappBadge = 0;
   @Input() schedulesBadge = 0;
   @Input()
@@ -37,12 +37,13 @@ export class AppShellSidebarComponent {
   }
 
   readonly primaryItems: SidebarItem[] = [
-    { id: 'dashboard', label: 'Inicio', icon: 'home' },
+    { id: 'home', label: 'Inicio', icon: 'home' },
     { id: 'whatsapp', label: 'WhatsApp', icon: 'chat_bubble' },
     { id: 'clients', label: 'Clientes', icon: 'group' }
   ];
 
   readonly toolItems: SidebarItem[] = [
+    { id: 'agent', label: 'Agente', icon: 'smart_toy' },
     { id: 'messages', label: 'Mensagens', icon: 'chat' },
     { id: 'schedules', label: 'Agendamentos', icon: 'calendar_today' }
   ];

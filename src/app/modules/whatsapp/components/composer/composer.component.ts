@@ -1,8 +1,13 @@
-import { Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+
+import { QuickReply } from '../../../../models/quick-reply.model';
+import { ManagerLaunchService } from '../../../../services/manager-launch.service';
+import { QuickReplyMenuComponent } from '../quick-reply-menu/quick-reply-menu.component';
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_MIME_PREFIXES = ['image/', 'application/pdf'];
 const ACCEPTED_DOC_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'];
+const QUICK_REPLY_TRIGGER_REGEX = /^\/([a-z0-9_-]*)$/i;
 
 const EMOJI_LIST = [
   '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊',
@@ -26,15 +31,45 @@ export class ComposerComponent {
   @Input() draftText = '';
   @Input() isSending = false;
   @Input() disabled = false;
+  @Input() aiEnabled = false;
+  @Input() isAiThinking = false;
+  @Input() aiSuggestion = '';
+  @Input() aiStatusMessage = '';
+  @Input() assistantLabel = 'IA';
+  @Input() assistantIcon = 'smart_toy';
+  @Input() contactName = '';
   @Output() draftTextChange = new EventEmitter<string>();
+  @Output() acceptAiSuggestion = new EventEmitter<string>();
+  @Output() requestAiSuggestion = new EventEmitter<void>();
+  @Output() requestGuidedAiSuggestion = new EventEmitter<string>();
+  @Output() rateAiSuggestion = new EventEmitter<'up' | 'down'>();
   @Output() sendText = new EventEmitter<string>();
   @Output() sendMedia = new EventEmitter<{ file: File; caption: string }>();
 
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('textarea') textarea?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('aiButton') aiButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('guidedAiTextarea') guidedAiTextarea?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('suggestionAcceptButton') suggestionAcceptButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild(QuickReplyMenuComponent) quickReplyMenu?: QuickReplyMenuComponent;
 
   isEmojiPickerOpen = false;
+  isGuidedAiOpen = false;
+  guidedAiInstruction = '';
+  suggestionFeedback: '' | 'up' | 'down' = '';
   emojiList = EMOJI_LIST;
+
+  isQuickReplyMenuOpen = false;
+  quickReplyQuery = '';
+  private isQuickReplyForcedOpen = false;
+
+  constructor(private managerLaunch: ManagerLaunchService) {}
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (Object.prototype.hasOwnProperty.call(changes, 'aiSuggestion')) {
+      this.suggestionFeedback = '';
+    }
+  }
 
   setAttachmentFromDataUrl(dataUrl: string, filename: string): void {
     try {
@@ -77,6 +112,83 @@ export class ComposerComponent {
   onTextChange(value: string): void {
     this.draftText = value;
     this.draftTextChange.emit(value);
+    this.updateQuickReplyMenuFromText(value);
+  }
+
+  toggleQuickReplyMenu(): void {
+    if (this.disabled || this.isSending) {
+      return;
+    }
+    if (this.isQuickReplyMenuOpen) {
+      this.closeQuickReplyMenu();
+      return;
+    }
+    this.isQuickReplyForcedOpen = true;
+    this.quickReplyQuery = this.extractQuickReplyQuery(this.draftText);
+    this.isQuickReplyMenuOpen = true;
+    setTimeout(() => this.focus(), 0);
+  }
+
+  closeQuickReplyMenu(): void {
+    this.isQuickReplyMenuOpen = false;
+    this.isQuickReplyForcedOpen = false;
+  }
+
+  onQuickReplyManageRequested(): void {
+    this.closeQuickReplyMenu();
+    this.managerLaunch.openQuickReplyManager();
+  }
+
+  onQuickReplySelected(reply: QuickReply): void {
+    const rendered = this.renderQuickReplyContent(reply.content);
+    this.draftText = rendered;
+    this.draftTextChange.emit(rendered);
+
+    if (reply.imageDataUrl) {
+      const ext = this.detectExtensionFromDataUrl(reply.imageDataUrl);
+      this.setAttachmentFromDataUrl(reply.imageDataUrl, `mensagem-rapida.${ext}`);
+    }
+
+    this.closeQuickReplyMenu();
+    setTimeout(() => this.focus(), 0);
+  }
+
+  private updateQuickReplyMenuFromText(value: string): void {
+    const match = value.match(QUICK_REPLY_TRIGGER_REGEX);
+    if (match) {
+      this.quickReplyQuery = match[1] || '';
+      this.isQuickReplyMenuOpen = true;
+      return;
+    }
+
+    if (this.isQuickReplyForcedOpen) {
+      this.quickReplyQuery = '';
+      return;
+    }
+
+    this.isQuickReplyMenuOpen = false;
+  }
+
+  private extractQuickReplyQuery(value: string): string {
+    const match = value.match(QUICK_REPLY_TRIGGER_REGEX);
+    return match ? match[1] : '';
+  }
+
+  private renderQuickReplyContent(content: string): string {
+    const name = (this.contactName || '').trim();
+    return content.replace(/\{nome\}/gi, name);
+  }
+
+  private detectExtensionFromDataUrl(dataUrl: string): string {
+    const match = dataUrl.match(/^data:image\/([a-zA-Z0-9+]+);/i);
+    if (!match) {
+      return 'png';
+    }
+    const sub = match[1].toLowerCase();
+    if (sub === 'jpeg' || sub === 'jpg') {
+      return 'jpg';
+    }
+    return sub;
   }
 
   onPaste(event: ClipboardEvent): void {
@@ -115,10 +227,139 @@ export class ComposerComponent {
   }
 
   onTextareaKeydown(event: KeyboardEvent): void {
+    if (this.isQuickReplyMenuOpen) {
+      if (event.key === 'ArrowDown') {
+        if (this.quickReplyMenu?.moveHighlight(1)) {
+          event.preventDefault();
+          return;
+        }
+      } else if (event.key === 'ArrowUp') {
+        if (this.quickReplyMenu?.moveHighlight(-1)) {
+          event.preventDefault();
+          return;
+        }
+      } else if (event.key === 'Enter' && !event.shiftKey) {
+        if (this.quickReplyMenu?.selectHighlighted()) {
+          event.preventDefault();
+          return;
+        }
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeQuickReplyMenu();
+        return;
+      }
+    }
+
+    if (event.key === 'Tab' && this.canAcceptAiSuggestion) {
+      event.preventDefault();
+      this.applyAiSuggestion();
+      return;
+    }
+
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.onSubmit();
     }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.isGuidedAiOpen) {
+      event.preventDefault();
+      this.closeGuidedAi();
+      return;
+    }
+
+    if (event.key !== 'Tab' || !this.canAcceptAiSuggestion) {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    const textarea = this.textarea?.nativeElement;
+    const aiButton = this.aiButton?.nativeElement;
+    const suggestionAcceptButton = this.suggestionAcceptButton?.nativeElement;
+
+    if (activeElement !== textarea && activeElement !== aiButton && activeElement !== suggestionAcceptButton) {
+      return;
+    }
+
+    event.preventDefault();
+    this.applyAiSuggestion();
+  }
+
+  onAiButtonClick(): void {
+    if (this.disabled || this.isSending || !this.aiEnabled) {
+      return;
+    }
+
+    this.requestAiSuggestion.emit();
+  }
+
+  toggleGuidedAi(): void {
+    if (!this.canUseGuidedAi) {
+      return;
+    }
+
+    this.isGuidedAiOpen = !this.isGuidedAiOpen;
+    if (this.isGuidedAiOpen) {
+      setTimeout(() => this.guidedAiTextarea?.nativeElement.focus(), 0);
+      return;
+    }
+
+    setTimeout(() => this.focus(), 0);
+  }
+
+  closeGuidedAi(restoreComposerFocus = true): void {
+    this.isGuidedAiOpen = false;
+    this.guidedAiInstruction = '';
+
+    if (restoreComposerFocus) {
+      setTimeout(() => this.focus(), 0);
+    }
+  }
+
+  submitGuidedAi(): void {
+    const instruction = this.guidedAiInstruction.trim();
+    if (!instruction || !this.canUseGuidedAi) {
+      return;
+    }
+
+    this.requestGuidedAiSuggestion.emit(instruction);
+    this.closeGuidedAi();
+  }
+
+  onGuidedAiKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeGuidedAi();
+      return;
+    }
+
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      this.submitGuidedAi();
+    }
+  }
+
+  applyAiSuggestion(): void {
+    if (!this.canAcceptAiSuggestion) {
+      return;
+    }
+
+    this.draftText = this.aiSuggestion.trim();
+    this.draftTextChange.emit(this.draftText);
+    this.acceptAiSuggestion.emit(this.draftText);
+    setTimeout(() => this.focus(), 0);
+  }
+
+  submitAiFeedback(rating: 'up' | 'down'): void {
+    if (!this.canRateAiSuggestion) {
+      return;
+    }
+
+    this.suggestionFeedback = rating;
+    this.rateAiSuggestion.emit(rating);
   }
 
   toggleAttachMenu(): void {
@@ -239,6 +480,44 @@ export class ComposerComponent {
     }
     const kb = this.selectedFile.size / 1024;
     return `${kb.toFixed(0)} KB`;
+  }
+
+  get canAcceptAiSuggestion(): boolean {
+    return Boolean(
+      this.aiEnabled
+      && this.aiSuggestion.trim()
+      && !this.disabled
+      && !this.isSending
+      && !this.selectedFile
+      && !this.draftText.trim()
+    );
+  }
+
+  get canUseGuidedAi(): boolean {
+    return Boolean(this.aiEnabled && !this.disabled && !this.isSending);
+  }
+
+  get canRateAiSuggestion(): boolean {
+    return Boolean(
+      this.aiEnabled
+      && this.aiSuggestion.trim()
+      && !this.disabled
+      && !this.isSending
+    );
+  }
+
+  get textareaPlaceholder(): string {
+    if (this.canAcceptAiSuggestion) {
+      return '';
+    }
+
+    return this.selectedFile ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem';
+  }
+
+  get textareaSizerContent(): string {
+    const content = this.canAcceptAiSuggestion ? this.aiSuggestion : this.draftText;
+    return `${content || ' '}
+`;
   }
 
   private isAccepted(file: File): boolean {

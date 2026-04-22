@@ -2,15 +2,19 @@ import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input
 import { Subject, combineLatest } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
+import { AppLabel, AppLabelAssignments } from '../../../../models/app-label.model';
 import { MessageAck, WhatsappContact } from '../../../../models/whatsapp.model';
+import { LabelService } from '../../../../services/label.service';
+import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { formatBrazilianPhone } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
-type ConversationFilterId = 'all' | 'conversations' | 'unread' | `label:${string}`;
+type ConversationFilterId = 'all' | 'conversations' | 'unread' | `label:${string}` | `app-label:${string}`;
 
 interface ConversationFilterChip {
   id: ConversationFilterId;
   label: string;
+  color?: string;
 }
 
 const PHOTO_VISIBLE_OVERSCAN = 6;
@@ -37,6 +41,8 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   activeFilter: ConversationFilterId = 'all';
   labelFilters: string[] = [];
   filterChipsCached: ConversationFilterChip[] = [];
+  appLabels: AppLabel[] = [];
+  appLabelAssignments: AppLabelAssignments = {};
   isLoading = false;
   isSyncing = false;
   isSelectionMode = false;
@@ -46,13 +52,18 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuContact: WhatsappContact | null = null;
+  private appLabelsById = new Map<string, AppLabel>();
 
   private destroy$ = new Subject<void>();
   private prevOrderMap = new Map<string, number>();
   private scrollContainer?: ElementRef<HTMLDivElement>;
   private visiblePhotoTimer: number | null = null;
 
-  constructor(private state: WhatsappStateService) {}
+  constructor(
+    private state: WhatsappStateService,
+    private labelService: LabelService,
+    private managerLaunch: ManagerLaunchService
+  ) {}
 
   ngOnInit(): void {
     this.rebuildFilterChips();
@@ -83,6 +94,16 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     this.state.selectedJids$
       .pipe(takeUntil(this.destroy$))
       .subscribe(jids => (this.selectedJids = jids));
+
+    this.labelService.state$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ labels, assignments }) => {
+        this.appLabels = labels;
+        this.appLabelAssignments = assignments;
+        this.appLabelsById = new Map(labels.map(label => [label.id, label]));
+        this.rebuildFilterChips();
+        this.applyFilter();
+      });
   }
 
   ngAfterViewInit(): void {
@@ -142,6 +163,21 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
     this.activeFilter = filterId;
     this.applyFilter();
+  }
+
+  onAppLabelChipClick(label: AppLabel, event: Event): void {
+    event.stopPropagation();
+    if (this.disabled || this.isSelectionMode) {
+      return;
+    }
+
+    const filterId = this.toAppLabelFilterId(label.id);
+    this.activeFilter = this.activeFilter === filterId ? 'all' : filterId;
+    this.applyFilter();
+  }
+
+  isAppLabelFilterActive(labelId: string): boolean {
+    return this.activeFilter === this.toAppLabelFilterId(labelId);
   }
 
   onContactClick(contact: WhatsappContact): void {
@@ -276,6 +312,19 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     this.closeContextMenu();
   }
 
+  onContextManageLabels(): void {
+    this.managerLaunch.openLabelManager();
+    this.closeContextMenu();
+  }
+
+  getAppLabelsForContact(contact: WhatsappContact): AppLabel[] {
+    const ids = this.appLabelAssignments[contact.jid] || [];
+    if (!ids.length || !this.appLabelsById.size) {
+      return [];
+    }
+    return ids.map(id => this.appLabelsById.get(id)).filter((label): label is AppLabel => Boolean(label));
+  }
+
   @HostListener('document:click')
   closeContextMenu(): void {
     this.contextMenuVisible = false;
@@ -285,6 +334,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   private applyFilter(): void {
     const term = this.searchTerm.trim().toLowerCase();
     const activeLabel = this.getActiveLabelName();
+    const activeAppLabelId = this.getActiveAppLabelId();
 
     this.filteredContacts = this.contacts.filter(contact => {
       const unreadCount = this.getUnreadCount(contact);
@@ -306,6 +356,13 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
         }
       }
 
+      if (activeAppLabelId) {
+        const ids = this.appLabelAssignments[contact.jid] || [];
+        if (!ids.includes(activeAppLabelId)) {
+          return false;
+        }
+      }
+
       if (!term) {
         return true;
       }
@@ -315,8 +372,9 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       const phone = contact.phone || '';
       const preview = this.formatLastMessagePreview(contact).toLowerCase();
       const labelsJoined = (Array.isArray(contact.labels) ? contact.labels : []).join(' ').toLowerCase();
+      const appLabelsJoined = this.getAppLabelsForContact(contact).map(label => label.name).join(' ').toLowerCase();
 
-      if (name.includes(term) || preview.includes(term) || labelsJoined.includes(term)) {
+      if (name.includes(term) || preview.includes(term) || labelsJoined.includes(term) || appLabelsJoined.includes(term)) {
         return true;
       }
 
@@ -350,9 +408,8 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     const visibleEnd = Math.min(this.filteredContacts.length, visibleStart + visibleCount);
 
     for (const contact of this.filteredContacts.slice(visibleStart, visibleEnd)) {
-      if (!contact.isGroup) {
-        this.state.requestPhoto(contact.jid);
-      }
+      this.state.requestPhoto(contact.jid);
+      this.state.requestConversationContext(contact.jid);
     }
   }
 
@@ -384,12 +441,21 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       { id: 'unread', label: 'Não lidas' }
     ];
 
-    const labelChips = this.labelFilters.map(label => ({
+    const appLabelChips: ConversationFilterChip[] = this.appLabels
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      .map(label => ({
+        id: `app-label:${label.id}` as ConversationFilterId,
+        label: label.name,
+        color: label.color
+      }));
+
+    const labelChips: ConversationFilterChip[] = this.labelFilters.map(label => ({
       id: `label:${encodeURIComponent(label)}` as ConversationFilterId,
       label
     }));
 
-    this.filterChipsCached = [...base, ...labelChips];
+    this.filterChipsCached = [...base, ...appLabelChips, ...labelChips];
   }
 
   private getActiveLabelName(): string {
@@ -398,6 +464,17 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     }
 
     return decodeURIComponent(this.activeFilter.slice('label:'.length));
+  }
+
+  private getActiveAppLabelId(): string {
+    if (!this.activeFilter.startsWith('app-label:')) {
+      return '';
+    }
+    return this.activeFilter.slice('app-label:'.length);
+  }
+
+  private toAppLabelFilterId(labelId: string): ConversationFilterId {
+    return `app-label:${labelId}`;
   }
 
   private isDataUrlPreview(value: string): boolean {

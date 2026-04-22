@@ -151,6 +151,8 @@ describe('resolveMessagePreviewText', () => {
     assert.equal(resolveMessagePreviewText({ type: 'document' }), 'Documento');
     assert.equal(resolveMessagePreviewText({ type: 'sticker' }), 'Figurinha');
     assert.equal(resolveMessagePreviewText({ type: 'revoked' }), 'Mensagem apagada');
+    assert.equal(resolveMessagePreviewText({ type: 'location' }), 'Localização');
+    assert.equal(resolveMessagePreviewText({ type: 'poll_creation' }), 'Enquete');
   });
 
   it('unknown type with media → [mídia]', () => {
@@ -158,7 +160,7 @@ describe('resolveMessagePreviewText', () => {
   });
 
   it('unknown type without media → empty', () => {
-    assert.equal(resolveMessagePreviewText({ type: 'unknown', hasMedia: false }), '');
+    assert.equal(resolveMessagePreviewText({ type: 'unknown', hasMedia: false }), 'Mensagem');
   });
 
   it('null → empty', () => {

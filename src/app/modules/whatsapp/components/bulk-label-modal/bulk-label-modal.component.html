@@ -1,0 +1,80 @@
+<ng-container *ngIf="isOpen">
+  <div class="modal-backdrop" (click)="close.emit()"></div>
+  <section class="bulk-label-modal" role="dialog" aria-modal="true">
+    <header class="upload-modal-header">
+      <div>
+        <h2>Etiquetas em massa</h2>
+        <p>Aplique ou remova etiquetas em <strong>{{ jids.length }}</strong> conversa{{ jids.length === 1 ? '' : 's' }} selecionada{{ jids.length === 1 ? '' : 's' }}.</p>
+      </div>
+      <button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <p class="bulk-label-modal__hint" *ngIf="rows.length">
+      Clique em uma etiqueta para aplicar nas conversas selecionadas. Clique novamente para remover.
+    </p>
+
+    <div class="bulk-label-modal__list" *ngIf="rows.length; else emptyState">
+      <div
+        *ngFor="let row of rows; trackBy: trackById"
+        class="bulk-label-modal__row"
+        role="button"
+        tabindex="0"
+        [class.bulk-label-modal__row--all]="row.state === 'all'"
+        [class.bulk-label-modal__row--some]="row.state === 'some'"
+        [style.--row-color]="row.label.color"
+        (click)="onRowToggle(row)"
+        (keydown.enter)="onRowToggle(row)"
+        (keydown.space)="onRowToggle(row); $event.preventDefault()"
+      >
+        <span class="bulk-label-modal__check" aria-hidden="true">
+          <span
+            class="material-symbols-outlined"
+            *ngIf="row.state === 'all'"
+          >check</span>
+          <span
+            class="material-symbols-outlined"
+            *ngIf="row.state === 'some'"
+          >remove</span>
+        </span>
+
+        <span class="bulk-label-modal__dot"></span>
+        <span class="bulk-label-modal__name">{{ row.label.name }}</span>
+
+        <span class="bulk-label-modal__status">
+          <ng-container [ngSwitch]="row.state">
+            <span *ngSwitchCase="'all'">Em todas</span>
+            <span *ngSwitchCase="'some'">{{ row.count }} de {{ jids.length }}</span>
+            <span *ngSwitchDefault>—</span>
+          </ng-container>
+        </span>
+
+        <button
+          *ngIf="row.state === 'some'"
+          type="button"
+          class="bulk-label-modal__remove"
+          [attr.aria-label]="'Remover ' + row.label.name + ' de todos'"
+          title="Remover de todos"
+          (click)="removeFromAll(row, $event)"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </div>
+
+    <ng-template #emptyState>
+      <p class="bulk-label-modal__empty">
+        Nenhuma etiqueta cadastrada. <button type="button" class="bulk-label-modal__link" (click)="openManager()">Crie a primeira etiqueta</button>.
+      </p>
+    </ng-template>
+
+    <footer class="upload-modal-footer">
+      <button type="button" class="btn btn-outline" (click)="openManager()">
+        <span class="material-symbols-outlined btn-icon-symbol">tune</span>
+        Gerenciar etiquetas
+      </button>
+      <button type="button" class="btn btn-primary" (click)="close.emit()">Concluído</button>
+    </footer>
+  </section>
+</ng-container>

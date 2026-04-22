@@ -1,0 +1,126 @@
+.label-manager-modal__backdrop {
+  @apply z-30;
+}
+
+.label-manager-modal {
+  @apply fixed left-1/2 top-1/2 z-[31] flex max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-[22px] border border-border bg-surface p-6;
+  width: min(640px, calc(100vw - 2rem));
+  box-shadow: 0 24px 80px rgba(35, 24, 20, 0.24);
+}
+
+.label-manager-modal__create {
+  @apply flex flex-col gap-3 rounded-2xl border border-border bg-bg-subtle p-4;
+}
+
+.label-manager-modal__create-fields {
+  @apply flex flex-wrap items-end gap-3;
+}
+
+.label-manager-modal__name-input {
+  @apply min-w-[200px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-[0.92rem] text-txt;
+  font-family: inherit;
+}
+
+.label-manager-modal__name-input:focus {
+  @apply border-accent outline-none;
+  box-shadow: 0 0 0 3px rgba(117, 16, 19, 0.12);
+}
+
+.label-manager-modal__color-field {
+  @apply flex items-center gap-3;
+}
+
+.label-manager-modal__color-field > input[type='color'] {
+  @apply h-9 w-12 cursor-pointer rounded-lg border border-border bg-surface p-1;
+}
+
+.label-manager-modal__color-suggestions {
+  @apply flex flex-wrap items-center gap-1.5;
+  max-width: 240px;
+}
+
+.label-manager-modal__color-chip {
+  @apply h-6 w-6 cursor-pointer rounded-full border-2 border-transparent transition-transform;
+  padding: 0;
+}
+
+.label-manager-modal__color-chip:hover {
+  transform: scale(1.1);
+}
+
+.label-manager-modal__color-chip--active {
+  @apply border-txt;
+  box-shadow: 0 0 0 2px var(--color-surface, #fff) inset;
+}
+
+.label-manager-modal__error {
+  @apply m-0 rounded-lg bg-danger-soft px-3 py-2 text-[0.85rem] text-danger;
+}
+
+.label-manager-modal__list-section {
+  @apply flex min-h-0 flex-1 flex-col gap-2 overflow-hidden;
+}
+
+.label-manager-modal__list-section h3 {
+  @apply m-0 text-[0.78rem] font-semibold uppercase tracking-[0.04em] text-txt-subtle;
+}
+
+.label-manager-modal__list {
+  @apply m-0 flex flex-1 list-none flex-col gap-2 overflow-y-auto p-0;
+}
+
+.label-manager-modal__item {
+  @apply flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.label-manager-modal__item:hover {
+  @apply border-border-strong;
+}
+
+.label-manager-modal__item-color {
+  @apply h-8 w-8 shrink-0 cursor-pointer rounded-full border border-border bg-transparent p-0;
+}
+
+.label-manager-modal__item-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.label-manager-modal__item-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 999px;
+}
+
+.label-manager-modal__item-name {
+  @apply flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-[0.95rem] font-medium text-txt;
+  font-family: inherit;
+}
+
+.label-manager-modal__item-name:hover {
+  @apply border-border;
+}
+
+.label-manager-modal__item-name:focus {
+  @apply border-accent bg-surface outline-none;
+  box-shadow: 0 0 0 3px rgba(117, 16, 19, 0.12);
+}
+
+.label-manager-modal__item-usage {
+  @apply shrink-0 text-[0.78rem] text-txt-subtle;
+}
+
+.label-manager-modal__item-remove {
+  @apply inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent p-1.5 text-txt-muted;
+}
+
+.label-manager-modal__item-remove:hover {
+  @apply bg-danger-soft text-danger;
+}
+
+.label-manager-modal__item-remove .material-symbols-outlined {
+  @apply text-[1.15rem];
+}
+
+.label-manager-modal__empty {
+  @apply m-0 rounded-xl border border-dashed border-border bg-bg-subtle px-4 py-6 text-center text-[0.88rem] text-txt-muted;
+}

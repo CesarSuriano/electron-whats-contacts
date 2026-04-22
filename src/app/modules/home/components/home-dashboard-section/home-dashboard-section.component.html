@@ -1,0 +1,152 @@
+<section class="home-dashboard">
+  <section class="home-greeting">
+    <h2 class="home-greeting__title">{{ greetingLabel }} <span class="home-greeting__emoji">👋</span></h2>
+    <p class="home-greeting__description">Aqui está um resumo do que está rolando na loja hoje, {{ greetingDateLabel }}.</p>
+  </section>
+
+  <section class="home-metrics">
+    <article class="home-metric-card">
+      <span class="home-metric-card__label">Aniversariantes hoje</span>
+      <strong class="home-metric-card__value">{{ birthdaysToday.length }}</strong>
+      <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--rose">card_giftcard</span>
+    </article>
+
+    <article class="home-metric-card">
+      <span class="home-metric-card__label">Agendamentos ativos</span>
+      <strong class="home-metric-card__value">{{ pendingSchedules.length }}</strong>
+      <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--amber">calendar_today</span>
+    </article>
+
+    <article class="home-metric-card">
+      <span class="home-metric-card__label">Conversas não lidas</span>
+      <strong class="home-metric-card__value">{{ unreadConversations }}</strong>
+      <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--green">chat</span>
+    </article>
+
+    <article class="home-metric-card">
+      <span class="home-metric-card__label">Clientes cadastrados</span>
+      <strong class="home-metric-card__value">{{ clientesCountLabel }}</strong>
+      <span class="home-metric-card__trend" *ngIf="clientesAddedThisWeek > 0">
+        <span class="material-symbols-outlined home-metric-card__trend-icon">trending_up</span>
+        +{{ clientesAddedThisWeek }} essa semana
+      </span>
+      <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--orange">group</span>
+    </article>
+  </section>
+
+  <section class="home-highlight-grid">
+    <article class="home-panel">
+      <header class="home-panel__header">
+        <div class="home-panel__heading">
+          <h3 class="home-panel__title">
+            <span class="material-symbols-outlined home-panel__title-icon">card_giftcard</span>
+            Aniversariantes de hoje
+          </h3>
+          <p class="home-panel__subtitle">Envie uma mensagem de Parabéns com o cupom de 15%</p>
+        </div>
+        <button type="button" class="home-panel__link" (click)="emitOpenClients()">
+          Ver todos
+          <span class="material-symbols-outlined home-panel__link-icon">arrow_forward</span>
+        </button>
+      </header>
+
+      <div class="home-highlight-list" *ngIf="birthdaysToday.length; else dashboardBirthdaysEmpty">
+        <article class="home-highlight-card" *ngFor="let cliente of birthdaysToday | slice:0:4">
+          <div class="home-highlight-card__identity">
+            <span class="home-highlight-card__initials">{{ getClienteInitials(cliente.nome) }}</span>
+            <div class="home-highlight-card__copy">
+              <strong class="home-highlight-card__title">{{ cliente.nome }}</strong>
+              <p class="home-highlight-card__meta">{{ cliente.dataNascimento }} · {{ cliente.telefone }}</p>
+            </div>
+          </div>
+
+          <div class="home-highlight-card__actions">
+            <button class="btn btn-primary home-highlight-card__action" type="button" (click)="emitOpenBirthday(cliente)">
+              <span class="material-symbols-outlined home-highlight-card__action-icon">card_giftcard</span>
+              Parabéns
+            </button>
+            <button class="home-highlight-card__favorite" type="button" aria-label="Favoritar">
+              <span class="material-symbols-outlined">star</span>
+            </button>
+          </div>
+        </article>
+      </div>
+    </article>
+
+    <article class="home-panel">
+      <header class="home-panel__header">
+        <div class="home-panel__heading">
+          <h3 class="home-panel__title">
+            <span class="material-symbols-outlined home-panel__title-icon">calendar_today</span>
+            Próximos agendamentos
+          </h3>
+          <p class="home-panel__subtitle">Mensagens programadas para envio.</p>
+        </div>
+        <button type="button" class="home-panel__link home-panel__link--accent" (click)="emitOpenScheduleList()">
+          <span class="material-symbols-outlined home-panel__link-icon">add</span>
+          Novo
+        </button>
+      </header>
+
+      <div class="home-schedule-list" *ngIf="pendingSchedules.length; else dashboardSchedulesEmpty">
+        <article class="home-schedule-card" *ngFor="let schedule of pendingSchedules | slice:0:3">
+          <span class="material-symbols-outlined home-schedule-card__icon">schedule</span>
+          <div class="home-schedule-card__copy">
+            <strong class="home-schedule-card__title">{{ formatScheduleTimestamp(schedule.scheduledAt) }}</strong>
+            <p class="home-schedule-card__template">{{ schedule.template | slice:0:54 }}{{ schedule.template.length > 54 ? '...' : '' }}</p>
+            <small class="home-schedule-card__meta">{{ formatScheduleContacts(schedule) }}</small>
+          </div>
+        </article>
+      </div>
+
+      <button class="btn btn-outline home-panel__secondary-action" type="button" (click)="emitOpenScheduleList()">
+        Ver todos agendamentos
+      </button>
+    </article>
+  </section>
+
+  <section class="home-panel home-panel--quick-actions">
+    <header class="home-panel__header home-panel__header--compact">
+      <div class="home-panel__heading">
+        <h3 class="home-panel__title">
+          <span class="material-symbols-outlined home-panel__title-icon">bolt</span>
+          Ações rápidas
+        </h3>
+      </div>
+    </header>
+
+    <div class="home-quick-grid">
+      <button type="button" class="home-quick-action" (click)="emitGoToWhatsapp()">
+        <span class="material-symbols-outlined home-quick-action__icon">chat</span>
+        <strong class="home-quick-action__title">Abrir WhatsApp</strong>
+        <small class="home-quick-action__description">Conversas ao vivo</small>
+      </button>
+
+      <button type="button" class="home-quick-action" (click)="emitOpenClients()">
+        <span class="material-symbols-outlined home-quick-action__icon">card_giftcard</span>
+        <strong class="home-quick-action__title">Enviar parabéns</strong>
+        <small class="home-quick-action__description">Para aniversariantes</small>
+      </button>
+
+      <button type="button" class="home-quick-action" (click)="emitOpenScheduleList()">
+        <span class="material-symbols-outlined home-quick-action__icon">calendar_today</span>
+        <strong class="home-quick-action__title">Novo agendamento</strong>
+        <small class="home-quick-action__description">Programar mensagem</small>
+      </button>
+
+      <button type="button" class="home-quick-action" (click)="emitOpenMessages()">
+        <span class="material-symbols-outlined home-quick-action__icon">chat</span>
+        <strong class="home-quick-action__title">Editar templates</strong>
+        <small class="home-quick-action__description">Mensagens prontas</small>
+      </button>
+    </div>
+  </section>
+
+  <ng-template #dashboardBirthdaysEmpty>
+    <div class="home-inline-empty">Nenhum aniversariante marcado para hoje.</div>
+  </ng-template>
+
+  <ng-template #dashboardSchedulesEmpty>
+    <div class="home-inline-empty">Nenhum agendamento pendente no momento.</div>
+  </ng-template>
+</section>

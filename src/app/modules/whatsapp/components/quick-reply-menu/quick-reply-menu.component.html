@@ -1,0 +1,39 @@
+<div class="quick-reply-menu" *ngIf="isOpen">
+  <div class="quick-reply-menu__header">
+    <span class="material-symbols-outlined quick-reply-menu__header-icon">bolt</span>
+    <span class="quick-reply-menu__header-title">Mensagens rápidas</span>
+    <span class="quick-reply-menu__header-hint" *ngIf="results.length">↑↓ navegar · Enter inserir · Esc fechar</span>
+    <button type="button" class="quick-reply-menu__manage" (click)="manage.emit()">Gerenciar</button>
+  </div>
+
+  <ul class="quick-reply-menu__list" #listEl *ngIf="results.length; else emptyState">
+    <li
+      *ngFor="let item of results; let i = index"
+      class="quick-reply-menu__item"
+      [class.quick-reply-menu__item--active]="i === highlightedIndex"
+      (mousedown)="$event.preventDefault()"
+      (click)="selectAt(i)"
+      (mouseenter)="highlightedIndex = i"
+    >
+      <div class="quick-reply-menu__item-row">
+        <span class="quick-reply-menu__item-shortcode">/{{ item.shortcode }}</span>
+        <span class="quick-reply-menu__item-title" *ngIf="item.title">{{ item.title }}</span>
+        <span class="quick-reply-menu__item-image-tag" *ngIf="item.imageDataUrl">
+          <span class="material-symbols-outlined">image</span>
+        </span>
+      </div>
+      <p class="quick-reply-menu__item-preview">{{ renderPreview(item.content) }}</p>
+    </li>
+  </ul>
+
+  <ng-template #emptyState>
+    <div class="quick-reply-menu__empty">
+      <p *ngIf="query">Nenhuma mensagem rápida combina com "<strong>{{ query }}</strong>"</p>
+      <p *ngIf="!query">Você ainda não cadastrou mensagens rápidas.</p>
+      <button type="button" class="quick-reply-menu__empty-action" (click)="manage.emit()">
+        <span class="material-symbols-outlined">add</span>
+        Cadastrar mensagem rápida
+      </button>
+    </div>
+  </ng-template>
+</div>

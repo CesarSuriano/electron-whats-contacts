@@ -1,0 +1,71 @@
+<div class="label-picker" *ngIf="isOpen" data-label-popover>
+  <header class="label-picker__header">
+    <span class="material-symbols-outlined label-picker__header-icon">sell</span>
+    <span class="label-picker__header-title">Etiquetas</span>
+    <button type="button" class="label-picker__manage" (click)="manage.emit()">Gerenciar</button>
+  </header>
+
+  <div class="label-picker__search" *ngIf="!isCreating">
+    <span class="material-symbols-outlined label-picker__search-icon">search</span>
+    <input
+      type="text"
+      [(ngModel)]="searchTerm"
+      placeholder="Buscar etiqueta"
+      autofocus
+    />
+  </div>
+
+  <ul class="label-picker__list" *ngIf="!isCreating">
+    <li
+      *ngFor="let label of filteredLabels"
+      class="label-picker__item"
+      (click)="toggleLabel(label)"
+    >
+      <span class="label-picker__color-dot" [style.background]="label.color"></span>
+      <span class="label-picker__item-name">{{ label.name }}</span>
+      <span class="material-symbols-outlined label-picker__check" *ngIf="isSelected(label)">check</span>
+    </li>
+
+    <li class="label-picker__empty" *ngIf="!filteredLabels.length">
+      <p>Nenhuma etiqueta {{ searchTerm ? 'encontrada' : 'cadastrada' }}.</p>
+    </li>
+  </ul>
+
+  <button
+    *ngIf="!isCreating"
+    type="button"
+    class="label-picker__create-trigger"
+    (click)="startCreate()"
+  >
+    <span class="material-symbols-outlined">add</span>
+    Nova etiqueta{{ searchTerm ? ' "' + searchTerm + '"' : '' }}
+  </button>
+
+  <div class="label-picker__create-form" *ngIf="isCreating">
+    <label>Nome</label>
+    <input type="text" [(ngModel)]="newLabelName" placeholder="Ex: VIP" maxlength="40" />
+
+    <label>Cor</label>
+    <div class="label-picker__color-row">
+      <input type="color" [value]="newLabelColor" (input)="pickColor($any($event.target).value)" />
+      <div class="label-picker__color-suggestions">
+        <button
+          *ngFor="let color of suggestedColors"
+          type="button"
+          class="label-picker__color-suggestion"
+          [class.label-picker__color-suggestion--active]="color.toLowerCase() === newLabelColor.toLowerCase()"
+          [style.background]="color"
+          [attr.aria-label]="color"
+          (click)="pickColor(color)"
+        ></button>
+      </div>
+    </div>
+
+    <div class="label-picker__create-actions">
+      <button type="button" class="btn btn-outline btn-sm" (click)="cancelCreate()">Cancelar</button>
+      <button type="button" class="btn btn-primary btn-sm" (click)="confirmCreate()" [disabled]="!newLabelName.trim()">
+        Criar e aplicar
+      </button>
+    </div>
+  </div>
+</div>

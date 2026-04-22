@@ -1,0 +1,176 @@
+.quick-reply-manager-modal {
+  @apply fixed left-1/2 top-1/2 z-[21] flex max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-[22px] border border-border bg-surface p-6;
+  width: min(900px, calc(100vw - 2rem));
+  box-shadow: 0 24px 80px rgba(35, 24, 20, 0.24);
+}
+
+.quick-reply-manager-modal__body {
+  @apply grid min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-bg-subtle;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+}
+
+.quick-reply-manager-modal__list-pane {
+  @apply flex min-h-0 flex-col border-r border-border bg-surface;
+}
+
+.quick-reply-manager-modal__list-header {
+  @apply flex items-center justify-between gap-2 border-b border-border px-4 py-3;
+}
+
+.quick-reply-manager-modal__list-header h3 {
+  @apply m-0 text-[0.78rem] font-semibold uppercase tracking-[0.04em] text-txt-subtle;
+}
+
+.quick-reply-manager-modal__list {
+  @apply m-0 flex flex-1 list-none flex-col gap-1 overflow-y-auto p-2;
+}
+
+.quick-reply-manager-modal__list-item {
+  @apply flex items-stretch gap-1 rounded-lg border border-transparent transition-colors;
+}
+
+.quick-reply-manager-modal__list-item:hover {
+  @apply bg-bg-subtle;
+}
+
+.quick-reply-manager-modal__list-item--active {
+  @apply border-accent bg-accent-soft;
+}
+
+.quick-reply-manager-modal__list-button {
+  @apply flex flex-1 cursor-pointer flex-col gap-[2px] rounded-lg border-none bg-transparent px-3 py-2 text-left;
+}
+
+.quick-reply-manager-modal__list-shortcode {
+  @apply text-[0.78rem] font-semibold text-accent;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.quick-reply-manager-modal__list-title {
+  @apply max-w-[220px] overflow-hidden text-ellipsis whitespace-nowrap text-[0.82rem] text-txt-muted;
+}
+
+.quick-reply-manager-modal__list-remove {
+  @apply inline-flex cursor-pointer items-center justify-center rounded-lg border-none bg-transparent px-2 text-txt-muted;
+}
+
+.quick-reply-manager-modal__list-remove:hover {
+  @apply bg-danger-soft text-danger;
+}
+
+.quick-reply-manager-modal__list-remove .material-symbols-outlined {
+  @apply text-[1.05rem];
+}
+
+.quick-reply-manager-modal__list-empty {
+  @apply m-0 px-4 py-5 text-center text-[0.85rem] text-txt-muted;
+}
+
+.quick-reply-manager-modal__form-pane {
+  @apply flex flex-col gap-4 overflow-y-auto bg-surface p-5;
+}
+
+.quick-reply-manager-modal__field {
+  @apply flex flex-col gap-1.5;
+}
+
+.quick-reply-manager-modal__field label {
+  @apply text-[0.75rem] font-semibold uppercase tracking-[0.04em] text-txt-subtle;
+}
+
+.quick-reply-manager-modal__field input,
+.quick-reply-manager-modal__field textarea {
+  @apply rounded-lg border border-border bg-surface px-3 py-2 text-[0.92rem] text-txt;
+  font-family: inherit;
+}
+
+.quick-reply-manager-modal__field input:focus,
+.quick-reply-manager-modal__field textarea:focus {
+  @apply border-accent outline-none;
+  box-shadow: 0 0 0 3px rgba(117, 16, 19, 0.12);
+}
+
+.quick-reply-manager-modal__field textarea {
+  @apply min-h-[140px] resize-y leading-[1.45];
+}
+
+.quick-reply-manager-modal__field small {
+  @apply text-[0.72rem] text-txt-subtle;
+}
+
+.quick-reply-manager-modal__shortcode-field {
+  @apply flex items-stretch overflow-hidden rounded-lg border border-border bg-surface;
+}
+
+.quick-reply-manager-modal__shortcode-field:focus-within {
+  @apply border-accent;
+  box-shadow: 0 0 0 3px rgba(117, 16, 19, 0.12);
+}
+
+.quick-reply-manager-modal__shortcode-field input {
+  @apply flex-1 border-none bg-transparent px-2 py-2 text-[0.92rem] text-txt;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.quick-reply-manager-modal__shortcode-field input:focus {
+  box-shadow: none;
+}
+
+.quick-reply-manager-modal__slash {
+  @apply flex items-center justify-center bg-accent-soft px-3 text-[1rem] font-bold text-accent;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.quick-reply-manager-modal__token {
+  @apply self-start;
+}
+
+.quick-reply-manager-modal__image-row {
+  @apply flex items-center gap-3;
+}
+
+.quick-reply-manager-modal__image-preview {
+  @apply relative h-24 w-24 overflow-hidden rounded-lg border border-border;
+}
+
+.quick-reply-manager-modal__image-preview img {
+  @apply block h-full w-full object-cover;
+}
+
+.quick-reply-manager-modal__image-remove {
+  @apply absolute right-1 top-1 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none text-white;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.quick-reply-manager-modal__image-remove .material-symbols-outlined {
+  @apply text-[1rem];
+}
+
+.quick-reply-manager-modal__error {
+  @apply m-0 rounded-lg bg-danger-soft px-3 py-2 text-[0.85rem] text-danger;
+}
+
+.quick-reply-manager-modal__form-actions {
+  @apply mt-auto flex justify-end gap-2 border-t border-border pt-4;
+}
+
+.quick-reply-manager-modal__placeholder {
+  @apply flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl bg-bg-subtle p-8 text-center text-txt-muted;
+}
+
+.quick-reply-manager-modal__placeholder p {
+  @apply m-0 max-w-[320px] text-[0.92rem];
+}
+
+.quick-reply-manager-modal__placeholder-icon {
+  @apply text-[3rem] text-accent;
+}
+
+@media (max-width: 720px) {
+  .quick-reply-manager-modal__body {
+    grid-template-columns: 1fr;
+  }
+  .quick-reply-manager-modal__list-pane {
+    @apply max-h-[200px] border-b border-r-0 border-border;
+  }
+}

@@ -106,6 +106,7 @@
 
 .composer__textarea {
   @apply min-h-[46px] max-h-[140px] flex-1 resize-none rounded-full border-0 bg-wa-surface-alt px-4 py-3 text-[0.95rem] leading-[1.4] text-txt outline-none;
+  width: 100%;
 }
 
 .composer__textarea:disabled {

@@ -1,7 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 import { ClientesLoadResult } from '../models/cliente.model';
 import { parseClientesFromXml } from '../helpers/clientes-xml.helper';
@@ -14,18 +12,17 @@ export class ClientesDataService {
   private readonly xmlStorageTimestampKey = 'clientesXmlUpdatedAt';
   private readonly xmlStorageFileNameKey = 'clientesXmlFileName';
 
-  constructor(private http: HttpClient) {}
-
   loadClientes(): Observable<ClientesLoadResult> {
-    const storedResult = this.getStoredXmlResult();
-    if (storedResult) {
-      return of(storedResult);
+    const storedXmlResult = this.getStoredXmlResult();
+    if (storedXmlResult) {
+      return of(storedXmlResult);
     }
 
-    const xmlUrl = `assets/clientes.xml?v=${Date.now()}`;
-    return this.http.get(xmlUrl, { responseType: 'text' }).pipe(
-      map(xmlText => this.createLoadResult(xmlText, new Date(), 'clientes.xml (padrão)'))
-    );
+    return of({
+      clientes: [],
+      loadedAt: new Date(),
+      fileName: null
+    });
   }
 
   saveUploadedXml(fileName: string, xmlContent: string): ClientesLoadResult {
@@ -41,6 +38,14 @@ export class ClientesDataService {
   }
 
   clearStoredXml(): void {
+    if (!this.hasLocalStorage()) {
+      return;
+    }
+
+    this.clearLegacyXmlStorage();
+  }
+
+  private clearLegacyXmlStorage(): void {
     if (!this.hasLocalStorage()) {
       return;
     }

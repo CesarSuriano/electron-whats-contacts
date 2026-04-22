@@ -928,7 +928,8 @@ export class ContactsService {
   }
 
   async fetchProfilePhotoUrl(jid: string): Promise<string | null> {
-    if (!this.sessionState.isReady() || !isPersonalOrLinkedJid(jid)) {
+    const isGroup = isGroupJid(jid);
+    if (!this.sessionState.isReady() || (!isGroup && !isPersonalOrLinkedJid(jid))) {
       return null;
     }
 
@@ -952,7 +953,7 @@ export class ContactsService {
       candidates.push(jid);
     }
 
-    const knownLid = isPersonalJid(jid) ? this.lidMap.getLid(jid) : '';
+    const knownLid = isGroup ? '' : (isPersonalJid(jid) ? this.lidMap.getLid(jid) : '');
     if (knownLid && !candidates.includes(knownLid)) {
       candidates.push(knownLid);
     }

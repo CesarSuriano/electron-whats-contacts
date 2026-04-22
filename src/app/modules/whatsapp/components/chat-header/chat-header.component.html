@@ -4,4 +4,46 @@
     <span class="chat-header__name">{{ contact.name || 'Sem nome' }}</span>
     <span class="chat-header__phone">{{ phoneFormatted }}</span>
   </div>
+
+  <div class="chat-header__labels">
+    <span
+      *ngFor="let label of appLabels"
+      class="chat-header__label-chip"
+      [style.background]="label.color + '22'"
+      [style.color]="label.color"
+      [style.borderColor]="label.color + '55'"
+    >
+      <span class="chat-header__label-dot" [style.background]="label.color"></span>
+      {{ label.name }}
+      <button
+        type="button"
+        class="chat-header__label-remove"
+        (click)="removeLabel(label)"
+        [attr.aria-label]="'Remover etiqueta ' + label.name"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </span>
+
+    <div class="chat-header__label-anchor">
+      <button
+        type="button"
+        class="chat-header__label-add"
+        (click)="toggleLabelPicker()"
+        data-label-anchor
+        [attr.aria-expanded]="isLabelPickerOpen"
+        aria-label="Adicionar etiqueta"
+      >
+        <span class="material-symbols-outlined">sell</span>
+        Etiqueta
+      </button>
+
+      <app-label-picker-popover
+        [isOpen]="isLabelPickerOpen"
+        [jid]="contact.jid"
+        (close)="closeLabelPicker()"
+        (manage)="onManageRequested()"
+      ></app-label-picker-popover>
+    </div>
+  </div>
 </header>

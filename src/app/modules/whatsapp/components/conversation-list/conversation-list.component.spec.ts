@@ -30,7 +30,7 @@ describe('ConversationListComponent', () => {
     selectedJids$ = new BehaviorSubject<Set<string>>(new Set());
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection', 'requestPhoto'
+      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection', 'requestPhoto', 'requestConversationContext'
     ], {
       contacts$: contacts$.asObservable(),
       selectedContactJid$: selectedJid$.asObservable(),
@@ -67,7 +67,7 @@ describe('ConversationListComponent', () => {
     expect(component.contacts).toEqual(list);
   });
 
-  it('requests photos for visible non-group contacts', () => {
+  it('requests photos for visible contacts, including groups', () => {
     const list = [
       makeContact('a@c.us', 'Ana'),
       makeContact('b@c.us', 'Bia'),
@@ -87,7 +87,10 @@ describe('ConversationListComponent', () => {
 
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('a@c.us');
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('b@c.us');
-    expect(stateSpy.requestPhoto).not.toHaveBeenCalledWith('g@g.us');
+    expect(stateSpy.requestPhoto).toHaveBeenCalledWith('g@g.us');
+    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('a@c.us');
+    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('b@c.us');
+    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('g@g.us');
   });
 
   it('tracks loading state', () => {
@@ -98,6 +101,20 @@ describe('ConversationListComponent', () => {
   it('tracks syncing state', () => {
     syncing$.next(true);
     expect(component.isSyncing).toBeTrue();
+  });
+
+  it('does not show the synced label when syncing is idle', () => {
+    syncing$.next(false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Sincronizado agora');
+  });
+
+  it('shows the syncing label only while syncing is active', () => {
+    syncing$.next(true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Sincronizando conversas...');
   });
 
   it('tracks selection mode', () => {

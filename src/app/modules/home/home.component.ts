@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
+import { AppShellSection } from '../../components/app-shell-sidebar/app-shell-sidebar.component';
 import { ClientesDataService } from '../../services/clientes-data.service';
 import { compareClientes } from '../../helpers/cliente-date.helper';
 import { buildYearEndMessage } from '../../helpers/cliente-message.helper';
@@ -18,7 +19,7 @@ import { ScheduleListLauncherService } from '../../services/schedule-list-launch
 import { ScheduledMessageService } from '../../services/scheduled-message.service';
 import { RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
 
-type HomeSection = 'dashboard' | 'clients' | 'messages' | 'schedules' | 'settings';
+type HomeSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings';
 type ClientFilter = 'all' | 'today' | 'upcoming';
 
 @Component({
@@ -30,7 +31,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   clientes: Cliente[] = [];
   sortedColumn: SortColumn = 'dataNascimento';
   sortDirection: SortDirection = 'asc';
-  activeSection: HomeSection = 'dashboard';
+  activeSection: HomeSection = 'home';
   clienteSearchTerm = '';
   activeClientFilter: ClientFilter = 'all';
   scheduledMessages: ScheduledMessage[] = [];
@@ -51,6 +52,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   storedSavedAtLabel: string | null = null;
   selectedFileName: string | null = null;
   uploadErrorMessage: string | null = null;
+  clientesRefreshErrorMessage: string | null = null;
   successToastMessage: string | null = null;
   activeTemplateEditorConfig: MessageTemplateEditorConfig | null = null;
 
@@ -255,11 +257,56 @@ export class HomeComponent implements OnInit, OnDestroy {
     return this.messageTemplates.review;
   }
 
-  onShellSectionSelect(section: HomeSection | 'whatsapp'): void {
+  get primaryClientesActionLabel(): string {
+    return 'Importar XML';
+  }
+
+  get primaryClientesActionIcon(): string {
+    return 'upload_file';
+  }
+
+  get isPrimaryClientesActionDisabled(): boolean {
+    return false;
+  }
+
+  get clientesSourceLabel(): string {
+    return this.storedFileName ? `Fonte ativa: ${this.storedFileName}` : 'Fonte ativa: XML legado';
+  }
+
+  get clientesSourceDescription(): string {
+    if (this.storedSavedAtLabel) {
+      return `Base local carregada. Ultima atualizacao: ${this.storedSavedAtLabel}.`;
+    }
+
+    return 'Importe um XML para carregar e atualizar a base de clientes exibida nesta tela.';
+  }
+
+  get emptyClientesMessage(): string {
+    if (this.isLoading) {
+      return 'Carregando clientes...';
+    }
+
+    if (this.hasError) {
+      return 'Nao foi possivel carregar os clientes agora.';
+    }
+
+    if (this.clientes.length > 0) {
+      return 'Nenhum cliente encontrado com os filtros atuais.';
+    }
+
+    return 'Nenhum cliente importado ainda. Envie um XML para carregar a base.';
+  }
+
+  onShellSectionSelect(section: AppShellSection): void {
     this.isConfigMenuOpen = false;
 
     if (section === 'whatsapp') {
       this.goToWhatsapp();
+      return;
+    }
+
+    if (section === 'agent') {
+      this.goToAgent();
       return;
     }
 
@@ -313,6 +360,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   openUploadModal(): void {
     this.isConfigMenuOpen = false;
+    this.clientesRefreshErrorMessage = null;
     this.isUploadModalOpen = true;
     this.isDraggingFile = false;
     this.isSavingUpload = false;
@@ -322,6 +370,15 @@ export class HomeComponent implements OnInit, OnDestroy {
   goToWhatsapp(): void {
     void this.router.navigate(['/whatsapp']);
     this.isConfigMenuOpen = false;
+  }
+
+  goToAgent(): void {
+    void this.router.navigate(['/agente']);
+    this.isConfigMenuOpen = false;
+  }
+
+  handleClientesPrimaryAction(): void {
+    this.openUploadModal();
   }
 
   closeUploadModal(): void {
@@ -416,7 +473,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       const result = this.clientesDataService.saveUploadedXml(this.selectedFileName, this.pendingXmlContent);
       this.applyLoadResult(result);
       this.isSavingUpload = false;
-      this.showSuccessToast('Dados atualizados com sucesso.');
+      this.showSuccessToast('Clientes importados com sucesso.');
       this.closeUploadModal();
     } catch (error) {
       console.error('Erro ao salvar XML enviado', error);
@@ -536,7 +593,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       },
       error: error => {
-        console.error('Erro ao carregar clientes.xml', error);
+        console.error('Erro ao carregar clientes', error);
         this.clientes = [];
         this.hasError = true;
         this.isLoading = false;
@@ -589,6 +646,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.clientes = result.clientes;
     this.storedFileName = result.fileName ?? 'clientes.xml (padrão)';
     this.storedSavedAtLabel = formatTimestamp(result.loadedAt);
+    this.clientesRefreshErrorMessage = null;
     this.hasError = false;
     this.lastUpdated = formatTimestamp(result.loadedAt);
   }
@@ -619,13 +677,16 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   private parseSectionParam(value: string | null): HomeSection {
     switch (value) {
+      case 'home':
+      case 'dashboard':
+        return 'home';
       case 'clients':
       case 'messages':
       case 'schedules':
       case 'settings':
         return value;
       default:
-        return 'dashboard';
+        return 'home';
     }
   }
 }

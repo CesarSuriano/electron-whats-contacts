@@ -1,0 +1,266 @@
+:host {
+  @apply block;
+}
+
+.home-dashboard {
+  @apply flex w-full flex-col gap-5;
+}
+
+.home-greeting,
+.home-panel {
+  box-shadow: var(--shadow);
+}
+
+.home-greeting {
+  @apply rounded-[20px] border border-border bg-surface px-5 py-5;
+}
+
+.home-greeting__title {
+  @apply m-0 flex items-center gap-2 text-[1.85rem] font-semibold tracking-[-0.03em] text-txt;
+}
+
+.home-greeting__emoji {
+  @apply text-[1.6rem];
+}
+
+.home-greeting__description {
+  @apply mb-0 mt-2 text-sm text-txt-muted;
+}
+
+.home-metrics {
+  @apply grid gap-4;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-metric-card {
+  @apply relative flex min-h-[140px] flex-col gap-2 overflow-hidden rounded-[18px] border border-border bg-surface p-4;
+}
+
+.home-metric-card__label {
+  @apply text-[0.82rem] font-medium uppercase tracking-[0.06em] text-txt-muted;
+}
+
+.home-metric-card__value {
+  @apply mt-auto text-[2rem] font-semibold tracking-[-0.04em] text-txt;
+}
+
+.home-metric-card__icon {
+  @apply absolute right-5 top-5 text-[2rem] text-accent;
+  opacity: 0.7;
+}
+
+.home-metric-card__icon--rose {
+  color: #d9466f;
+}
+
+.home-metric-card__icon--amber {
+  color: #d97706;
+}
+
+.home-metric-card__icon--green {
+  color: #16a34a;
+}
+
+.home-metric-card__icon--orange {
+  color: #ea580c;
+}
+
+.home-metric-card__trend {
+  @apply inline-flex items-center gap-1 rounded-full bg-accent-soft px-3 py-1 text-[12px] font-medium text-accent;
+}
+
+.home-metric-card__trend-icon {
+  @apply text-[14px];
+}
+
+.home-highlight-grid {
+  @apply grid gap-5;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+
+.home-panel {
+  @apply rounded-[20px] border border-border bg-surface p-4;
+}
+
+.home-panel--quick-actions {
+  @apply p-5;
+}
+
+.home-panel__header {
+  @apply flex flex-wrap items-start justify-between gap-4;
+}
+
+.home-panel__header--compact {
+  @apply mb-5;
+}
+
+.home-panel__heading {
+  @apply min-w-0;
+}
+
+.home-panel__title {
+  @apply m-0 flex items-center gap-2 text-[1.05rem] font-semibold text-txt;
+}
+
+.home-panel__title-icon {
+  @apply text-[1.25rem] text-accent;
+}
+
+.home-panel__subtitle {
+  @apply mb-0 mt-1 text-sm text-txt-muted;
+}
+
+.home-panel__link {
+  @apply inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-[13px] font-medium text-accent transition-colors;
+}
+
+.home-panel__link:hover {
+  @apply border-accent bg-accent-soft;
+}
+
+.home-panel__link--accent {
+  @apply border-accent bg-accent text-accent-text;
+}
+
+.home-panel__link--accent:hover {
+  @apply border-accent-hover bg-accent-hover;
+}
+
+.home-panel__link-icon {
+  @apply text-[16px];
+}
+
+.home-panel__secondary-action {
+  @apply mt-5 min-h-[42px] self-start;
+}
+
+.home-highlight-list,
+.home-schedule-list {
+  @apply mt-5 flex flex-col gap-3;
+}
+
+.home-highlight-card,
+.home-schedule-card {
+  @apply flex items-center gap-4 rounded-[16px] border border-border bg-surface-2 p-4;
+}
+
+.home-highlight-card {
+  @apply justify-between;
+}
+
+.home-highlight-card__identity {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.home-highlight-card__initials {
+  @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent;
+}
+
+.home-highlight-card__copy,
+.home-schedule-card__copy {
+  @apply min-w-0;
+}
+
+.home-highlight-card__title,
+.home-schedule-card__title {
+  @apply block truncate text-sm font-semibold text-txt;
+}
+
+.home-highlight-card__meta,
+.home-schedule-card__template,
+.home-schedule-card__meta {
+  @apply mb-0 mt-1 text-[13px] text-txt-muted;
+}
+
+.home-highlight-card__actions {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.home-highlight-card__action {
+  @apply min-h-[40px];
+}
+
+.home-highlight-card__action-icon {
+  @apply text-[16px];
+}
+
+.home-highlight-card__favorite {
+  @apply inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-txt-muted transition-colors;
+}
+
+.home-highlight-card__favorite:hover {
+  @apply border-accent bg-accent-soft text-accent;
+}
+
+.home-schedule-card__icon {
+  @apply text-[1.35rem] text-accent;
+}
+
+.home-quick-grid {
+  @apply grid gap-4;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-quick-action {
+  @apply flex min-h-[152px] flex-col items-start gap-3 rounded-[18px] border border-border bg-surface-2 p-4 text-left transition-all;
+}
+
+.home-quick-action:hover {
+  @apply border-accent bg-surface;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.home-quick-action__icon {
+  @apply inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-[1.5rem] text-accent;
+}
+
+.home-quick-action__title {
+  @apply text-[15px] font-semibold text-txt;
+}
+
+.home-quick-action__description {
+  @apply text-[13px] text-txt-muted;
+}
+
+.home-inline-empty {
+  @apply rounded-[16px] border border-dashed border-border bg-surface-2 px-4 py-6 text-center text-sm text-txt-muted;
+}
+
+@media (max-width: 1279px) {
+  .home-metrics,
+  .home-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-highlight-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 959px) {
+  .home-metrics,
+  .home-quick-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .home-greeting,
+  .home-panel {
+    @apply rounded-[16px] p-4;
+  }
+
+  .home-greeting__title {
+    @apply text-[1.55rem];
+  }
+
+  .home-highlight-card,
+  .home-schedule-card {
+    @apply flex-col items-start;
+  }
+
+  .home-highlight-card__actions {
+    @apply w-full justify-between;
+  }
+}

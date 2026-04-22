@@ -1,0 +1,87 @@
+<ng-container *ngIf="isOpen">
+  <div class="modal-backdrop label-manager-modal__backdrop" (click)="close.emit()"></div>
+  <section class="label-manager-modal" role="dialog" aria-modal="true">
+    <header class="upload-modal-header">
+      <div>
+        <h2>Etiquetas</h2>
+        <p>Crie etiquetas e associe a contatos para organizar suas conversas. Filtre conversas por etiqueta na lista lateral.</p>
+      </div>
+      <button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <section class="label-manager-modal__create">
+      <div class="label-manager-modal__create-fields">
+        <input
+          type="text"
+          class="label-manager-modal__name-input"
+          [(ngModel)]="newName"
+          placeholder="Nome da nova etiqueta (ex: VIP)"
+          maxlength="40"
+          (keydown.enter)="create()"
+        />
+        <div class="label-manager-modal__color-field">
+          <input type="color" [value]="newColor" (input)="pickColor($any($event.target).value)" aria-label="Escolher cor" />
+          <div class="label-manager-modal__color-suggestions">
+            <button
+              *ngFor="let color of suggestedColors"
+              type="button"
+              class="label-manager-modal__color-chip"
+              [class.label-manager-modal__color-chip--active]="color.toLowerCase() === newColor.toLowerCase()"
+              [style.background]="color"
+              [attr.aria-label]="color"
+              (click)="pickColor(color)"
+            ></button>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary" (click)="create()">
+          <span class="material-symbols-outlined btn-icon-symbol">add</span>
+          Criar
+        </button>
+      </div>
+      <p class="label-manager-modal__error" *ngIf="errorMessage">{{ errorMessage }}</p>
+    </section>
+
+    <section class="label-manager-modal__list-section">
+      <h3>Etiquetas cadastradas ({{ labels.length }})</h3>
+
+      <ul class="label-manager-modal__list" *ngIf="labels.length; else emptyState">
+        <li *ngFor="let label of labels; trackBy: trackById" class="label-manager-modal__item">
+          <input
+            type="color"
+            [value]="label.color"
+            (change)="changeColor(label, $any($event.target).value)"
+            class="label-manager-modal__item-color"
+            aria-label="Alterar cor"
+          />
+          <input
+            type="text"
+            [value]="label.name"
+            (blur)="rename(label, $any($event.target).value)"
+            (keydown.enter)="$any($event.target).blur()"
+            class="label-manager-modal__item-name"
+            maxlength="40"
+          />
+          <span class="label-manager-modal__item-usage">{{ usageOf(label) }} contato{{ usageOf(label) === 1 ? '' : 's' }}</span>
+          <button
+            type="button"
+            class="label-manager-modal__item-remove"
+            (click)="remove(label)"
+            aria-label="Excluir etiqueta"
+          >
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </li>
+      </ul>
+
+      <ng-template #emptyState>
+        <p class="label-manager-modal__empty">Nenhuma etiqueta cadastrada ainda. Use o campo acima para criar a primeira.</p>
+      </ng-template>
+    </section>
+
+    <footer class="upload-modal-footer">
+      <button class="btn btn-outline" type="button" (click)="close.emit()">Fechar</button>
+    </footer>
+  </section>
+</ng-container>

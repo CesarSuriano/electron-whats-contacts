@@ -126,6 +126,15 @@ describe('MessageListComponent', () => {
 
       expect(component.messageText(msg)).toBe('Olá com legenda');
     });
+
+    it('returns a placeholder for location messages without text', () => {
+      const msg = makeMsg({
+        text: '',
+        payload: { type: 'location' }
+      });
+
+      expect(component.messageText(msg)).toBe('Localizacao');
+    });
   });
 
   it('converts raw mediaDataUrl base64 into image preview URL', () => {

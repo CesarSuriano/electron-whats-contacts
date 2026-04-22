@@ -1,8 +1,9 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { EMPTY, of, throwError } from 'rxjs';
+import { BehaviorSubject, EMPTY, of, throwError } from 'rxjs';
 
+import { AgentService } from '../../../../services/agent.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
@@ -20,9 +21,11 @@ describe('WhatsappPageComponent', () => {
   let fixture: ComponentFixture<WhatsappPageComponent>;
   let component: WhatsappPageComponent;
   let routerSpy: jasmine.SpyObj<Router>;
+  let agentSpy: jasmine.SpyObj<AgentService>;
   let gatewaySpy: jasmine.SpyObj<WhatsappWebjsGatewayService>;
   let wsSpy: jasmine.SpyObj<WhatsappWsService>;
   let scheduleListLauncherSpy: jasmine.SpyObj<ScheduleListLauncherService>;
+  let gemSettingsSubject: BehaviorSubject<any>;
 
   beforeEach(async () => {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -37,12 +40,25 @@ describe('WhatsappPageComponent', () => {
       connected$: of(false)
     });
     wsSpy.on.and.returnValue(EMPTY);
+
+    gemSettingsSubject = new BehaviorSubject({
+      enabled: false,
+      gemUrl: '',
+      responseMode: 'fast',
+      googleAccounts: [{ id: 'primary', label: 'Conta principal', createdAt: new Date().toISOString(), lastUsedAt: null }],
+      activeGoogleAccountId: 'primary'
+    });
+    agentSpy = jasmine.createSpyObj('AgentService', ['toggleEnabled', 'openAgentWindow'], {
+      settings$: gemSettingsSubject.asObservable()
+    });
+    agentSpy.openAgentWindow.and.returnValue(Promise.resolve({ ok: true, message: 'Janela aberta.' }));
     scheduleListLauncherSpy = jasmine.createSpyObj('ScheduleListLauncherService', ['requestOpen']);
 
     await TestBed.configureTestingModule({
       declarations: [WhatsappPageComponent],
       providers: [
         { provide: Router, useValue: routerSpy },
+        { provide: AgentService, useValue: agentSpy },
         { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy },
         { provide: WhatsappWsService, useValue: wsSpy },
         { provide: ScheduleListLauncherService, useValue: scheduleListLauncherSpy }
@@ -76,6 +92,27 @@ describe('WhatsappPageComponent', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
   });
 
+  it('redirects to the agent page when the agent is not configured', () => {
+    component.toggleAgent();
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/agente']);
+    expect(agentSpy.toggleEnabled).not.toHaveBeenCalled();
+  });
+
+  it('enables the official agent when the configuration exists', () => {
+    gemSettingsSubject.next({
+      enabled: false,
+      gemUrl: 'https://gemini.google.com/gem/teste',
+      responseMode: 'fast',
+      googleAccounts: [{ id: 'primary', label: 'Conta principal', createdAt: new Date().toISOString(), lastUsedAt: null }],
+      activeGoogleAccountId: 'primary'
+    });
+    fixture.detectChanges();
+
+    component.toggleAgent();
+
+    expect(agentSpy.toggleEnabled).toHaveBeenCalledWith(true);
+  });
+
   it('openAboutModal opens modal', () => {
     component.openAboutModal();
     expect(component.isAboutModalOpen).toBeTrue();
@@ -84,6 +121,26 @@ describe('WhatsappPageComponent', () => {
   it('openScheduleList requests opening the schedule list', () => {
     component.openScheduleList();
     expect(scheduleListLauncherSpy.requestOpen).toHaveBeenCalled();
+  });
+
+  it('opens the quick reply manager from the header action', () => {
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('.config-menu-item')) as HTMLButtonElement[];
+    const quickReplyButton = buttons.find(button => button.textContent?.includes('Mensagens rápidas'));
+
+    quickReplyButton?.click();
+
+    expect(quickReplyButton).toBeTruthy();
+    expect(component.isQuickReplyManagerOpen).toBeTrue();
+  });
+
+  it('opens the label manager from the header action', () => {
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('.config-menu-item')) as HTMLButtonElement[];
+    const labelButton = buttons.find(button => button.textContent?.includes('Etiquetas'));
+
+    labelButton?.click();
+
+    expect(labelButton).toBeTruthy();
+    expect(component.isLabelManagerOpen).toBeTrue();
   });
 
   it('closeAboutModal closes the modal', () => {

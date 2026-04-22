@@ -4,15 +4,16 @@
   "main": "main.js",
   "scripts": {
     "ng": "ng",
-    "prestart": "npm run bridge:install && ng build",
+    "prestart": "npm run bridge:install && npm run bridge:build && ng build",
     "start": "electron-forge start",
     "bridge:install": "node scripts/ensure-bridge-deps.js",
-    "build": "ng build",
+    "bridge:build": "npm --prefix whatsapp-webjs-bridge run build",
+    "build": "npm run bridge:build && ng build",
     "watch": "ng build --watch --configuration development",
-    "dist": "ng build --configuration production && electron-builder",
+    "dist": "npm run bridge:build && ng build --configuration production && electron-builder",
     "test": "ng test",
-    "package": "electron-forge package",
-    "make": "electron-forge make"
+    "package": "npm run bridge:build && electron-forge package",
+    "make": "npm run bridge:build && electron-forge make"
   },
   "build": {
     "appId": "com.uniq.system",

@@ -140,6 +140,44 @@
   @apply text-[#2f9bd4];
 }
 
+.conversation-list__row--labels {
+  @apply flex-wrap justify-start gap-1.5;
+}
+
+.conversation-list__label-chip {
+  @apply inline-flex max-w-full cursor-pointer appearance-none items-center gap-1 rounded-[8px] border px-2 py-[0.2rem] text-[0.68rem] font-medium leading-none shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
+  -webkit-appearance: none;
+  border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 24%, var(--color-border, #e2e8f0));
+  background: color-mix(in srgb, var(--label-color, var(--color-primary)) 10%, transparent);
+  color: var(--label-color, var(--text-secondary));
+}
+
+.conversation-list__label-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 46%, var(--color-border, #e2e8f0));
+  background: color-mix(in srgb, var(--label-color, var(--color-primary)) 16%, transparent);
+}
+
+.conversation-list__item:hover .conversation-list__label-chip:not(:hover):not(:disabled) {
+  border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 24%, var(--color-border, #e2e8f0));
+  background: color-mix(in srgb, var(--label-color, var(--color-primary)) 10%, transparent);
+}
+
+.conversation-list__label-chip--active {
+  border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 58%, var(--color-border, #e2e8f0));
+  background: color-mix(in srgb, var(--label-color, var(--color-primary)) 20%, transparent);
+  color: var(--label-color, var(--text-secondary));
+}
+
+.conversation-list__label-chip-dot {
+  @apply h-2 w-2 shrink-0 rounded-full;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+  background: var(--label-color, var(--color-primary));
+}
+
+.conversation-list__label-chip-text {
+  @apply min-w-0 truncate;
+}
+
 .conversation-list__unread-badge {
   @apply inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[0.78rem] font-semibold text-white;
 }

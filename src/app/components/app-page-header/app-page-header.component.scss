@@ -24,6 +24,14 @@
   @apply flex items-center gap-1.5;
 }
 
+.app-page-header__inline-actions {
+  @apply flex items-center gap-2;
+}
+
+.app-page-header__inline-actions:empty {
+  display: none;
+}
+
 .app-page-header__menu-button {
   @apply inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded border border-transparent bg-transparent text-txt-muted transition-colors;
 }
@@ -39,5 +47,9 @@
 @media (max-width: 767px) {
   .app-page-header {
     @apply px-4;
+  }
+
+  .app-page-header__inline-actions {
+    @apply max-w-[calc(100vw-10rem)] overflow-x-auto;
   }
 }

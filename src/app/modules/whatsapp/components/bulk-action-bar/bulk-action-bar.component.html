@@ -16,6 +16,15 @@
       type="button"
       class="btn-secondary"
       [disabled]="disabled || selectedCount === 0"
+      (click)="openLabels.emit()"
+    >
+      <span class="material-symbols-outlined">sell</span>
+      Etiquetas
+    </button>
+    <button
+      type="button"
+      class="btn-secondary"
+      [disabled]="disabled || selectedCount === 0"
       (click)="openSchedule.emit()"
     >
       <span class="material-symbols-outlined">schedule_send</span>

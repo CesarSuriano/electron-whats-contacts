@@ -1,3 +1,115 @@
 :host {
   @apply block min-h-full;
 }
+
+.home-shell {
+  @apply flex min-h-screen bg-bg;
+}
+
+.home-content {
+  @apply flex min-w-0 flex-1 flex-col;
+  background:
+    radial-gradient(circle at top right, rgba(154, 54, 81, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(250, 250, 249, 0));
+}
+
+.home-main {
+  @apply flex-1 overflow-y-auto overflow-x-hidden px-5 py-5;
+}
+
+.home-settings,
+.home-center-section {
+  @apply mx-auto flex w-full max-w-[1240px] flex-col gap-5;
+}
+
+.home-center-section {
+  @apply max-w-[880px];
+}
+
+.home-feature-card,
+.home-settings-card {
+  box-shadow: var(--shadow);
+}
+
+.home-feature-card {
+  @apply items-start rounded-[20px] border border-border bg-surface p-6;
+}
+
+.home-feature-card__icon {
+  @apply inline-flex h-14 w-14 items-center justify-center rounded-[18px] bg-accent-soft text-[1.7rem] text-accent;
+}
+
+.home-feature-card__title {
+  @apply m-0 text-[1.45rem] font-semibold tracking-[-0.03em] text-txt;
+}
+
+.home-feature-card__description {
+  @apply m-0 text-sm text-txt-muted;
+}
+
+.home-feature-card__actions,
+.home-settings-card__actions {
+  @apply flex flex-wrap gap-3;
+}
+
+.home-feature-card__action,
+.home-settings-card__action {
+  @apply min-h-[42px];
+}
+
+.home-settings-grid {
+  @apply grid gap-4;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.home-settings-card {
+  @apply flex flex-col gap-4 rounded-[18px] border border-border bg-surface p-4;
+}
+
+.home-settings-card__title {
+  @apply m-0 text-[1rem] font-semibold text-txt;
+}
+
+.home-settings-card__text,
+.home-settings-card__meta {
+  @apply m-0 text-sm text-txt-muted;
+}
+
+.home-settings-card__text-strong {
+  @apply font-semibold text-txt;
+}
+
+.home-settings-card__text-strong--accent {
+  @apply text-accent;
+}
+
+@media (max-width: 1279px) {
+  .home-settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 959px) {
+  .home-main {
+    @apply px-4 py-4;
+  }
+
+  .home-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .home-shell {
+    @apply flex-col;
+  }
+
+  .home-main {
+    @apply px-3 py-3;
+  }
+
+  .home-feature-card,
+  .home-settings-card {
+    @apply rounded-[16px] p-4;
+  }
+}

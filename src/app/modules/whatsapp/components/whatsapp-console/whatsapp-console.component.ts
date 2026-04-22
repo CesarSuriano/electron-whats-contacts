@@ -65,6 +65,8 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   scheduleEditInitialImage: string | undefined;
 
   allContacts: WhatsappContact[] = [];
+  isBulkLabelModalOpen = false;
+  bulkLabelJids: string[] = [];
   private selectedJidSet = new Set<string>();
   private destroy$ = new Subject<void>();
 
@@ -194,6 +196,18 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       return;
     }
     this.isTemplateModalOpen = true;
+  }
+
+  onOpenBulkLabels(): void {
+    if (!this.selectedCount || this.isUiBlocked) {
+      return;
+    }
+    this.bulkLabelJids = Array.from(this.selectedJidSet);
+    this.isBulkLabelModalOpen = true;
+  }
+
+  closeBulkLabelModal(): void {
+    this.isBulkLabelModalOpen = false;
   }
 
   get isInitialLoading(): boolean {

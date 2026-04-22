@@ -7,6 +7,10 @@ const routes: Routes = [
     loadChildren: () => import('./modules/home/home.module').then(m => m.HomeModule)
   },
   {
+    path: 'agente',
+    loadChildren: () => import('./modules/agent/agent.module').then(m => m.AgentModule)
+  },
+  {
     path: 'whatsapp',
     loadChildren: () => import('./modules/whatsapp/whatsapp.module').then(m => m.WhatsappModule)
   },

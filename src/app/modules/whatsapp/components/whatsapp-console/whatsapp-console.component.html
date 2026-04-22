@@ -10,6 +10,7 @@
     (exitMode)="onExitSelectionMode()"
     (openBulkSend)="onOpenBulkSend()"
     (openSchedule)="onScheduleFromSelection()"
+    (openLabels)="onOpenBulkLabels()"
   ></app-bulk-action-bar>
 
   <header class="whatsapp-console__toolbar" *ngIf="!isSelectionMode && instances.length > 1">
@@ -95,4 +96,10 @@
     (dismiss)="onNotificationDismiss($event)"
     (snooze)="onNotificationSnooze($event)"
   ></app-schedule-notification>
+
+  <app-bulk-label-modal
+    [isOpen]="isBulkLabelModalOpen"
+    [jids]="bulkLabelJids"
+    (close)="closeBulkLabelModal()"
+  ></app-bulk-label-modal>
 </section>

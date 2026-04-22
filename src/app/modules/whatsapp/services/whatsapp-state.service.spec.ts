@@ -10,6 +10,18 @@ const mockInstance: WhatsappInstance = { name: 'inst1', token: 'tok', connected:
 const mockContact: WhatsappContact = { jid: 'c1@s.whatsapp.net', phone: '5511', name: 'Alice', found: true };
 const secondMockContact: WhatsappContact = { jid: 'c2@s.whatsapp.net', phone: '5522', name: 'Bob', found: true };
 
+function makeBootstrapContact(index: number): WhatsappContact {
+  return {
+    jid: `c${index}@s.whatsapp.net`,
+    phone: `55${index}`,
+    name: `Contato ${index}`,
+    found: true,
+    lastMessagePreview: `mensagem ${index}`,
+    getChatsTimestampMs: (1_000 - index) * 1_000,
+    fromGetChats: true
+  };
+}
+
 function makeGatewayStub(): jasmine.SpyObj<WhatsappWebjsGatewayService> {
   return jasmine.createSpyObj<WhatsappWebjsGatewayService>('WhatsappWebjsGatewayService', [
     'loadInstances',
@@ -142,8 +154,59 @@ describe('WhatsappStateService', () => {
       service.loadInstances();
       tick();
 
-      const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1]);
-      expect(calledJids).toEqual([mockContact.jid, secondMockContact.jid]);
+      const calledArgs = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args);
+      expect(calledArgs).toEqual([
+        [mockInstance.name, mockContact.jid, 10, false],
+        [mockInstance.name, secondMockContact.jid, 10, false]
+      ]);
+    }));
+
+    it('preloads all unread messages for unread conversations during bootstrap', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(of([
+        {
+          ...mockContact,
+          lastMessagePreview: 'primeira',
+          getChatsTimestampMs: 2_000,
+          fromGetChats: true,
+          unreadCount: 150
+        }
+      ]));
+
+      service.loadInstances();
+      tick();
+
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 150, false);
+    }));
+
+    it('caps bootstrap context loading to the first 100 contacts', fakeAsync(() => {
+      const contacts = Array.from({ length: 120 }, (_, index) => makeBootstrapContact(index + 1));
+      gateway.loadContacts.and.returnValue(of(contacts));
+
+      service.loadInstances();
+      tick();
+
+      const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
+      expect(calledJids.length).toBe(100);
+      expect(calledJids).toEqual(contacts.slice(0, 100).map(contact => contact.jid));
+    }));
+
+    it('prioritizes unread conversations in the bootstrap queue even when they are older', fakeAsync(() => {
+      const contacts = Array.from({ length: 120 }, (_, index) => makeBootstrapContact(index + 1));
+      const unreadTailContact = {
+        ...makeBootstrapContact(999),
+        jid: 'older-unread@s.whatsapp.net',
+        getChatsTimestampMs: 1,
+        unreadCount: 3,
+        lastMessagePreview: 'nao lida'
+      };
+      contacts[119] = unreadTailContact;
+      gateway.loadContacts.and.returnValue(of(contacts));
+
+      service.loadInstances();
+      tick();
+
+      const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
+      expect(calledJids).toContain(unreadTailContact.jid);
     }));
 
     it('sets error message on gateway failure', () => {
@@ -223,8 +286,30 @@ describe('WhatsappStateService', () => {
     it('emits new draft text', () => {
       let draft = '';
       service.draftText$.subscribe(t => (draft = t));
+
+      service.selectContact(mockContact.jid);
       service.setDraftText('Olá mundo');
+
       expect(draft).toBe('Olá mundo');
+    });
+
+    it('keeps a separate draft for each conversation', () => {
+      let draft = '';
+      (service as any).contactsSubject.next([mockContact, secondMockContact]);
+      service.draftText$.subscribe(value => (draft = value));
+
+      service.selectContact(mockContact.jid);
+      service.setDraftText('rascunho da Alice');
+      expect(draft).toBe('rascunho da Alice');
+
+      service.selectContact(secondMockContact.jid);
+      expect(draft).toBe('');
+
+      service.setDraftText('rascunho do Bob');
+      expect(draft).toBe('rascunho do Bob');
+
+      service.selectContact(mockContact.jid);
+      expect(draft).toBe('rascunho da Alice');
     });
   });
 
@@ -232,7 +317,10 @@ describe('WhatsappStateService', () => {
     it('emits dataUrl', () => {
       let url: string | null = '';
       service.draftImageDataUrl$.subscribe(u => (url = u));
+
+      service.selectContact(mockContact.jid);
       service.setDraftImageDataUrl('data:image/png;base64,abc');
+
       expect(url).toBe('data:image/png;base64,abc');
     });
   });
@@ -306,7 +394,7 @@ describe('WhatsappStateService', () => {
       expect(loadingState.messages).toBeFalse();
     });
 
-    it('skips history fetch when the chat already has recent server messages', () => {
+    it('still loads full history when the chat only has shallow preview messages', () => {
       (service as unknown as { messagesSubject: { next(value: WhatsappMessage[]): void } }).messagesSubject.next([
         {
           id: 'm1',
@@ -328,7 +416,7 @@ describe('WhatsappStateService', () => {
 
       service.selectContact(mockContact.jid);
 
-      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 180, true);
     });
   });
 
@@ -402,6 +490,27 @@ describe('WhatsappStateService', () => {
       expect(updated[0].lastMessageHasMedia).toBeTrue();
       expect(updated[0].lastMessageMediaMimetype).toBe('image/jpeg');
     });
+
+    it('uses a placeholder in contact preview when history message is a location without text', () => {
+      (service as any).contactsSubject.next([{ ...mockContact, lastMessagePreview: '' }]);
+
+      (service as any).resortContactsByLatestMessage([
+        {
+          id: 'msg-location',
+          contactJid: mockContact.jid,
+          text: '',
+          sentAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          source: 'history',
+          payload: {
+            type: 'location'
+          }
+        }
+      ]);
+
+      const updated = (service as any).contactsSubject.value as WhatsappContact[];
+      expect(updated[0].lastMessagePreview).toBe('Localizacao');
+    });
   });
 
   describe('requestPhoto', () => {
@@ -430,6 +539,72 @@ describe('WhatsappStateService', () => {
       tick(151);
 
       expect(gateway.loadContactPhoto).not.toHaveBeenCalled();
+    }));
+  });
+
+  describe('requestConversationContext', () => {
+    beforeEach(() => {
+      (service as unknown as { selectedInstanceSubject: { next(value: string): void } }).selectedInstanceSubject.next(mockInstance.name);
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([mockContact]);
+      gateway.loadChatMessages.calls.reset();
+    });
+
+    it('loads a shallow 10-message context for visible contacts', fakeAsync(() => {
+      service.requestConversationContext(mockContact.jid);
+      tick(151);
+
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 10, false);
+    }));
+
+    it('loads enough preview history to cover unread messages', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        { ...mockContact, unreadCount: 150 }
+      ]);
+
+      service.requestConversationContext(mockContact.jid);
+      tick(151);
+
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 150, false);
+    }));
+
+    it('does not refetch the same warmed context twice after loading preview history', fakeAsync(() => {
+      gateway.loadChatMessages.and.returnValue(of([
+        {
+          id: 'evt-preview-1',
+          source: 'webjs-chat-history',
+          receivedAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          chatJid: mockContact.jid,
+          phone: mockContact.phone,
+          text: 'preview',
+          payload: {}
+        }
+      ]));
+
+      service.requestConversationContext(mockContact.jid);
+      tick(151);
+
+      gateway.loadChatMessages.calls.reset();
+
+      service.requestConversationContext(mockContact.jid);
+      tick(151);
+
+      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
+    }));
+
+    it('does not mark shallow warmed context as fully loaded', fakeAsync(() => {
+      gateway.loadChatMessages.and.returnValues(of([]), of([]));
+
+      service.requestConversationContext(mockContact.jid);
+      tick(151);
+
+      service.selectContact(mockContact.jid);
+      tick();
+
+      expect(gateway.loadChatMessages.calls.allArgs()).toEqual([
+        [mockInstance.name, mockContact.jid, 10, false],
+        [mockInstance.name, mockContact.jid, 180, true]
+      ]);
     }));
   });
 });

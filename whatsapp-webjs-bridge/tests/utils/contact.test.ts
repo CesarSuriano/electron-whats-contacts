@@ -68,6 +68,8 @@ describe('extractLastMessagePreview', () => {
     assert.equal(extractLastMessagePreview({ lastMessage: { type: 'document' } }), 'Documento');
     assert.equal(extractLastMessagePreview({ lastMessage: { type: 'sticker' } }), 'Figurinha');
     assert.equal(extractLastMessagePreview({ lastMessage: { type: 'revoked' } }), 'Mensagem apagada');
+    assert.equal(extractLastMessagePreview({ lastMessage: { type: 'location' } }), 'Localizacao');
+    assert.equal(extractLastMessagePreview({ lastMessage: { type: 'poll_creation' } }), 'Enquete');
   });
 
   it('returns empty for notification-like messages', () => {
@@ -83,5 +85,9 @@ describe('extractLastMessagePreview', () => {
   it('returns empty when there is no lastMessage', () => {
     assert.equal(extractLastMessagePreview({}), '');
     assert.equal(extractLastMessagePreview(null), '');
+  });
+
+  it('uses a generic placeholder for unknown structured messages', () => {
+    assert.equal(extractLastMessagePreview({ lastMessage: { type: 'unknown' } }), 'Mensagem');
   });
 });

@@ -3,13 +3,13 @@
 	<section class="upload-modal" aria-modal="true" role="dialog">
 		<div class="upload-modal-loading" *ngIf="isSavingUpload">
 			<div class="loading-spinner"></div>
-			<p>Atualizando lista de clientes...</p>
+			<p>Importando clientes do XML legado...</p>
 		</div>
 
 		<header class="upload-modal-header">
 			<div>
-				<h2>Enviar arquivo XML</h2>
-				<p>Arraste e solte um XML em qualquer lugar da tela ou selecione um arquivo para atualizar a lista de clientes.</p>
+				<h2>Importar XML legado</h2>
+				<p>Importe o XML da loja para atualizar a base local de clientes exibida no sistema.</p>
 			</div>
 			<button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
 				<span class="material-symbols-outlined">close</span>
@@ -56,9 +56,9 @@
 			<button class="btn btn-outline" type="button" (click)="close.emit()">
 				Cancelar
 			</button>
-			<button class="btn btn-icon" type="button" (click)="save.emit()" [disabled]="!hasPendingFile || isSavingUpload">
+			<button class="btn btn-primary" type="button" (click)="save.emit()" [disabled]="!hasPendingFile || isSavingUpload">
 				<span class="material-symbols-outlined btn-icon-symbol">save</span>
-				<span class="btn-label">{{ isSavingUpload ? 'Salvando...' : 'Salvar XML' }}</span>
+				<span class="btn-label">{{ isSavingUpload ? 'Importando...' : 'Importar XML' }}</span>
 			</button>
 		</footer>
 	</section>

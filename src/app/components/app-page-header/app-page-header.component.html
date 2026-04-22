@@ -5,6 +5,10 @@
   </div>
 
   <div class="app-page-header__actions">
+    <div class="app-page-header__inline-actions">
+      <ng-content select="[header-actions]"></ng-content>
+    </div>
+
     <button
       class="app-page-header__menu-button"
       type="button"

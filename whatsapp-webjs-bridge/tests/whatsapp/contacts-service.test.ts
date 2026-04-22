@@ -103,6 +103,19 @@ describe('ContactsService.fetchProfilePhotoUrl', () => {
     const result = await service.fetchProfilePhotoUrl(linkedJid);
     assert.equal(result, fakeDataUrl);
   });
+
+  it('accepts @g.us JIDs and uses the same fallback path', async () => {
+    const fakeDataUrl = 'data:image/png;base64,ZmFrZQ==';
+    const groupJid = '120363000000000000@g.us';
+    const { service } = createService({
+      getProfilePicUrl: async () => undefined,
+      getContactById: async () => ({}),
+      getContacts: async () => [],
+      pupPage: { evaluate: async () => fakeDataUrl }
+    }, { enableProfilePhotoFetch: true });
+    const result = await service.fetchProfilePhotoUrl(groupJid);
+    assert.equal(result, fakeDataUrl);
+  });
 });
 
 describe('ContactsService.refreshContactsFromChats', () => {

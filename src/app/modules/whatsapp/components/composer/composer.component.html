@@ -17,6 +17,36 @@
 
   <p class="composer__attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>
 
+  <div class="composer__suggestion flex items-start justify-between gap-3 rounded-2xl border border-border bg-surface px-3 py-2.5" *ngIf="aiEnabled && (aiSuggestion || aiStatusMessage || isAiThinking)">
+    <div class="composer__suggestion-main flex min-w-0 flex-1 flex-col gap-1">
+      <button
+        #suggestionAcceptButton
+        *ngIf="canAcceptAiSuggestion"
+        type="button"
+        class="composer__suggestion-accept inline-flex w-fit items-center gap-1 rounded-full border border-border bg-wa-surface-alt px-2.5 py-1 text-[0.78rem] font-medium text-accent"
+        (click)="applyAiSuggestion()"
+      >
+        <span class="material-symbols-outlined composer__suggestion-accept-icon text-[1rem]">keyboard_tab</span>
+        Usar sugestão
+      </button>
+
+      <p class="composer__suggestion-text m-0 whitespace-pre-wrap text-[0.9rem] text-txt-strong" *ngIf="aiSuggestion">{{ aiSuggestion }}</p>
+      <p class="composer__suggestion-status m-0 text-[0.78rem] text-txt-muted" *ngIf="!aiSuggestion && (aiStatusMessage || isAiThinking)">
+        {{ isAiThinking ? (assistantLabel + ' está pensando...') : aiStatusMessage }}
+      </p>
+      <p class="composer__suggestion-status m-0 text-[0.78rem] text-txt-muted" *ngIf="aiSuggestion && aiStatusMessage">{{ aiStatusMessage }}</p>
+    </div>
+
+    <div class="composer__suggestion-actions flex items-center gap-1" *ngIf="aiSuggestion">
+      <button type="button" class="composer__feedback-button inline-flex h-9 w-9 items-center justify-center rounded-full text-txt-muted transition disabled:opacity-40" [class.bg-accent-soft]="suggestionFeedback === 'up'" [class.text-accent]="suggestionFeedback === 'up'" (click)="submitAiFeedback('up')" [disabled]="!canRateAiSuggestion">
+        <span class="material-symbols-outlined">thumb_up</span>
+      </button>
+      <button type="button" class="composer__feedback-button inline-flex h-9 w-9 items-center justify-center rounded-full text-txt-muted transition disabled:opacity-40" [class.bg-accent-soft]="suggestionFeedback === 'down'" [class.text-accent]="suggestionFeedback === 'down'" (click)="submitAiFeedback('down')" [disabled]="!canRateAiSuggestion">
+        <span class="material-symbols-outlined">thumb_down</span>
+      </button>
+    </div>
+  </div>
+
   <div class="composer__emoji-panel" *ngIf="isEmojiPickerOpen">
     <div class="composer__emoji-grid">
       <button
@@ -45,6 +75,28 @@
       <button
         type="button"
         class="composer__icon-button composer__icon-button--plain"
+        (click)="toggleQuickReplyMenu()"
+        [disabled]="disabled || isSending"
+        aria-label="Mensagens rápidas"
+        data-quick-reply-anchor
+      >
+        <span class="material-symbols-outlined composer__icon-button-symbol">bolt</span>
+      </button>
+
+      <app-quick-reply-menu
+        [isOpen]="isQuickReplyMenuOpen"
+        [query]="quickReplyQuery"
+        [contactName]="contactName"
+        (select)="onQuickReplySelected($event)"
+        (close)="closeQuickReplyMenu()"
+        (manage)="onQuickReplyManageRequested()"
+      ></app-quick-reply-menu>
+    </div>
+
+    <div class="composer__control-group">
+      <button
+        type="button"
+        class="composer__icon-button composer__icon-button--plain"
         (click)="toggleAttachMenu()"
         [disabled]="disabled || isSending"
         aria-label="Anexar arquivo"
@@ -66,17 +118,44 @@
       <input #fileInput type="file" hidden (change)="onFileSelected($event)" />
     </div>
 
-    <textarea
-      #textarea
-      [ngModel]="draftText"
-      (ngModelChange)="onTextChange($event)"
-      (keydown)="onTextareaKeydown($event)"
-      (paste)="onPaste($event)"
-      [placeholder]="selectedFile ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem'"
-      [disabled]="disabled"
-      rows="1"
-      class="composer__textarea"
-    ></textarea>
+    <div class="composer__input-shell flex-1">
+      <textarea
+        #textarea
+        [ngModel]="draftText"
+        (ngModelChange)="onTextChange($event)"
+        (keydown)="onTextareaKeydown($event)"
+        (paste)="onPaste($event)"
+        [placeholder]="textareaPlaceholder"
+        [disabled]="disabled"
+        rows="1"
+        class="composer__textarea"
+      ></textarea>
+    </div>
+
+    <div class="composer__control-group" *ngIf="aiEnabled">
+      <button
+        #aiButton
+        type="button"
+        class="composer__icon-button composer__icon-button--plain"
+        (click)="onAiButtonClick()"
+        [disabled]="disabled || isSending"
+        [attr.aria-label]="assistantLabel"
+      >
+        <span class="material-symbols-outlined composer__icon-button-symbol">{{ assistantIcon }}</span>
+      </button>
+    </div>
+
+    <div class="composer__control-group" *ngIf="aiEnabled">
+      <button
+        type="button"
+        class="composer__icon-button composer__icon-button--plain"
+        (click)="toggleGuidedAi()"
+        [disabled]="disabled || isSending"
+        aria-label="Orientar agente"
+      >
+        <span class="material-symbols-outlined composer__icon-button-symbol">tune</span>
+      </button>
+    </div>
 
     <button
       type="button"
@@ -87,5 +166,21 @@
     >
       <span class="material-symbols-outlined composer__icon-button-symbol">send</span>
     </button>
+  </div>
+
+  <div class="composer__guide-panel flex flex-col gap-2 rounded-2xl border border-border bg-surface p-3" *ngIf="isGuidedAiOpen">
+    <textarea
+      #guidedAiTextarea
+      [ngModel]="guidedAiInstruction"
+      (ngModelChange)="guidedAiInstruction = $event"
+      (keydown)="onGuidedAiKeydown($event)"
+      rows="3"
+      class="composer__guide-textarea min-h-[84px] w-full resize-y rounded-2xl border border-border bg-wa-surface-alt px-3 py-2.5 text-[0.9rem] text-txt outline-none"
+      placeholder="Ex.: responda curto e direto"
+    ></textarea>
+    <div class="composer__guide-actions flex justify-end gap-2">
+      <button type="button" class="composer__guide-button composer__guide-button--secondary inline-flex items-center rounded-full border border-border bg-transparent px-3 py-2 text-[0.82rem] font-medium text-txt-muted transition" (click)="closeGuidedAi()">Cancelar · Esc</button>
+      <button type="button" class="composer__guide-button composer__guide-button--primary inline-flex items-center rounded-full bg-accent px-3 py-2 text-[0.82rem] font-medium text-white transition" (click)="submitGuidedAi()">Gerar · Ctrl+Enter</button>
+    </div>
   </div>
 </div>

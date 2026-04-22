@@ -1,7 +1,6 @@
 export const APP_VERSION = '2.0';
 
 export const APP_WHATS_NEW = [
-  'Upload de XML com salvamento local e atualização da lista de clientes.',
   'Mensagens de parabéns e avaliação configuráveis pelo header.',
   'Editor com negrito, itálico, nome do cliente, quebra de linha, preview e histórico.',
   'Emojis rápidos com priorização automática dos mais usados.'

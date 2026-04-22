@@ -66,12 +66,12 @@ export class MessageListComponent implements AfterViewChecked {
 
   messageText(message: WhatsappMessage): string {
     if (typeof message.text !== 'string') {
-      return '';
+      return this.nonTextLabel(message);
     }
 
     const trimmed = message.text.trim();
     if (!trimmed) {
-      return '';
+      return this.nonTextLabel(message);
     }
 
     if (/^data:[^,]+,/i.test(trimmed) || this.looksLikeRawImageBase64(trimmed)) {
@@ -133,6 +133,39 @@ export class MessageListComponent implements AfterViewChecked {
     }
 
     return { kind, filename, previewUrl };
+  }
+
+  private nonTextLabel(message: WhatsappMessage): string {
+    if (this.isMediaMessage(message)) {
+      return '';
+    }
+
+    const type = typeof message.payload?.['type'] === 'string'
+      ? String(message.payload?.['type']).trim().toLowerCase()
+      : '';
+
+    switch (type) {
+      case 'revoked':
+        return 'Mensagem apagada';
+      case 'location':
+        return 'Localizacao';
+      case 'vcard':
+      case 'multi_vcard':
+      case 'contact_card':
+        return 'Contato';
+      case 'reaction':
+        return 'Reacao';
+      case 'poll_creation':
+        return 'Enquete';
+      case 'event_creation':
+        return 'Evento';
+      case 'order':
+        return 'Pedido';
+      case 'payment':
+        return 'Pagamento';
+      default:
+        return type ? 'Mensagem' : '';
+    }
   }
 
   private scrollToBottom(): void {

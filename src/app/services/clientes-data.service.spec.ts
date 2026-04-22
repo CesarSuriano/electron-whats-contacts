@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 
 import { ClientesDataService } from './clientes-data.service';
 
@@ -15,63 +14,50 @@ const MINIMAL_XML = `<?xml version="1.0" encoding="UTF-8"?>
 
 describe('ClientesDataService', () => {
   let service: ClientesDataService;
-  let httpMock: HttpTestingController;
 
   beforeEach(() => {
     localStorage.clear();
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
       providers: [ClientesDataService]
     });
     service = TestBed.inject(ClientesDataService);
-    httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
-    httpMock.verify();
     localStorage.clear();
   });
 
   describe('loadClientes', () => {
-    it('fetches XML from assets when localStorage is empty', () => {
+    it('returns an empty result when no imported clients exist yet', () => {
       let result: any;
       service.loadClientes().subscribe(r => (result = r));
 
-      const req = httpMock.expectOne(r => r.url.includes('assets/clientes.xml'));
-      req.flush(MINIMAL_XML);
-
-      expect(result.clientes.length).toBe(1);
-      expect(result.clientes[0].nome).toBe('Teste');
-      expect(result.fileName).toBe('clientes.xml (padrão)');
+      expect(result.clientes).toEqual([]);
+      expect(result.fileName).toBeNull();
     });
 
-    it('returns cached result from localStorage when present', () => {
+    it('returns cached XML result from localStorage when present', () => {
       localStorage.setItem('clientesXmlContent', MINIMAL_XML);
-      localStorage.setItem('clientesXmlFileName', 'meu-arquivo.xml');
+      localStorage.setItem('clientesXmlFileName', 'clientes-importados.xml');
       localStorage.setItem('clientesXmlUpdatedAt', new Date().toISOString());
 
       let result: any;
       service.loadClientes().subscribe(r => (result = r));
 
-      httpMock.expectNone(r => r.url.includes('assets/clientes.xml'));
       expect(result.clientes.length).toBe(1);
-      expect(result.fileName).toBe('meu-arquivo.xml');
+      expect(result.fileName).toBe('clientes-importados.xml');
+      expect(result.clientes[0].nome).toBe('Teste');
     });
 
-    it('falls back to asset fetch when localStorage XML is corrupt', () => {
-      const consoleErrorSpy = spyOn(console, 'error');
-
+    it('clears invalid XML data from localStorage', () => {
       localStorage.setItem('clientesXmlContent', 'INVALID <<< XML');
       localStorage.setItem('clientesXmlFileName', 'bad.xml');
 
       let result: any;
       service.loadClientes().subscribe(r => (result = r));
 
-      const req = httpMock.expectOne(r => r.url.includes('assets/clientes.xml'));
-      req.flush(MINIMAL_XML);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(result.clientes.length).toBe(1);
+      expect(result.clientes).toEqual([]);
+      expect(localStorage.getItem('clientesXmlContent')).toBeNull();
     });
   });
 
@@ -91,7 +77,7 @@ describe('ClientesDataService', () => {
   });
 
   describe('clearStoredXml', () => {
-    it('removes all three localStorage keys', () => {
+    it('removes legacy XML localStorage keys', () => {
       localStorage.setItem('clientesXmlContent', MINIMAL_XML);
       localStorage.setItem('clientesXmlFileName', 'test.xml');
       localStorage.setItem('clientesXmlUpdatedAt', new Date().toISOString());

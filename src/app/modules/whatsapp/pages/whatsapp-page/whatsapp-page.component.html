@@ -7,6 +7,18 @@
 
   <div class="whatsapp-page__content">
     <app-page-header class="whatsapp-page__header" title="WhatsApp" subtitle="Conversas e mensagens">
+      <button header-actions class="btn btn-outline btn-sm" type="button" (click)="toggleAgent()">
+        <span class="material-symbols-outlined config-menu-icon">smart_toy</span>
+        {{ agentToggleLabel }}
+      </button>
+      <button class="config-menu-item" type="button" (click)="openQuickReplyManager()">
+        <span class="material-symbols-outlined config-menu-icon">bolt</span>
+        Mensagens rápidas
+      </button>
+      <button class="config-menu-item" type="button" (click)="openLabelManager()">
+        <span class="material-symbols-outlined config-menu-icon">sell</span>
+        Etiquetas
+      </button>
       <button class="config-menu-item" type="button" (click)="openScheduleList()">
         <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
         Agendamentos de mensagens
@@ -83,5 +95,15 @@
       </button>
     </footer>
   </section>
+
+  <app-quick-reply-manager-modal
+    [isOpen]="isQuickReplyManagerOpen"
+    (close)="closeQuickReplyManager()"
+  ></app-quick-reply-manager-modal>
+
+  <app-label-manager-modal
+    [isOpen]="isLabelManagerOpen"
+    (close)="closeLabelManager()"
+  ></app-label-manager-modal>
 
 </div>

@@ -16,4 +16,5 @@ export class BulkActionBarComponent {
   @Output() exitMode = new EventEmitter<void>();
   @Output() openBulkSend = new EventEmitter<void>();
   @Output() openSchedule = new EventEmitter<void>();
+  @Output() openLabels = new EventEmitter<void>();
 }

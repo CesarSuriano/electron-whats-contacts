@@ -6,6 +6,8 @@ import * as QRCode from 'qrcode';
 
 import { AppShellSection } from '../../../../components/app-shell-sidebar/app-shell-sidebar.component';
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
+import { AgentService } from '../../../../services/agent.service';
+import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
@@ -24,11 +26,15 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   isSessionReady = false;
   isAboutModalOpen = false;
   isDisconnectModalOpen = false;
+  isQuickReplyManagerOpen = false;
+  isLabelManagerOpen = false;
   isSessionActionLoading = false;
   currentSessionStatus = 'initializing';
   sessionStatusText = 'Verificando sessão do WhatsApp...';
   qrCodeDataUrl = '';
   sessionErrorMessage = '';
+  isAgentEnabled = false;
+  hasAgentConfiguration = false;
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
@@ -39,9 +45,11 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
+    private agentService: AgentService,
     private whatsappGatewayService: WhatsappWebjsGatewayService,
     private ws: WhatsappWsService,
-    private scheduleListLauncher: ScheduleListLauncherService
+    private scheduleListLauncher: ScheduleListLauncherService,
+    private managerLaunch: ManagerLaunchService
   ) {}
 
   ngOnInit(): void {
@@ -57,6 +65,19 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
         this.updateSessionState(status);
       }
     });
+
+    this.agentService.settings$.pipe(takeUntil(this.destroy$)).subscribe(settings => {
+      this.isAgentEnabled = settings.enabled;
+      this.hasAgentConfiguration = settings.gemUrl.trim().length > 0;
+    });
+
+    this.managerLaunch.openQuickReplyManager$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => (this.isQuickReplyManagerOpen = true));
+
+    this.managerLaunch.openLabelManager$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => (this.isLabelManagerOpen = true));
   }
 
   ngOnDestroy(): void {
@@ -75,9 +96,44 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (section === 'agent') {
+      void this.router.navigate(['/agente']);
+      return;
+    }
+
     void this.router.navigate(['/'], {
       queryParams: { view: section }
     });
+  }
+
+  goToAgent(): void {
+    void this.router.navigate(['/agente']);
+  }
+
+  toggleAgent(): void {
+    if (!this.hasAgentConfiguration) {
+      this.goToAgent();
+      return;
+    }
+
+    const nextEnabled = !this.isAgentEnabled;
+    this.agentService.toggleEnabled(nextEnabled);
+  }
+
+  get agentToggleLabel(): string {
+    if (this.isAgentEnabled) {
+      return 'Desativar agente';
+    }
+
+    return this.hasAgentConfiguration ? 'Ativar agente' : 'Configurar agente';
+  }
+
+  get agentToggleStateLabel(): string {
+    if (this.isAgentEnabled) {
+      return 'Ligado';
+    }
+
+    return this.hasAgentConfiguration ? 'Desligado' : 'Configurar';
   }
 
   openAboutModal(): void {
@@ -90,6 +146,22 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
 
   closeAboutModal(): void {
     this.isAboutModalOpen = false;
+  }
+
+  openQuickReplyManager(): void {
+    this.isQuickReplyManagerOpen = true;
+  }
+
+  closeQuickReplyManager(): void {
+    this.isQuickReplyManagerOpen = false;
+  }
+
+  openLabelManager(): void {
+    this.isLabelManagerOpen = true;
+  }
+
+  closeLabelManager(): void {
+    this.isLabelManagerOpen = false;
   }
 
   get connectActionLabel(): string {
