@@ -1,4 +1,4 @@
-export const APP_VERSION = '2.0';
+export const APP_VERSION = '2.0.0';
 
 export const APP_WHATS_NEW = [
   'Mensagens de parabéns e avaliação configuráveis pelo header.',

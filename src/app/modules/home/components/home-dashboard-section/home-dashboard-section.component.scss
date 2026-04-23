@@ -29,7 +29,7 @@
 
 .home-metrics {
   @apply grid gap-4;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .home-metric-card {
@@ -213,6 +213,7 @@
 
 .home-quick-action__icon {
   @apply inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-[1.5rem] text-accent;
+  --whatsapp-icon-size: 1.5rem;
 }
 
 .home-quick-action__title {

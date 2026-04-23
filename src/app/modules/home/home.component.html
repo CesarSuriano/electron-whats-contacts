@@ -15,11 +15,11 @@
       </button>
       <button class="config-menu-item" type="button" (click)="openTemplateEditor('birthday')">
         <span class="material-symbols-outlined config-menu-icon">edit</span>
-        Editar mensagem de parabens
+        Editar mensagem de parabéns
       </button>
       <button class="config-menu-item" type="button" (click)="openTemplateEditor('review')">
         <span class="material-symbols-outlined config-menu-icon">chat</span>
-        Editar mensagem de avaliacao
+        Editar mensagem de avaliação
       </button>
       <button class="config-menu-item" type="button" (click)="openScheduleList()">
         <span class="material-symbols-outlined config-menu-icon">schedule_send</span>
@@ -27,7 +27,7 @@
       </button>
       <button class="config-menu-item" type="button" (click)="openAboutModal()">
         <span class="material-symbols-outlined config-menu-icon">info</span>
-        Ver versao do app
+        Ver versão do app
       </button>
     </app-page-header>
 
@@ -39,7 +39,6 @@
           [greetingDateLabel]="greetingDateLabel"
           [birthdaysToday]="birthdaysToday"
           [pendingSchedules]="pendingSchedules"
-          [unreadConversations]="unreadConversations"
           [clientesCount]="clientes.length"
           [clientesAddedThisWeek]="clientesAddedThisWeek"
           (openClients)="onShellSectionSelect('clients')"
@@ -66,7 +65,7 @@
               <div class="home-filter-group">
                 <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'all'" (click)="setClientFilter('all')">Todos</button>
                 <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'today'" (click)="setClientFilter('today')">Aniversariantes hoje</button>
-                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'upcoming'" (click)="setClientFilter('upcoming')">Proximos 7 dias</button>
+                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'upcoming'" (click)="setClientFilter('upcoming')">Próximos 7 dias</button>
               </div>
             </div>
 
@@ -90,7 +89,7 @@
               </div>
 
               <div class="home-clients-toolbar__actions">
-                <span class="home-status-pill" *ngIf="lastUpdated">Ultima sincronizacao: {{ lastUpdated }}</span>
+                <span class="home-status-pill" *ngIf="lastUpdated">Última sincronização: {{ lastUpdated }}</span>
                 <button class="btn btn-outline home-toolbar-button" type="button" (click)="openBirthdayTemplateQuickAction()">
                   <span class="material-symbols-outlined btn-icon-symbol">edit</span>
                   Editar mensagens
@@ -104,16 +103,14 @@
           </section>
 
           <div class="home-bulk-bar" *ngIf="useInternalWhatsapp">
-            <span class="home-bulk-bar__count">
-              {{ selectionCount > 0 ? (selectionCount + ' cliente' + (selectionCount === 1 ? '' : 's') + ' selecionado' + (selectionCount === 1 ? '' : 's')) : 'Nenhum cliente selecionado' }}
-            </span>
+            <span class="home-bulk-bar__count">{{ selectionSummaryLabel }}</span>
             <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
-              <span class="home-bulk-bar__emoji">🎉</span> Enviar Parabens
+              <span class="home-bulk-bar__emoji">🎉</span> Enviar Parabéns
             </button>
             <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
-              <span class="home-bulk-bar__emoji">⭐</span> Enviar Avaliacao
+              <span class="home-bulk-bar__emoji">⭐</span> Enviar Avaliação
             </button>
-            <button class="home-bulk-bar__cancel" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar selecao</button>
+            <button class="home-bulk-bar__cancel" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar seleção</button>
           </div>
 
           <section class="home-table-shell" *ngIf="filteredClientes.length; else clientsLoadingOrEmpty">
@@ -121,14 +118,12 @@
               [clientes]="filteredClientes"
               [sortedColumn]="sortedColumn"
               [sortDirection]="sortDirection"
-              [isYearEndButtonAvailable]="isYearEndButtonAvailable"
               [selectionMode]="useInternalWhatsapp"
               [selectedClienteIds]="selectedClienteIds"
               [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
               (sortChange)="changeSort($event)"
               (birthdayClick)="openWhatsappBirthday($event)"
               (reviewClick)="openWhatsappReview($event)"
-              (yearEndClick)="openWhatsappYearEnd($event)"
               (selectionToggle)="toggleClienteSelection($event)"
             ></app-clientes-table>
           </section>
@@ -151,10 +146,10 @@
           <article class="home-feature-card">
             <span class="material-symbols-outlined home-feature-card__icon">chat</span>
             <h2 class="home-feature-card__title">Templates de mensagens</h2>
-            <p class="home-feature-card__description">Edite os templates enviados pelos botoes de Parabens e Avaliacao.</p>
+            <p class="home-feature-card__description">Edite os templates enviados pelos botões de Parabéns e Avaliação.</p>
             <div class="home-feature-card__actions">
-              <button class="btn btn-primary home-feature-card__action" type="button" (click)="openBirthdayTemplateQuickAction()">Editar mensagem de parabens</button>
-              <button class="btn btn-outline home-feature-card__action" type="button" (click)="openReviewTemplateQuickAction()">Editar mensagem de avaliacao</button>
+              <button class="btn btn-primary home-feature-card__action" type="button" (click)="openBirthdayTemplateQuickAction()">Editar mensagem de parabéns</button>
+              <button class="btn btn-outline home-feature-card__action" type="button" (click)="openReviewTemplateQuickAction()">Editar mensagem de avaliação</button>
             </div>
           </article>
         </section>
@@ -174,13 +169,13 @@
           <div class="home-settings-grid">
             <article class="home-settings-card">
               <h3 class="home-settings-card__title">Fonte de dados</h3>
-              <p class="home-settings-card__text">Arquivo atual: <strong class="home-settings-card__text-strong">{{ storedFileName || 'clientes.xml (padrao)' }}</strong></p>
-              <small class="home-settings-card__meta" *ngIf="storedSavedAtLabel">Ultima atualizacao: {{ storedSavedAtLabel }}</small>
+              <p class="home-settings-card__text">Arquivo atual: <strong class="home-settings-card__text-strong">{{ storedFileName || 'clientes.xml (padrão)' }}</strong></p>
+              <small class="home-settings-card__meta" *ngIf="storedSavedAtLabel">Última atualização: {{ storedSavedAtLabel }}</small>
               <button class="btn btn-primary home-settings-card__action" type="button" (click)="openUploadModal()">Atualizar arquivo XML</button>
             </article>
 
             <article class="home-settings-card">
-              <h3 class="home-settings-card__title">Mensagens e automacoes</h3>
+              <h3 class="home-settings-card__title">Mensagens e automações</h3>
               <p class="home-settings-card__text">Organize os templates e acompanhe os envios programados da loja.</p>
               <div class="home-settings-card__actions">
                 <button class="btn btn-outline home-settings-card__action" type="button" (click)="onShellSectionSelect('messages')">Abrir mensagens</button>
@@ -190,7 +185,7 @@
 
             <article class="home-settings-card">
               <h3 class="home-settings-card__title">Aplicativo</h3>
-              <p class="home-settings-card__text">Versao atual <strong class="home-settings-card__text-strong home-settings-card__text-strong--accent">{{ appVersion }}</strong></p>
+              <p class="home-settings-card__text">Versão atual <strong class="home-settings-card__text-strong home-settings-card__text-strong--accent">{{ appVersion }}</strong></p>
               <button class="btn btn-outline home-settings-card__action" type="button" (click)="openAboutModal()">Ver novidades</button>
             </article>
           </div>

@@ -12,7 +12,6 @@ export class ClientesTableComponent {
   @Input() clientes: Cliente[] = [];
   @Input() sortedColumn: SortColumn = 'dataNascimento';
   @Input() sortDirection: SortDirection = 'asc';
-  @Input() isYearEndButtonAvailable = false;
   @Input() selectionMode = false;
   @Input() selectedClienteIds = new Set<number>();
   @Input() actionsDisabled = false;
@@ -20,7 +19,6 @@ export class ClientesTableComponent {
   @Output() sortChange = new EventEmitter<SortColumn>();
   @Output() birthdayClick = new EventEmitter<Cliente>();
   @Output() reviewClick = new EventEmitter<Cliente>();
-  @Output() yearEndClick = new EventEmitter<Cliente>();
   @Output() selectionToggle = new EventEmitter<number>();
 
   requestSort(column: SortColumn): void {
@@ -51,11 +49,11 @@ export class ClientesTableComponent {
 
   getBirthdayLabel(cliente: Cliente): string {
     if (cliente.birthdayStatus === 'today') {
-      return 'Aniversario hoje';
+      return 'Aniversário hoje';
     }
 
     if (cliente.birthdayStatus === 'upcoming') {
-      return 'Proximos 7 dias';
+      return 'Próximos 7 dias';
     }
 
     return 'Cadastro ativo';

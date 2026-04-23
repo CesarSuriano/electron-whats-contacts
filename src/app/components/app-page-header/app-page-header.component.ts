@@ -1,5 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
+import { ThemeService } from '../../services/theme.service';
+
 @Component({
   selector: 'app-page-header',
   templateUrl: './app-page-header.component.html',
@@ -14,7 +16,12 @@ export class AppPageHeaderComponent {
   @Output() navClick = new EventEmitter<void>();
 
   isMenuOpen = false;
-  isDarkTheme = document.body.classList.contains('theme-dark');
+
+  get isDarkTheme(): boolean {
+    return this.themeService.isDark;
+  }
+
+  constructor(private readonly themeService: ThemeService) {}
 
   toggleMenu(): void {
     this.isMenuOpen = !this.isMenuOpen;
@@ -25,7 +32,6 @@ export class AppPageHeaderComponent {
   }
 
   toggleTheme(): void {
-    this.isDarkTheme = !this.isDarkTheme;
-    document.body.classList.toggle('theme-dark', this.isDarkTheme);
+    this.themeService.toggle();
   }
 }

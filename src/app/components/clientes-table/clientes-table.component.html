@@ -74,16 +74,7 @@
 						<span class="clientes-table__action-icon">⭐</span>
 						<span>Avaliação</span>
 					</button>
-					<button
-						*ngIf="isYearEndButtonAvailable"
-						class="clientes-table__action clientes-table__action--secondary"
-						type="button"
-						[disabled]="actionsDisabled"
-						(click)="$event.stopPropagation(); yearEndClick.emit(cliente)"
-					>
-						<span class="clientes-table__action-icon">🎄</span>
-						<span>Natal</span>
-					</button>
+	
 				</div>
 			</td>
 		</tr>

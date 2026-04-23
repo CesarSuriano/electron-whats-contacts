@@ -18,12 +18,6 @@
     </article>
 
     <article class="home-metric-card">
-      <span class="home-metric-card__label">Conversas não lidas</span>
-      <strong class="home-metric-card__value">{{ unreadConversations }}</strong>
-      <span class="material-symbols-outlined home-metric-card__icon home-metric-card__icon--green">chat</span>
-    </article>
-
-    <article class="home-metric-card">
       <span class="home-metric-card__label">Clientes cadastrados</span>
       <strong class="home-metric-card__value">{{ clientesCountLabel }}</strong>
       <span class="home-metric-card__trend" *ngIf="clientesAddedThisWeek > 0">
@@ -51,7 +45,7 @@
       </header>
 
       <div class="home-highlight-list" *ngIf="birthdaysToday.length; else dashboardBirthdaysEmpty">
-        <article class="home-highlight-card" *ngFor="let cliente of birthdaysToday | slice:0:4">
+        <article class="home-highlight-card" *ngFor="let cliente of birthdaysToday | slice:0:4; trackBy: trackByClienteId">
           <div class="home-highlight-card__identity">
             <span class="home-highlight-card__initials">{{ getClienteInitials(cliente.nome) }}</span>
             <div class="home-highlight-card__copy">
@@ -89,7 +83,7 @@
       </header>
 
       <div class="home-schedule-list" *ngIf="pendingSchedules.length; else dashboardSchedulesEmpty">
-        <article class="home-schedule-card" *ngFor="let schedule of pendingSchedules | slice:0:3">
+        <article class="home-schedule-card" *ngFor="let schedule of pendingSchedules | slice:0:3; trackBy: trackByScheduleId">
           <span class="material-symbols-outlined home-schedule-card__icon">schedule</span>
           <div class="home-schedule-card__copy">
             <strong class="home-schedule-card__title">{{ formatScheduleTimestamp(schedule.scheduledAt) }}</strong>
@@ -117,7 +111,7 @@
 
     <div class="home-quick-grid">
       <button type="button" class="home-quick-action" (click)="emitGoToWhatsapp()">
-        <span class="material-symbols-outlined home-quick-action__icon">chat</span>
+        <app-whatsapp-icon class="home-quick-action__icon"></app-whatsapp-icon>
         <strong class="home-quick-action__title">Abrir WhatsApp</strong>
         <small class="home-quick-action__description">Conversas ao vivo</small>
       </button>

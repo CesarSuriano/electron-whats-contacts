@@ -22,6 +22,20 @@ declare global {
         message: string;
         generatedAt: string;
       }>;
+      getVersion?: () => Promise<string>;
+      checkUpdate?: (updateUrl: string) => Promise<{
+        ok: boolean;
+        error?: string;
+        currentVersion?: string;
+        latestVersion?: string;
+        isNewer?: boolean;
+        notes?: string;
+        downloadUrl?: string;
+      }>;
+      installUpdate?: (downloadUrl: string) => Promise<{
+        ok: boolean;
+        error?: string;
+      }>;
     };
   }
 }

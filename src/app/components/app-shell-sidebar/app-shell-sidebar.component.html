@@ -21,7 +21,7 @@
     <span class="app-shell-sidebar__section-label">Principal</span>
 
     <button
-      *ngFor="let item of primaryItems"
+      *ngFor="let item of primaryItems; trackBy: trackBySectionId"
       type="button"
       class="app-shell-sidebar__item"
       [class.app-shell-sidebar__item--active]="activeSection === item.id"
@@ -44,7 +44,7 @@
     <span class="app-shell-sidebar__section-label">Ferramentas</span>
 
     <button
-      *ngFor="let item of toolItems"
+      *ngFor="let item of toolItems; trackBy: trackBySectionId"
       type="button"
       class="app-shell-sidebar__item"
       [class.app-shell-sidebar__item--active]="activeSection === item.id"
@@ -60,7 +60,7 @@
     <span class="app-shell-sidebar__section-label">Sistema</span>
 
     <button
-      *ngFor="let item of systemItems"
+      *ngFor="let item of systemItems; trackBy: trackBySectionId"
       type="button"
       class="app-shell-sidebar__item"
       [class.app-shell-sidebar__item--active]="activeSection === item.id"

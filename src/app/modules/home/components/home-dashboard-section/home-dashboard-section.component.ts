@@ -14,7 +14,6 @@ export class HomeDashboardSectionComponent {
   @Input() greetingDateLabel = '';
   @Input() birthdaysToday: Cliente[] = [];
   @Input() pendingSchedules: ScheduledMessage[] = [];
-  @Input() unreadConversations = 0;
   @Input() clientesCount = 0;
   @Input() clientesAddedThisWeek = 0;
 
@@ -77,5 +76,13 @@ export class HomeDashboardSectionComponent {
 
   emitOpenMessages(): void {
     this.openMessages.emit();
+  }
+
+  trackByClienteId(_index: number, cliente: Cliente): number {
+    return cliente.id;
+  }
+
+  trackByScheduleId(_index: number, schedule: ScheduledMessage): string {
+    return schedule.id;
   }
 }

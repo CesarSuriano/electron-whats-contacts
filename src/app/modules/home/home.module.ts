@@ -1,5 +1,4 @@
 import { CommonModule } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -17,6 +16,6 @@ import { HomeRoutingModule } from './home-routing.module';
     ClientesTableComponent,
     UploadXmlModalComponent
   ],
-  imports: [CommonModule, FormsModule, HttpClientModule, HomeRoutingModule, SharedModule]
+  imports: [CommonModule, FormsModule, HomeRoutingModule, SharedModule]
 })
 export class HomeModule {}

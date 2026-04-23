@@ -32,7 +32,7 @@
 }
 
 .whatsapp-page__auth-icon-symbol {
-  @apply text-[1.45rem];
+  --whatsapp-icon-size: 1.45rem;
 }
 
 .whatsapp-page__auth-copy {

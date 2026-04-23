@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import * as QRCode from 'qrcode';
 
-import { AppShellSection } from '../../../../components/app-shell-sidebar/app-shell-sidebar.component';
+import { AppShellSection } from '../../../../models/shell.model';
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
 import { AgentService } from '../../../../services/agent.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
@@ -359,6 +359,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
 
     this.sessionStatusText = 'Inicializando sessão do WhatsApp...';
     this.qrCodeDataUrl = '';
+    this.scheduleSessionStatusRetry();
   }
 
   private async updateQrCode(qrText: string): Promise<void> {

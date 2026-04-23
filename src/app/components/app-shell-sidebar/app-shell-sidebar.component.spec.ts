@@ -24,15 +24,15 @@ describe('AppShellSidebarComponent', () => {
     const sidebarText = fixture.nativeElement.textContent as string;
 
     expect(sidebarText).toContain('Agente');
-    expect(sidebarText).toContain('Configuracoes');
+    expect(sidebarText).toContain('Configurações');
   });
 
-  it('emits the selected section when Configuracoes is clicked', () => {
+  it('emits the selected section when Configurações is clicked', () => {
     const emittedSections: string[] = [];
     component.sectionSelect.subscribe(section => emittedSections.push(section));
 
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('.app-shell-sidebar__item')) as HTMLButtonElement[];
-    const settingsButton = buttons.find(button => button.textContent?.includes('Configuracoes'));
+    const settingsButton = buttons.find(button => button.textContent?.includes('Configurações'));
 
     settingsButton?.click();
 

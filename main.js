@@ -1,8 +1,14 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
+
+// Em desenvolvimento, usa pasta userData separada para não vazar dados com o release
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'uniq-system-dev'));
+}
 
 let bridgeProcess = null;
 let agentWindow = null;
@@ -132,7 +138,14 @@ function startWhatsappBridge() {
     return;
   }
 
-  const bridgeDir = path.join(__dirname, 'whatsapp-webjs-bridge');
+  // Em produção, a bridge fica em app.asar.unpacked para ter acesso completo ao
+  // sistema de arquivos (necessário para o Puppeteer/whatsapp-web.js gravar
+  // perfil do Chrome, sockets, etc.). Em desenvolvimento usa __dirname direto.
+  const bridgeBase = app.isPackaged
+    ? __dirname.replace('app.asar', 'app.asar.unpacked')
+    : __dirname;
+
+  const bridgeDir = path.join(bridgeBase, 'whatsapp-webjs-bridge');
   const bridgeEntry = path.join(bridgeDir, 'dist', 'server.js');
 
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
@@ -582,6 +595,51 @@ function resolveRendererIndexPath() {
   return candidates.find(candidate => fs.existsSync(candidate)) || null;
 }
 
+// ─── Auto-update helpers ────────────────────────────────────────────────────
+
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) { return diff; }
+  }
+  return 0;
+}
+
+function fetchJson(url) {
+  return net.fetch(url).then(response => {
+    if (!response.ok) {
+      throw new Error(`Erro HTTP ${response.status} ao buscar versão`);
+    }
+    return response.json();
+  });
+}
+
+function downloadWithNet(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+    const cleanup = () => { try { fs.unlinkSync(destPath); } catch {} };
+    const request = net.request({ url, redirect: 'follow' });
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        file.close();
+        cleanup();
+        reject(new Error(`Download falhou: status ${response.statusCode}`));
+        return;
+      }
+      response.on('data', (chunk) => file.write(chunk));
+      response.on('end', () => file.close(resolve));
+      response.on('error', (err) => { file.close(); cleanup(); reject(err); });
+    });
+    request.on('error', (err) => { file.close(); cleanup(); reject(err); });
+    request.end();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Handler para carregar o XML a partir da pasta do executável (produção)
 // ou da pasta atual (desenvolvimento). O arquivo pode ter qualquer nome,
 // desde que tenha extensão .xml.
@@ -650,6 +708,48 @@ ipcMain.handle('agent:generate-suggestion', async (_event, payload) => {
       message: error instanceof Error ? error.message : 'Falha ao gerar a sugestão pelo agente.',
       generatedAt
     };
+  }
+});
+
+ipcMain.handle('app:get-version', () => app.getVersion());
+
+ipcMain.handle('app:check-update', async (_event, updateUrl) => {
+  if (!updateUrl || typeof updateUrl !== 'string') {
+    return { ok: false, error: 'URL de atualização não configurada.' };
+  }
+  try {
+    const data = await fetchJson(updateUrl);
+    const currentVersion = app.getVersion();
+    const latestVersion = String(data.version || '');
+    const isNewer = compareVersions(latestVersion, currentVersion) > 0;
+    const downloadUrl = String(data.url || '');
+    return {
+      ok: true,
+      currentVersion,
+      latestVersion,
+      isNewer: isNewer && downloadUrl.length > 0,
+      notes: String(data.notes || ''),
+      downloadUrl
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Erro ao verificar atualização.' };
+  }
+});
+
+ipcMain.handle('app:install-update', async (_event, downloadUrl) => {
+  if (!downloadUrl || typeof downloadUrl !== 'string') {
+    return { ok: false, error: 'URL de download inválida.' };
+  }
+  try {
+    let filename = 'UniqSystem-Setup.exe';
+    try { filename = new URL(downloadUrl).pathname.split('/').filter(Boolean).pop() || filename; } catch {}
+    const destPath = path.join(os.tmpdir(), filename);
+    await downloadWithNet(downloadUrl, destPath);
+    shell.openPath(destPath);
+    setTimeout(() => app.quit(), 1500);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Erro ao baixar atualização.' };
   }
 });
 

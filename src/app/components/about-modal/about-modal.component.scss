@@ -1,2 +1,34 @@
 .about-modal {
 }
+
+.about-update-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.about-update-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.about-update-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-txt-muted);
+
+  &--error {
+    color: var(--color-danger);
+  }
+}
+
+.about-update-status__icon {
+  font-size: 1.1rem;
+
+  &--ok { color: var(--color-success); }
+  &--new { color: var(--color-accent); }
+}

@@ -7,7 +7,7 @@
 
   <div class="whatsapp-page__content">
     <app-page-header class="whatsapp-page__header" title="WhatsApp" subtitle="Conversas e mensagens">
-      <button header-actions class="btn btn-outline btn-sm" type="button" (click)="toggleAgent()">
+      <button *ngIf="false" header-actions class="btn btn-outline btn-sm" type="button" (click)="toggleAgent()">
         <span class="material-symbols-outlined config-menu-icon">smart_toy</span>
         {{ agentToggleLabel }}
       </button>
@@ -33,7 +33,7 @@
       </button>
       <button class="config-menu-item" type="button" (click)="openAboutModal()">
         <span class="material-symbols-outlined config-menu-icon">info</span>
-        Ver versao do app
+        Ver versão do app
       </button>
     </app-page-header>
 
@@ -48,7 +48,7 @@
     <section class="whatsapp-page__session-gate">
       <div class="whatsapp-page__auth-card">
         <div class="whatsapp-page__auth-icon">
-          <span class="material-symbols-outlined whatsapp-page__auth-icon-symbol">chat_bubble</span>
+          <app-whatsapp-icon class="whatsapp-page__auth-icon-symbol"></app-whatsapp-icon>
         </div>
 
         <div class="whatsapp-page__auth-copy">
@@ -62,7 +62,7 @@
 
         <div class="whatsapp-page__qr" *ngIf="!isCheckingSession && qrCodeDataUrl">
           <img class="whatsapp-page__qr-image" [src]="qrCodeDataUrl" alt="QR code para conectar WhatsApp" />
-          <p class="whatsapp-page__qr-text">Abra o WhatsApp no celular e escaneie este codigo para continuar.</p>
+          <p class="whatsapp-page__qr-text">Abra o WhatsApp no celular e escaneie este código para continuar.</p>
         </div>
 
         <p class="whatsapp-page__session-error" *ngIf="sessionErrorMessage">{{ sessionErrorMessage }}</p>

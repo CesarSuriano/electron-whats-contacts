@@ -83,6 +83,27 @@
   @apply text-accent;
 }
 
+.home-settings-update-status {
+  @apply flex items-center gap-1.5;
+}
+
+.home-settings-update-status__icon {
+  @apply text-[1.1rem] text-txt-muted;
+
+  &--ok  { @apply text-green-500; }
+  &--new { @apply text-accent; }
+}
+
+.home-settings-update-status--error {
+  @apply text-red-500;
+
+  .home-settings-update-status__icon { @apply text-red-500; }
+}
+
+.loading-spinner--sm {
+  @apply h-4 w-4 border-2;
+}
+
 @media (max-width: 1279px) {
   .home-settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

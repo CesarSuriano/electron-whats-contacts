@@ -54,7 +54,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   contextMenuContact: WhatsappContact | null = null;
   private appLabelsById = new Map<string, AppLabel>();
 
-  private destroy$ = new Subject<void>();
+  private readonly destroy$ = new Subject<void>();
   private prevOrderMap = new Map<string, number>();
   private scrollContainer?: ElementRef<HTMLDivElement>;
   private visiblePhotoTimer: number | null = null;

@@ -3,10 +3,9 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
-import { AppShellSection } from '../../components/app-shell-sidebar/app-shell-sidebar.component';
+import { AppShellSection } from '../../models/shell.model';
 import { ClientesDataService } from '../../services/clientes-data.service';
 import { compareClientes } from '../../helpers/cliente-date.helper';
-import { buildYearEndMessage } from '../../helpers/cliente-message.helper';
 import { MESSAGE_TEMPLATE_EDITOR_CONFIG } from '../../helpers/message-template.helper';
 import { APP_VERSION, APP_WHATS_NEW } from '../../helpers/app-info.helper';
 import { formatTimestamp } from '../../helpers/timestamp.helper';
@@ -68,7 +67,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
-  private readonly yearEndButtonDeadline = new Date(2025, 11, 26, 23, 59, 59, 999);
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -92,6 +90,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.scheduledMessageService.upcoming$.pipe(takeUntil(this.destroy$)).subscribe(u => (this.upcomingSchedule = u));
     this.scheduledMessageService.schedules$.pipe(takeUntil(this.destroy$)).subscribe(list => {
       this.scheduledMessages = list;
+      this.updateDerivedState();
     });
   }
 
@@ -138,11 +137,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  get isYearEndButtonAvailable(): boolean {
-    const today = new Date();
-    return today <= this.yearEndButtonDeadline;
-  }
-
   get pageTitle(): string {
     switch (this.activeSection) {
       case 'clients':
@@ -152,7 +146,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       case 'schedules':
         return 'Agendamentos';
       case 'settings':
-        return 'Configuracoes';
+        return 'Configurações';
       default:
         return 'Inicio';
     }
@@ -196,49 +190,10 @@ export class HomeComponent implements OnInit, OnDestroy {
     return formatted;
   }
 
-  get sortedClientes(): Cliente[] {
-    const clientesCopy = [...this.clientes];
-    clientesCopy.sort((a, b) => this.compareClientes(a, b));
-    return clientesCopy;
-  }
-
-  get filteredClientes(): Cliente[] {
-    const normalizedTerm = this.clienteSearchTerm.trim().toLocaleLowerCase('pt-BR');
-
-    return this.sortedClientes.filter(cliente => {
-      if (this.activeClientFilter !== 'all' && cliente.birthdayStatus !== this.activeClientFilter) {
-        return false;
-      }
-
-      if (!normalizedTerm) {
-        return true;
-      }
-
-      const haystack = [cliente.nome, cliente.cpf, cliente.telefone]
-        .join(' ')
-        .toLocaleLowerCase('pt-BR');
-
-      return haystack.includes(normalizedTerm);
-    });
-  }
-
-  get birthdaysToday(): Cliente[] {
-    return this.sortedClientes.filter(cliente => cliente.birthdayStatus === 'today');
-  }
-
-  get birthdaysUpcoming(): Cliente[] {
-    return this.sortedClientes.filter(cliente => cliente.birthdayStatus === 'upcoming');
-  }
-
-  get pendingSchedules(): ScheduledMessage[] {
-    return [...this.scheduledMessages]
-      .filter(schedule => schedule.status === 'pending' || schedule.status === 'notified')
-      .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime());
-  }
-
-  get nextSchedule(): ScheduledMessage | null {
-    return this.pendingSchedules[0] ?? null;
-  }
+  sortedClientes: Cliente[] = [];
+  filteredClientes: Cliente[] = [];
+  birthdaysToday: Cliente[] = [];
+  pendingSchedules: ScheduledMessage[] = [];
 
   changeSort(column: SortColumn): void {
     if (this.sortedColumn === column) {
@@ -247,54 +202,19 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.sortedColumn = column;
       this.sortDirection = 'asc';
     }
+    this.updateDerivedState();
   }
 
   get selectionCount(): number {
     return this.selectedClienteIds.size;
   }
 
-  get reviewTemplatePreview(): string {
-    return this.messageTemplates.review;
-  }
-
-  get primaryClientesActionLabel(): string {
-    return 'Importar XML';
-  }
-
-  get primaryClientesActionIcon(): string {
-    return 'upload_file';
-  }
-
-  get isPrimaryClientesActionDisabled(): boolean {
-    return false;
-  }
-
-  get clientesSourceLabel(): string {
-    return this.storedFileName ? `Fonte ativa: ${this.storedFileName}` : 'Fonte ativa: XML legado';
-  }
-
-  get clientesSourceDescription(): string {
-    if (this.storedSavedAtLabel) {
-      return `Base local carregada. Ultima atualizacao: ${this.storedSavedAtLabel}.`;
+  get selectionSummaryLabel(): string {
+    if (this.selectionCount === 0) {
+      return 'Nenhum cliente selecionado';
     }
-
-    return 'Importe um XML para carregar e atualizar a base de clientes exibida nesta tela.';
-  }
-
-  get emptyClientesMessage(): string {
-    if (this.isLoading) {
-      return 'Carregando clientes...';
-    }
-
-    if (this.hasError) {
-      return 'Nao foi possivel carregar os clientes agora.';
-    }
-
-    if (this.clientes.length > 0) {
-      return 'Nenhum cliente encontrado com os filtros atuais.';
-    }
-
-    return 'Nenhum cliente importado ainda. Envie um XML para carregar a base.';
+    const suffix = this.selectionCount === 1 ? '' : 's';
+    return `${this.selectionCount} cliente${suffix} selecionado${suffix}`;
   }
 
   onShellSectionSelect(section: AppShellSection): void {
@@ -315,10 +235,12 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   onClienteSearchChange(term: string): void {
     this.clienteSearchTerm = term;
+    this.updateDerivedState();
   }
 
   setClientFilter(filter: ClientFilter): void {
     this.activeClientFilter = filter;
+    this.updateDerivedState();
   }
 
   toggleWhatsappMode(mode: 'official' | 'internal'): void {
@@ -433,7 +355,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.activeTemplateEditorConfig = null;
   }
 
-  async saveTemplate(result: MessageTemplateSaveResult): Promise<void> {
+  saveTemplate(result: MessageTemplateSaveResult): void {
     if (!this.activeTemplateEditorConfig) {
       return;
     }
@@ -441,11 +363,9 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.isSavingTemplate = true;
 
     try {
-      await this.delay(400);
       const type = this.activeTemplateEditorConfig.type;
       this.messageTemplates = this.messageTemplateService.saveTemplate(type, result.text);
       this.messageTemplateService.saveTemplateImage(type, result.imageDataUrl);
-      this.isSavingTemplate = false;
       this.closeTemplateEditor();
       this.showSuccessToast('Mensagem atualizada com sucesso.');
     } catch (error) {
@@ -459,7 +379,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     void this.readXmlFile(file);
   }
 
-  async saveUploadedFile(): Promise<void> {
+  saveUploadedFile(): void {
     if (!this.pendingXmlContent || !this.selectedFileName) {
       return;
     }
@@ -469,10 +389,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.uploadErrorMessage = null;
 
     try {
-      await this.delay(700);
       const result = this.clientesDataService.saveUploadedXml(this.selectedFileName, this.pendingXmlContent);
       this.applyLoadResult(result);
-      this.isSavingUpload = false;
       this.showSuccessToast('Clientes importados com sucesso.');
       this.closeUploadModal();
     } catch (error) {
@@ -500,14 +418,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
     const message = this.messageTemplateService.renderTemplate('review', cliente);
-    this.openWhatsapp(cliente.telefone, message);
-  }
-
-  openWhatsappYearEnd(cliente: Cliente): void {
-    if (!this.isYearEndButtonAvailable) {
-      return;
-    }
-    const message = this.buildYearEndMessage(cliente);
     this.openWhatsapp(cliente.telefone, message);
   }
 
@@ -578,9 +488,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private initializeClientes(): void {
     this.isLoading = true;
     this.clientes = [];
-    setTimeout(() => {
-      this.loadClientes();
-    }, 1000);
+    this.loadClientes();
   }
 
   private loadClientes(): void {
@@ -615,10 +523,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     window.open(url, '_blank');
   }
 
-  private buildYearEndMessage(cliente: Cliente): string {
-    return buildYearEndMessage(cliente);
-  }
-
   private async readXmlFile(file: File): Promise<void> {
     this.uploadErrorMessage = null;
 
@@ -649,6 +553,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.clientesRefreshErrorMessage = null;
     this.hasError = false;
     this.lastUpdated = formatTimestamp(result.loadedAt);
+    this.updateDerivedState();
   }
 
   private showSuccessToast(message: string): void {
@@ -660,10 +565,27 @@ export class HomeComponent implements OnInit, OnDestroy {
     }, 3000);
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => {
-      window.setTimeout(resolve, ms);
+  private updateDerivedState(): void {
+    const sorted = [...this.clientes].sort((a, b) => this.compareClientes(a, b));
+    this.sortedClientes = sorted;
+
+    const normalizedTerm = this.clienteSearchTerm.trim().toLocaleLowerCase('pt-BR');
+    this.filteredClientes = sorted.filter(cliente => {
+      if (this.activeClientFilter !== 'all' && cliente.birthdayStatus !== this.activeClientFilter) {
+        return false;
+      }
+      if (!normalizedTerm) {
+        return true;
+      }
+      const haystack = [cliente.nome, cliente.cpf, cliente.telefone].join(' ').toLocaleLowerCase('pt-BR');
+      return haystack.includes(normalizedTerm);
     });
+
+    this.birthdaysToday = sorted.filter(c => c.birthdayStatus === 'today');
+
+    this.pendingSchedules = [...this.scheduledMessages]
+      .filter(s => s.status === 'pending' || s.status === 'notified')
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   }
 
   private setActiveSection(section: HomeSection): void {

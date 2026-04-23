@@ -1,6 +1,6 @@
 {
   "name": "uniq-system",
-  "version": "0.0.0",
+  "version": "2.1.0",
   "main": "main.js",
   "scripts": {
     "ng": "ng",
@@ -12,15 +12,22 @@
     "watch": "ng build --watch --configuration development",
     "dist": "npm run bridge:build && ng build --configuration production && electron-builder",
     "test": "ng test",
+    "make:installer": "npm run bridge:build && ng build --configuration production && electron-builder",
     "package": "npm run bridge:build && electron-forge package",
     "make": "npm run bridge:build && electron-forge make"
   },
   "build": {
     "appId": "com.uniq.system",
     "productName": "UniqSystem",
+    "asar": true,
+    "asarUnpack": [
+      "whatsapp-webjs-bridge/**/*"
+    ],
     "files": [
       "dist/uniq-system/**/*",
       "whatsapp-webjs-bridge/**/*",
+      "!whatsapp-webjs-bridge/.wwebjs_auth/**",
+      "!whatsapp-webjs-bridge/.wwebjs_cache/**",
       "main.js",
       "preload.js",
       "package.json"
@@ -35,10 +42,15 @@
       "icon": "src/assets/logo-fundo-vermelho.ico"
     },
     "nsis": {
-      "oneClick": true,
-      "perMachine": false,
+      "oneClick": false,
+      "perMachine": true,
       "allowElevation": true,
-      "allowToChangeInstallationDirectory": false
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Uniq System",
+      "installerIcon": "src/assets/logo-fundo-vermelho.ico",
+      "uninstallerIcon": "src/assets/logo-fundo-vermelho.ico"
     }
   },
   "private": true,
@@ -80,6 +92,7 @@
     "@types/qrcode": "^1.5.5",
     "autoprefixer": "^10.5.0",
     "electron": "^30.0.0",
+    "electron-builder": "^26.8.1",
     "jasmine-core": "~4.5.0",
     "karma": "~6.4.0",
     "karma-chrome-launcher": "~3.1.0",

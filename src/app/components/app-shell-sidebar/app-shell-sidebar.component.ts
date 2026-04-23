@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-export type AppShellSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings' | 'whatsapp' | 'agent';
+import { AppShellSection } from '../../models/shell.model';
+import { ThemeService } from '../../services/theme.service';
 
 interface SidebarItem {
   id: AppShellSection;
@@ -30,10 +31,10 @@ export class AppShellSidebarComponent {
   @Output() about = new EventEmitter<void>();
   @Output() expandedChange = new EventEmitter<boolean>();
 
-  isExpanded = false;
+  isExpanded = true;
 
   get isDarkTheme(): boolean {
-    return document.body.classList.contains('theme-dark');
+    return this.themeService.isDark;
   }
 
   readonly primaryItems: SidebarItem[] = [
@@ -43,14 +44,15 @@ export class AppShellSidebarComponent {
   ];
 
   readonly toolItems: SidebarItem[] = [
-    { id: 'agent', label: 'Agente', icon: 'smart_toy' },
     { id: 'messages', label: 'Mensagens', icon: 'chat' },
     { id: 'schedules', label: 'Agendamentos', icon: 'calendar_today' }
   ];
 
   readonly systemItems: SidebarItem[] = [
-    { id: 'settings', label: 'Configuracoes', icon: 'settings' }
+    { id: 'settings', label: 'Configurações', icon: 'settings' }
   ];
+
+  constructor(private readonly themeService: ThemeService) {}
 
   select(section: AppShellSection): void {
     this.sectionSelect.emit(section);
@@ -63,6 +65,10 @@ export class AppShellSidebarComponent {
 
   get sidebarToggleLabel(): string {
     return this.isExpanded ? 'Fechar menu lateral' : 'Abrir menu lateral';
+  }
+
+  trackBySectionId(_index: number, item: SidebarItem): string {
+    return item.id;
   }
 
   badgeFor(section: AppShellSection): number {

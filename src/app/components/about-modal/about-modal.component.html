@@ -21,6 +21,47 @@
 					<li *ngFor="let item of whatsNew">{{ item }}</li>
 				</ul>
 			</div>
+
+			<div class="about-update-section">
+				<div class="about-update-section__actions">
+					<button
+						class="btn btn-primary"
+						type="button"
+						(click)="checkForUpdate()"
+						[disabled]="updateStatus === 'checking' || updateStatus === 'downloading'"
+					>
+						<span class="material-symbols-outlined btn-icon-symbol" *ngIf="updateStatus !== 'checking'">system_update</span>
+						<span class="loading-spinner loading-spinner--sm" *ngIf="updateStatus === 'checking'"></span>
+						{{ updateStatus === 'checking' ? 'Verificando...' : 'Verificar atualizações' }}
+					</button>
+
+					<button
+						*ngIf="updateStatus === 'available' || updateStatus === 'downloading'"
+						class="btn btn-primary"
+						type="button"
+						(click)="installUpdate()"
+						[disabled]="updateStatus === 'downloading'"
+					>
+						<span class="material-symbols-outlined btn-icon-symbol" *ngIf="updateStatus !== 'downloading'">download</span>
+						<span class="loading-spinner loading-spinner--sm" *ngIf="updateStatus === 'downloading'"></span>
+						{{ updateStatus === 'downloading' ? 'Baixando...' : 'Baixar e instalar ' + updateLatestVersion }}
+					</button>
+				</div>
+
+				<p class="about-update-status" *ngIf="updateStatus === 'up-to-date'">
+					<span class="material-symbols-outlined about-update-status__icon about-update-status__icon--ok">check_circle</span>
+					Você já está usando a versão mais recente.
+				</p>
+				<p class="about-update-status" *ngIf="updateStatus === 'available'">
+					<span class="material-symbols-outlined about-update-status__icon about-update-status__icon--new">new_releases</span>
+					Nova versão disponível: <strong>{{ updateLatestVersion }}</strong>
+					<span *ngIf="updateNotes"> — {{ updateNotes }}</span>
+				</p>
+				<p class="about-update-status about-update-status--error" *ngIf="updateStatus === 'error'">
+					<span class="material-symbols-outlined about-update-status__icon">error</span>
+					{{ updateErrorMessage }}
+				</p>
+			</div>
 		</section>
 
 		<footer class="upload-modal-footer">

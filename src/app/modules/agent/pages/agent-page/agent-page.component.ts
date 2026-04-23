@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
-import { AppShellSection } from '../../../../components/app-shell-sidebar/app-shell-sidebar.component';
+import { AppShellSection } from '../../../../models/shell.model';
 import { AgentGoogleAccountProfile, AgentResponseMode, AgentSettings } from '../../../../models/agent.model';
 import { AgentService } from '../../../../services/agent.service';
 

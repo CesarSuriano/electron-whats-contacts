@@ -43,7 +43,7 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   private pendingAiSuggestionPromotion = false;
   private acceptedAiSuggestionDraft = '';
 
-  private destroy$ = new Subject<void>();
+  private readonly destroy$ = new Subject<void>();
 
   constructor(
     private state: WhatsappStateService,
