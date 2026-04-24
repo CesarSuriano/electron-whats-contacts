@@ -438,7 +438,9 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   openScheduleList(): void {
+    this.isConfigMenuOpen = false;
     this.scheduleListLauncher.requestOpen();
+    void this.router.navigate(['/whatsapp']);
   }
 
   formatScheduleTimestamp(isoDate: string): string {

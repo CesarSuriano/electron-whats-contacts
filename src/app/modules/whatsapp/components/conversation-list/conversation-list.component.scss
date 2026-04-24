@@ -46,38 +46,6 @@
   @apply text-txt-subtle;
 }
 
-.conversation-list__filters {
-  @apply flex gap-2 overflow-x-auto bg-wa-surface px-4 pb-3;
-}
-
-.conversation-list__filter-chip {
-  @apply inline-flex items-center gap-1.5 appearance-none whitespace-nowrap rounded-full border-none bg-wa-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
-}
-
-.conversation-list__filter-chip:hover {
-  @apply bg-wa-hover;
-}
-
-.conversation-list__filter-chip--active {
-  @apply bg-accent text-accent-text;
-}
-
-.conversation-list__filter-chip-dot {
-  @apply inline-block h-2 w-2 shrink-0 rounded-full;
-}
-
-.conversation-list__add-label-btn {
-  @apply inline-flex shrink-0 cursor-pointer appearance-none items-center justify-center rounded-full border-none bg-transparent p-1.5 text-txt-subtle shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
-}
-
-.conversation-list__add-label-btn:hover {
-  @apply bg-wa-hover text-txt;
-}
-
-.conversation-list__add-label-btn .material-symbols-outlined {
-  @apply text-[1.1rem];
-}
-
 .conversation-list__sync-bar {
   @apply flex items-center gap-2 bg-wa-surface px-4 py-2 text-[0.75rem] text-txt-muted;
 }
@@ -182,6 +150,11 @@
   border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 58%, var(--color-border, #e2e8f0));
   background: color-mix(in srgb, var(--label-color, var(--color-primary)) 20%, transparent);
   color: var(--label-color, var(--text-secondary));
+}
+
+.conversation-list__label-chip--active:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 64%, var(--color-border, #e2e8f0));
+  background: color-mix(in srgb, var(--label-color, var(--color-primary)) 24%, transparent);
 }
 
 .conversation-list__label-chip-dot {

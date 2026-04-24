@@ -50,3 +50,7 @@
 .schedule-preview-icon {
   @apply text-[1.15rem] text-accent;
 }
+
+.schedule-modal__confirm {
+  @apply min-w-[10rem];
+}

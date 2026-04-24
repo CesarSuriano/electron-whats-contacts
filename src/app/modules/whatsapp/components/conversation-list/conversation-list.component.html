@@ -34,30 +34,65 @@
     <button
       type="button"
       class="filter-chip conversation-list__filter-chip"
-      *ngFor="let chip of filterChips"
+      *ngFor="let chip of baseFilterChips"
       [class.conversation-list__filter-chip--active]="activeFilter === chip.id"
-      [class.conversation-list__filter-chip--colored]="!!chip.color"
-      [style.--chip-color]="chip.color || null"
       [disabled]="disabled"
       (click)="onFilterChange(chip.id)"
     >
-      <span
-        *ngIf="chip.color"
-        class="conversation-list__filter-chip-dot"
-        [style.background]="chip.color"
-      ></span>
       {{ chip.label }}
     </button>
-    <button
-      type="button"
-      class="conversation-list__add-label-btn"
-      [disabled]="disabled"
-      (click)="openLabelManager()"
-      aria-label="Nova etiqueta"
-      title="Nova etiqueta"
-    >
-      <span class="material-symbols-outlined">add</span>
-    </button>
+
+    <div class="conversation-list__label-menu">
+      <button
+        type="button"
+        class="conversation-list__label-menu-toggle"
+        [class.conversation-list__label-menu-toggle--active]="!!activeLabelFilterChip"
+        [class.conversation-list__label-menu-toggle--open]="isLabelMenuOpen"
+        [style.--menu-color]="activeLabelFilterChip?.color || null"
+        [disabled]="disabled"
+        (click)="toggleLabelMenu($event)"
+        data-label-menu-anchor
+        [attr.aria-expanded]="isLabelMenuOpen"
+        [attr.title]="labelMenuButtonText"
+      >
+        <span
+          *ngIf="activeLabelFilterChip?.color"
+          class="conversation-list__label-menu-dot"
+        ></span>
+        <span class="conversation-list__label-menu-text">{{ labelMenuButtonText }}</span>
+        <span class="material-symbols-outlined conversation-list__label-menu-icon">expand_more</span>
+      </button>
+
+      <div class="conversation-list__label-menu-popover" *ngIf="isLabelMenuOpen" data-label-menu>
+        <button
+          type="button"
+          class="conversation-list__label-menu-item"
+          *ngFor="let chip of labelFilterChips"
+          [class.conversation-list__label-menu-item--active]="activeFilter === chip.id"
+          [style.--menu-color]="chip.color || null"
+          (click)="onLabelMenuFilterSelect(chip.id, $event)"
+          [attr.title]="chip.label"
+        >
+          <span *ngIf="chip.color" class="conversation-list__label-menu-dot"></span>
+          <span class="conversation-list__label-menu-item-text">{{ chip.label }}</span>
+          <span class="material-symbols-outlined conversation-list__label-menu-check" *ngIf="activeFilter === chip.id">check</span>
+        </button>
+
+        <p class="conversation-list__label-menu-empty" *ngIf="!labelFilterChips.length">
+          Nenhuma etiqueta cadastrada.
+        </p>
+
+        <button
+          type="button"
+          class="conversation-list__label-menu-create"
+          (click)="openLabelManagerFromMenu($event)"
+          title="Nova etiqueta"
+        >
+          <span class="material-symbols-outlined">add</span>
+          Nova etiqueta
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="sync-bar conversation-list__sync-bar" *ngIf="isSyncing">

@@ -3,7 +3,7 @@
 }
 
 .chat-header {
-  @apply flex min-h-[4.3rem] items-center gap-3 border-b border-border bg-wa-surface px-4 py-3;
+  @apply flex min-h-[4.3rem] min-w-0 items-center gap-3 border-b border-border bg-wa-surface px-4 py-3;
 }
 
 .chat-header__copy {
@@ -11,7 +11,7 @@
 }
 
 .chat-header__labels {
-  @apply flex flex-wrap items-center justify-end gap-2;
+  @apply flex min-w-0 shrink items-center justify-end gap-2;
 }
 
 .chat-header__name {
@@ -23,11 +23,19 @@
 }
 
 .chat-header__label-chip {
-  @apply inline-flex min-h-[2rem] items-center gap-2 rounded-full border px-3 py-1 text-[0.76rem] font-medium;
+  @apply inline-flex min-h-[2rem] min-w-0 max-w-[11rem] items-center gap-2 rounded-full border px-3 py-1 text-[0.76rem] font-medium;
+}
+
+.chat-header__label-text {
+  @apply min-w-0 truncate;
 }
 
 .chat-header__label-dot {
   @apply h-2 w-2 shrink-0 rounded-full;
+}
+
+.chat-header__label-dot--menu {
+  background: var(--label-color);
 }
 
 .chat-header__label-remove {
@@ -47,11 +55,73 @@
 }
 
 .chat-header__label-add {
-  @apply inline-flex min-h-[2rem] items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-[0.78rem] font-medium text-txt-muted transition;
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface p-0 text-txt-muted transition;
 }
 
 .chat-header__label-add:hover {
   @apply border-accent bg-accent-soft text-accent;
+}
+
+.chat-header__label-add .material-symbols-outlined,
+.chat-header__label-overflow-toggle .material-symbols-outlined,
+.chat-header__label-overflow-remove .material-symbols-outlined {
+  @apply text-[1rem];
+}
+
+.chat-header__label-overflow {
+  @apply relative shrink-0;
+}
+
+.chat-header__label-overflow-toggle {
+  @apply inline-flex min-h-[2rem] items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-[0.76rem] font-medium text-txt-muted transition;
+}
+
+.chat-header__label-overflow-toggle:hover,
+.chat-header__label-overflow-toggle--open {
+  @apply border-accent bg-accent-soft text-accent;
+}
+
+.chat-header__label-overflow-toggle--open .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
+.chat-header__label-overflow-count {
+  @apply leading-none;
+}
+
+.chat-header__label-overflow-menu {
+  @apply absolute right-0 top-[calc(100%+0.45rem)] z-20 flex min-w-[220px] max-w-[280px] flex-col gap-1 rounded-2xl border border-border bg-surface p-2;
+  box-shadow: 0 18px 40px rgba(35, 24, 20, 0.14);
+}
+
+.chat-header__label-overflow-item {
+  @apply flex items-center justify-between gap-3 rounded-xl px-2 py-2;
+  background: color-mix(in srgb, var(--label-color) 8%, var(--color-surface, #fff));
+}
+
+.chat-header__label-overflow-copy {
+  @apply flex min-w-0 items-center gap-2;
+}
+
+.chat-header__label-overflow-name {
+  @apply min-w-0 truncate text-[0.78rem] font-medium;
+  color: var(--label-color);
+}
+
+.chat-header__label-overflow-remove {
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-none bg-transparent p-0 text-txt-muted transition;
+}
+
+.chat-header__label-overflow-remove:hover {
+  @apply bg-danger-soft text-danger;
+}
+
+.chat-header__label-overflow-create {
+  @apply inline-flex items-center gap-2 rounded-xl border-none bg-transparent px-2 py-2 text-left text-[0.8rem] font-semibold text-accent transition;
+}
+
+.chat-header__label-overflow-create:hover {
+  @apply bg-accent-soft text-accent-hover;
 }
 
 @media (max-width: 959px) {
@@ -61,5 +131,14 @@
 
   .chat-header__labels {
     @apply w-full justify-start;
+  }
+
+  .chat-header__label-chip {
+    @apply max-w-[9rem];
+  }
+
+  .chat-header__label-overflow-menu {
+    left: 0;
+    right: auto;
   }
 }

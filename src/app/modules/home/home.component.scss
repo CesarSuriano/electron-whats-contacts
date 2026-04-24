@@ -23,7 +23,7 @@
 }
 
 .home-center-section {
-  @apply max-w-[880px];
+  @apply min-h-[calc(100vh-12rem)] max-w-[760px] items-center justify-center;
 }
 
 .home-feature-card,
@@ -32,7 +32,7 @@
 }
 
 .home-feature-card {
-  @apply items-start rounded-[20px] border border-border bg-surface p-6;
+  @apply flex w-full max-w-[42rem] flex-col items-center gap-5 rounded-[20px] border border-border bg-surface px-8 py-10 text-center;
 }
 
 .home-feature-card__icon {
@@ -44,15 +44,21 @@
 }
 
 .home-feature-card__description {
-  @apply m-0 text-sm text-txt-muted;
+  @apply m-0 max-w-[30rem] text-sm text-txt-muted;
 }
 
-.home-feature-card__actions,
+.home-feature-card__actions {
+  @apply flex flex-wrap justify-center gap-3;
+}
+
 .home-settings-card__actions {
   @apply flex flex-wrap gap-3;
 }
 
-.home-feature-card__action,
+.home-feature-card__action {
+  @apply min-h-[42px] min-w-[15rem];
+}
+
 .home-settings-card__action {
   @apply min-h-[42px];
 }
@@ -129,8 +135,16 @@
     @apply px-3 py-3;
   }
 
+  .home-center-section {
+    @apply min-h-0;
+  }
+
   .home-feature-card,
   .home-settings-card {
     @apply rounded-[16px] p-4;
+  }
+
+  .home-feature-card__action {
+    @apply w-full min-w-0;
   }
 }

@@ -1186,3 +1186,101 @@ select {
 	}
 	}
 
+.conversation-list__filters {
+	@apply relative flex flex-wrap items-center gap-2 bg-wa-surface px-4 pb-3;
+}
+
+.conversation-list__filter-chip {
+	@apply inline-flex shrink-0 items-center gap-1.5 appearance-none whitespace-nowrap rounded-full border-none bg-wa-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.conversation-list__filter-chip:hover:not(:disabled):not(.conversation-list__filter-chip--active) {
+	@apply bg-wa-hover;
+}
+
+.conversation-list__filter-chip--active,
+.conversation-list__filter-chip--active:hover:not(:disabled) {
+	@apply bg-accent text-accent-text;
+}
+
+.conversation-list__label-menu {
+	@apply relative shrink-0;
+}
+
+.conversation-list__label-menu-toggle {
+	@apply inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.conversation-list__label-menu-toggle:hover:not(:disabled) {
+	@apply bg-wa-hover text-txt;
+}
+
+.conversation-list__label-menu-toggle--active {
+	border-color: color-mix(in srgb, var(--menu-color, var(--accent, #7d2238)) 48%, var(--border, #ebe7e3));
+	background: color-mix(in srgb, var(--menu-color, var(--accent, #7d2238)) 14%, var(--surface, #fff));
+	color: var(--menu-color, var(--accent, #7d2238));
+}
+
+.conversation-list__label-menu-toggle--active:hover:not(:disabled),
+.conversation-list__label-menu-toggle--open:not(:disabled) {
+	border-color: color-mix(in srgb, var(--menu-color, var(--accent, #7d2238)) 58%, var(--border, #ebe7e3));
+	background: color-mix(in srgb, var(--menu-color, var(--accent, #7d2238)) 18%, var(--surface, #fff));
+	color: var(--menu-color, var(--accent, #7d2238));
+}
+
+.conversation-list__label-menu-dot {
+	@apply inline-block h-2 w-2 shrink-0 rounded-full;
+	background: var(--menu-color, var(--accent, #7d2238));
+}
+
+.conversation-list__label-menu-text {
+	@apply min-w-0 truncate;
+}
+
+.conversation-list__label-menu-icon {
+	@apply shrink-0 text-[1rem];
+}
+
+.conversation-list__label-menu-toggle--open .conversation-list__label-menu-icon {
+	transform: rotate(180deg);
+}
+
+.conversation-list__label-menu-popover {
+	@apply absolute left-0 top-[calc(100%+0.45rem)] z-20 flex min-w-[240px] max-w-[280px] flex-col gap-1 rounded-2xl border border-border bg-surface p-2;
+	box-shadow: 0 18px 32px rgba(40, 20, 15, 0.16);
+}
+
+.conversation-list__label-menu-item {
+	@apply inline-flex w-full items-center gap-2 rounded-xl border-none bg-transparent px-2.5 py-2 text-left text-[0.82rem] text-txt transition;
+}
+
+.conversation-list__label-menu-item:hover {
+	@apply bg-wa-hover;
+}
+
+.conversation-list__label-menu-item--active,
+.conversation-list__label-menu-item--active:hover {
+	background: color-mix(in srgb, var(--menu-color, var(--accent, #7d2238)) 14%, var(--surface, #fff));
+	color: var(--menu-color, var(--accent, #7d2238));
+}
+
+.conversation-list__label-menu-item-text {
+	@apply min-w-0 flex-1 truncate;
+}
+
+.conversation-list__label-menu-check {
+	@apply shrink-0 text-[1rem];
+}
+
+.conversation-list__label-menu-empty {
+	@apply m-0 px-2.5 py-2 text-[0.8rem] text-txt-subtle;
+}
+
+.conversation-list__label-menu-create {
+	@apply inline-flex items-center gap-2 rounded-xl border-none bg-transparent px-2.5 py-2 text-left text-[0.82rem] font-semibold text-accent transition;
+}
+
+.conversation-list__label-menu-create:hover {
+	@apply bg-accent-soft text-accent-hover;
+}
+

@@ -195,3 +195,22 @@ describe('ContactsService.refreshContactsFromChats', () => {
     assert.equal(entry.name, 'Grupo de trabalho');
   });
 });
+
+describe('ContactsService.waitForContactsWarmup', () => {
+  it('retries a refresh immediately when the cache is still empty after a recent ready warmup', async () => {
+    let getChatsCalls = 0;
+    const { service } = createService({
+      getChats: async () => {
+        getChatsCalls += 1;
+        return [];
+      },
+      getContacts: async () => []
+    });
+
+    (service as unknown as { lastContactsRefreshAt: number }).lastContactsRefreshAt = Date.now();
+
+    await service.waitForContactsWarmup(true);
+
+    assert.equal(getChatsCalls, 1);
+  });
+});

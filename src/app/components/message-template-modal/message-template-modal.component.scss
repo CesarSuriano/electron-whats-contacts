@@ -30,3 +30,11 @@
 .template-image-remove .material-symbols-outlined {
   @apply text-[1rem];
 }
+
+.message-template-modal__footer {
+  @apply items-center;
+}
+
+.message-template-modal__save {
+  @apply min-w-[12rem];
+}

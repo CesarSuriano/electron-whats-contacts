@@ -133,9 +133,9 @@
 			<p>Quebra de linha: <strong>\n</strong></p>
 		</section>
 
-		<footer class="upload-modal-footer">
+		<footer class="upload-modal-footer message-template-modal__footer">
 			<button class="btn btn-outline" type="button" (click)="close.emit()">Cancelar</button>
-			<button class="btn btn-icon" type="button" (click)="saveTemplate()" [disabled]="isSaving">
+			<button class="btn btn-primary message-template-modal__save" type="button" (click)="saveTemplate()" [disabled]="isSaving">
 				<span class="material-symbols-outlined btn-icon-symbol">save</span>
 				<span class="btn-label">Salvar mensagem</span>
 			</button>

@@ -698,8 +698,9 @@ export class ContactsService {
   }
 
   async waitForContactsWarmup(waitForRefresh: boolean): Promise<void> {
+    const isCacheEmpty = this.contactStore.size === 0;
     const shouldRefresh = this.sessionState.isReady()
-      && Date.now() - this.lastContactsRefreshAt >= CONTACTS_REFRESH_COOLDOWN_MS;
+      && (isCacheEmpty || Date.now() - this.lastContactsRefreshAt >= CONTACTS_REFRESH_COOLDOWN_MS);
 
     if (shouldRefresh) {
       const refreshPromise = this.triggerRefresh({ reason: 'contacts-endpoint' });
@@ -709,7 +710,7 @@ export class ContactsService {
         } catch {
           // Fall back to current cache if refresh is still running or timed out.
         }
-      } else if (this.contactStore.size === 0) {
+      } else if (isCacheEmpty) {
         try {
           await withTimeout(refreshPromise, CONTACTS_EMPTY_CACHE_WAIT_MS, 'warming contacts cache');
         } catch {

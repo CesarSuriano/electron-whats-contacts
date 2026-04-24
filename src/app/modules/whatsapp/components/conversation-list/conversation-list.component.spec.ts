@@ -2,6 +2,7 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 
+import { AppLabel } from '../../../../models/app-label.model';
 import { WhatsappContact } from '../../../../models/whatsapp.model';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ConversationListComponent } from './conversation-list.component';
@@ -22,6 +23,9 @@ describe('ConversationListComponent', () => {
   let stateSpy: jasmine.SpyObj<WhatsappStateService>;
 
   beforeEach(async () => {
+    localStorage.removeItem('appLabels');
+    localStorage.removeItem('appLabelAssignments');
+
     contacts$ = new BehaviorSubject<WhatsappContact[]>([]);
     selectedJid$ = new BehaviorSubject<string>('');
     loadingState$ = new BehaviorSubject({ instances: false, contacts: false, messages: false, sending: false });
@@ -202,5 +206,15 @@ describe('ConversationListComponent', () => {
       (component as any).applyFilter();
       expect(component.filteredContacts.some(c => c.name === 'Carlos')).toBeTrue();
     });
+  });
+
+  it('separates base filters from label filters for the dropdown menu', () => {
+    component.labelFilters = ['VIP Externo'];
+    component.appLabels = [{ id: 'vip', name: 'VIP', color: '#ef4444', createdAt: '2026-04-24T00:00:00.000Z' } as AppLabel];
+
+    (component as any).rebuildFilterChips();
+
+    expect(component.baseFilterChips.map(chip => chip.id)).toEqual(['all', 'conversations', 'unread']);
+    expect(component.labelFilterChips.map(chip => chip.label)).toEqual(['VIP', 'VIP Externo']);
   });
 });

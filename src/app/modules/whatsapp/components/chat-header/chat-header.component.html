@@ -7,14 +7,15 @@
 
   <div class="chat-header__labels">
     <span
-      *ngFor="let label of appLabels"
+      *ngFor="let label of visibleLabels"
       class="chat-header__label-chip"
       [style.background]="label.color + '22'"
       [style.color]="label.color"
       [style.borderColor]="label.color + '55'"
+      [attr.title]="label.name"
     >
       <span class="chat-header__label-dot" [style.background]="label.color"></span>
-      {{ label.name }}
+      <span class="chat-header__label-text">{{ label.name }}</span>
       <button
         type="button"
         class="chat-header__label-remove"
@@ -25,6 +26,50 @@
       </button>
     </span>
 
+    <div class="chat-header__label-overflow" *ngIf="hiddenLabels.length">
+      <button
+        type="button"
+        class="chat-header__label-overflow-toggle"
+        [class.chat-header__label-overflow-toggle--open]="isOverflowMenuOpen"
+        (click)="toggleOverflowMenu()"
+        data-label-overflow-anchor
+        [attr.aria-expanded]="isOverflowMenuOpen"
+        aria-label="Mostrar etiquetas escondidas"
+        [attr.title]="'Mostrar ' + hiddenLabels.length + ' etiqueta' + (hiddenLabels.length === 1 ? '' : 's')"
+      >
+        <span class="chat-header__label-overflow-count">+{{ hiddenLabels.length }}</span>
+        <span class="material-symbols-outlined">expand_more</span>
+      </button>
+
+      <div class="chat-header__label-overflow-menu" *ngIf="isOverflowMenuOpen" data-label-overflow-menu>
+        <div
+          *ngFor="let label of hiddenLabels"
+          class="chat-header__label-overflow-item"
+          [style.--label-color]="label.color"
+          [attr.title]="label.name"
+        >
+          <div class="chat-header__label-overflow-copy">
+            <span class="chat-header__label-dot chat-header__label-dot--menu"></span>
+            <span class="chat-header__label-overflow-name">{{ label.name }}</span>
+          </div>
+
+          <button
+            type="button"
+            class="chat-header__label-overflow-remove"
+            (click)="removeLabel(label)"
+            [attr.aria-label]="'Remover etiqueta ' + label.name"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <button type="button" class="chat-header__label-overflow-create" (click)="openLabelPicker()" title="Nova etiqueta">
+          <span class="material-symbols-outlined">add</span>
+          Nova etiqueta
+        </button>
+      </div>
+    </div>
+
     <div class="chat-header__label-anchor">
       <button
         type="button"
@@ -32,10 +77,10 @@
         (click)="toggleLabelPicker()"
         data-label-anchor
         [attr.aria-expanded]="isLabelPickerOpen"
-        aria-label="Adicionar etiqueta"
+        aria-label="Gerenciar etiquetas"
+        title="Gerenciar etiquetas"
       >
         <span class="material-symbols-outlined">sell</span>
-        Etiqueta
       </button>
 
       <app-label-picker-popover

@@ -47,6 +47,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   isLoading = false;
   isSyncing = false;
   isSelectionMode = false;
+  isLabelMenuOpen = false;
   selectedJids = new Set<string>();
   flashingJids = new Set<string>();
   contextMenuVisible = false;
@@ -163,7 +164,34 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     }
 
     this.activeFilter = filterId;
+    this.isLabelMenuOpen = false;
     this.applyFilter();
+  }
+
+  toggleLabelMenu(event: Event): void {
+    event.stopPropagation();
+    if (this.disabled) {
+      return;
+    }
+
+    this.isLabelMenuOpen = !this.isLabelMenuOpen;
+  }
+
+  onLabelMenuFilterSelect(filterId: ConversationFilterId, event: Event): void {
+    event.stopPropagation();
+    if (this.disabled) {
+      return;
+    }
+
+    this.activeFilter = this.activeFilter === filterId ? 'all' : filterId;
+    this.isLabelMenuOpen = false;
+    this.applyFilter();
+  }
+
+  openLabelManagerFromMenu(event: Event): void {
+    event.stopPropagation();
+    this.isLabelMenuOpen = false;
+    this.openLabelManager();
   }
 
   onAppLabelChipClick(label: AppLabel, event: Event): void {
@@ -273,6 +301,22 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     return this.filterChipsCached;
   }
 
+  get baseFilterChips(): ConversationFilterChip[] {
+    return this.filterChipsCached.filter(chip => !this.isLabelFilterChip(chip));
+  }
+
+  get labelFilterChips(): ConversationFilterChip[] {
+    return this.filterChipsCached.filter(chip => this.isLabelFilterChip(chip));
+  }
+
+  get activeLabelFilterChip(): ConversationFilterChip | null {
+    return this.labelFilterChips.find(chip => chip.id === this.activeFilter) || null;
+  }
+
+  get labelMenuButtonText(): string {
+    return this.activeLabelFilterChip?.label || 'Etiquetas';
+  }
+
   getUnreadCount(contact: WhatsappContact): number {
     return Math.max(0, Number(contact.unreadCount || 0));
   }
@@ -330,10 +374,32 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     return ids.map(id => this.appLabelsById.get(id)).filter((label): label is AppLabel => Boolean(label));
   }
 
-  @HostListener('document:click')
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+
+    this.closeContextMenu();
+
+    if (!this.isLabelMenuOpen) {
+      return;
+    }
+
+    if (target && (target.closest('[data-label-menu-anchor]') || target.closest('[data-label-menu]'))) {
+      return;
+    }
+
+    this.isLabelMenuOpen = false;
+  }
+
   closeContextMenu(): void {
     this.contextMenuVisible = false;
     this.contextMenuContact = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closeContextMenu();
+    this.isLabelMenuOpen = false;
   }
 
   private applyFilter(): void {
@@ -481,6 +547,10 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
   private toAppLabelFilterId(labelId: string): ConversationFilterId {
     return `app-label:${labelId}`;
+  }
+
+  private isLabelFilterChip(chip: ConversationFilterChip): boolean {
+    return chip.id.startsWith('app-label:') || chip.id.startsWith('label:');
   }
 
   private isDataUrlPreview(value: string): boolean {

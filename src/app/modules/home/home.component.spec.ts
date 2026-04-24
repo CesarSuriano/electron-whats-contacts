@@ -187,4 +187,10 @@ describe('HomeComponent', () => {
     expect(component.appVersion).toBeTruthy();
     expect(Array.isArray(component.appWhatsNew)).toBe(true);
   });
+
+  it('openScheduleList requests the modal and navigates to whatsapp', () => {
+    component.openScheduleList();
+    expect(mockScheduleListLauncher.requestOpen).toHaveBeenCalled();
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/whatsapp']);
+  });
 });

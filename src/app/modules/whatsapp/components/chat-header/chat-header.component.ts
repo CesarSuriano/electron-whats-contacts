@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, HostListener, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { Subject } from 'rxjs';
 import { switchMap, takeUntil } from 'rxjs/operators';
 import { Observable, of } from 'rxjs';
@@ -18,8 +18,11 @@ import { WhatsappStateService } from '../../services/whatsapp-state.service';
 export class ChatHeaderComponent implements OnChanges, OnDestroy {
   @Input() contact: WhatsappContact | null = null;
 
+  readonly maxVisibleLabels = 2;
+
   appLabels: AppLabel[] = [];
   isLabelPickerOpen = false;
+  isOverflowMenuOpen = false;
 
   private readonly destroy$ = new Subject<void>();
   private readonly contactJid$ = new Subject<string | null>();
@@ -47,6 +50,7 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
       }
       this.contactJid$.next(contact?.jid || null);
       this.isLabelPickerOpen = false;
+      this.isOverflowMenuOpen = false;
     }
   }
 
@@ -64,15 +68,44 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
     return formatBrazilianPhone(phoneSource);
   }
 
+  get visibleLabels(): AppLabel[] {
+    return this.appLabels.slice(0, this.maxVisibleLabels);
+  }
+
+  get hiddenLabels(): AppLabel[] {
+    return this.appLabels.slice(this.maxVisibleLabels);
+  }
+
   toggleLabelPicker(): void {
     if (!this.contact) {
       return;
     }
+    this.isOverflowMenuOpen = false;
     this.isLabelPickerOpen = !this.isLabelPickerOpen;
   }
 
   closeLabelPicker(): void {
     this.isLabelPickerOpen = false;
+  }
+
+  openLabelPicker(): void {
+    if (!this.contact) {
+      return;
+    }
+    this.isOverflowMenuOpen = false;
+    this.isLabelPickerOpen = true;
+  }
+
+  toggleOverflowMenu(): void {
+    if (!this.hiddenLabels.length) {
+      return;
+    }
+    this.isLabelPickerOpen = false;
+    this.isOverflowMenuOpen = !this.isOverflowMenuOpen;
+  }
+
+  closeOverflowMenu(): void {
+    this.isOverflowMenuOpen = false;
   }
 
   removeLabel(label: AppLabel): void {
@@ -84,7 +117,32 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
 
   onManageRequested(): void {
     this.isLabelPickerOpen = false;
+    this.isOverflowMenuOpen = false;
     this.managerLaunch.openLabelManager();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.isOverflowMenuOpen) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      this.isOverflowMenuOpen = false;
+      return;
+    }
+
+    if (target.closest('[data-label-overflow-anchor]') || target.closest('[data-label-overflow-menu]')) {
+      return;
+    }
+
+    this.isOverflowMenuOpen = false;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.isOverflowMenuOpen = false;
   }
 
   private resolvePhoneSource(contact: WhatsappContact): string {
