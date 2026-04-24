@@ -75,7 +75,7 @@
     "qrcode-terminal": "^0.12.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "whatsapp-web.js": "^1.26.0",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
     "zone.js": "~0.12.0"
   },
   "devDependencies": {

@@ -58,7 +58,14 @@ export function buildContainer(config: BridgeConfig): Container {
 
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: config.instanceName, dataPath: config.dataPath }),
-    puppeteer: puppeteerOptions
+    puppeteer: puppeteerOptions,
+    // Pin a known WhatsApp Web HTML to avoid the "stuck after authenticated"
+    // bug that happens when WhatsApp updates its frontend and breaks Store injection.
+    // Source: https://github.com/wppconnect-team/wa-version
+    webVersionCache: {
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1037994907-alpha.html'
+    }
   });
 
   const selfJidResolver = new SelfJidResolver(client);
