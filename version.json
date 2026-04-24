@@ -1,5 +1,5 @@
 {
   "version": "2.2.0",
-  "url": "",
+  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/2.2.0/UniqSystem.Setup.2.2.0.exe",
   "notes": "- Menu de etiquetas na barra lateral com dropdown de filtro por etiqueta\n- Cabeçalho do chat exibe até 2 etiquetas com menu de overflow para as demais\n- Filtro de etiqueta ativo destacado no botão da barra lateral\n- Envio em massa vinculado ao agendamento: disparo registra conclusão ou cancelamento no agendamento correspondente\n- Persistência da fila de envio em massa com debounce para evitar travamentos\n- Correção: tela travando ao navegar no painel de envio em massa\n- Correção: digitação na busca de conversas causava travamento na interface\n- Correção: tela de QR code não carregava corretamente após a leitura\n- Correção: bridge do WhatsApp não iniciava corretamente na versão instalada"
 }
