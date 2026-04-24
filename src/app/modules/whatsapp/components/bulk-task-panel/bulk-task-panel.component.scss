@@ -164,3 +164,36 @@
 .btn-control--primary .btn-control__shortcut {
   @apply text-current opacity-70;
 }
+
+.bulk-panel-confirm {
+  @apply absolute inset-0 z-10 flex items-center justify-center bg-[rgba(11,20,26,0.55)] px-3;
+  animation: slideUp 0.15s ease-out;
+}
+
+.bulk-panel-confirm__card {
+  @apply flex w-full flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-[0_12px_24px_rgba(11,20,26,0.2)];
+}
+
+.bulk-panel-confirm__icon {
+  @apply flex h-10 w-10 items-center justify-center rounded-full bg-danger-soft text-danger;
+}
+
+.bulk-panel-confirm__icon .material-symbols-outlined {
+  @apply text-[1.4rem];
+}
+
+.bulk-panel-confirm__body {
+  @apply flex flex-col gap-1;
+}
+
+.bulk-panel-confirm__title {
+  @apply text-[0.95rem] leading-tight text-txt;
+}
+
+.bulk-panel-confirm__text {
+  @apply m-0 text-[0.82rem] text-txt-muted;
+}
+
+.bulk-panel-confirm__actions {
+  @apply grid grid-cols-2 gap-2;
+}

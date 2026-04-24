@@ -162,16 +162,56 @@ describe('BulkTaskPanelComponent', () => {
     expect(bulkSendSpy.skipCurrent).not.toHaveBeenCalled();
   });
 
-  it('cancel delegates to service when confirmed', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('cancel opens the in-app confirm overlay without blocking the renderer', () => {
+    isSendingCurrent = false;
+    queue$.next(makeQueue());
     component.cancel();
-    expect(bulkSendSpy.cancel).toHaveBeenCalled();
+    expect(component.isCancelConfirmOpen).toBeTrue();
+    expect(bulkSendSpy.cancel).not.toHaveBeenCalled();
   });
 
-  it('cancel does not delegate to service when not confirmed', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
+  it('confirmCancel delegates to service and closes the overlay', () => {
+    isSendingCurrent = false;
+    queue$.next(makeQueue());
     component.cancel();
+    component.confirmCancel();
+    expect(bulkSendSpy.cancel).toHaveBeenCalled();
+    expect(component.isCancelConfirmOpen).toBeFalse();
+  });
+
+  it('dismissCancel closes the overlay without cancelling', () => {
+    isSendingCurrent = false;
+    queue$.next(makeQueue());
+    component.cancel();
+    component.dismissCancel();
     expect(bulkSendSpy.cancel).not.toHaveBeenCalled();
+    expect(component.isCancelConfirmOpen).toBeFalse();
+  });
+
+  it('cancel is blocked while the current item is sending', () => {
+    queue$.next(makeQueue());
+    isSendingCurrent = true;
+    component.cancel();
+    expect(component.isCancelConfirmOpen).toBeFalse();
+  });
+
+  it('resets the confirm overlay when the queue clears', () => {
+    isSendingCurrent = false;
+    queue$.next(makeQueue());
+    component.cancel();
+    expect(component.isCancelConfirmOpen).toBeTrue();
+    queue$.next(null);
+    expect(component.isCancelConfirmOpen).toBeFalse();
+  });
+
+  it('Escape closes the confirm overlay when open', () => {
+    isSendingCurrent = false;
+    queue$.next(makeQueue());
+    component.cancel();
+
+    component.onKeydown({ key: 'Escape', preventDefault: jasmine.createSpy('preventDefault') } as unknown as KeyboardEvent);
+
+    expect(component.isCancelConfirmOpen).toBeFalse();
   });
 
   it('ignores Enter while the current item is still sending', () => {

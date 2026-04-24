@@ -16,6 +16,7 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
   isMinimized = false;
   visibleItems: BulkItem[] = [];
   hiddenItemCount = 0;
+  isCancelConfirmOpen = false;
 
   private destroy$ = new Subject<void>();
 
@@ -27,6 +28,7 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
       this.updateVisibleItems(queue);
       if (!queue) {
         this.isMinimized = false;
+        this.isCancelConfirmOpen = false;
       }
     });
   }
@@ -93,8 +95,14 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (event.key === 'Escape' && this.isCancelConfirmOpen) {
+      event.preventDefault();
+      this.dismissCancel();
+      return;
+    }
+
     if ((event.key === 'Enter' || event.key === 'NumpadEnter') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      if (this.queue.isPaused || !this.canSendCurrent || this.isInteractiveShortcutTarget(event.target)) {
+      if (this.isCancelConfirmOpen || this.queue.isPaused || !this.canSendCurrent || this.isInteractiveShortcutTarget(event.target)) {
         return;
       }
 
@@ -104,10 +112,19 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
   }
 
   cancel(): void {
-    const confirmed = window.confirm('Cancelar o envio em massa? O progresso atual será descartado.');
-    if (confirmed) {
-      this.bulkSend.cancel();
+    if (this.isSendingCurrent) {
+      return;
     }
+    this.isCancelConfirmOpen = true;
+  }
+
+  confirmCancel(): void {
+    this.isCancelConfirmOpen = false;
+    this.bulkSend.cancel();
+  }
+
+  dismissCancel(): void {
+    this.isCancelConfirmOpen = false;
   }
 
   statusIcon(item: BulkItem): string {

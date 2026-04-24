@@ -76,4 +76,29 @@
       </button>
     </footer>
   </div>
+
+  <div class="bulk-panel-confirm" *ngIf="isCancelConfirmOpen" role="dialog" aria-modal="true">
+    <div class="bulk-panel-confirm__card">
+      <div class="bulk-panel-confirm__icon">
+        <span class="material-symbols-outlined">warning</span>
+      </div>
+      <div class="bulk-panel-confirm__body">
+        <strong class="bulk-panel-confirm__title">Cancelar envio em massa?</strong>
+        <p class="bulk-panel-confirm__text">O progresso atual será descartado.</p>
+      </div>
+      <div class="bulk-panel-confirm__actions">
+        <button type="button" class="btn-control" (click)="dismissCancel()">
+          <span class="btn-control__copy">
+            <span class="btn-control__label">Voltar</span>
+          </span>
+        </button>
+        <button type="button" class="btn-control danger" (click)="confirmCancel()">
+          <span class="material-symbols-outlined">stop_circle</span>
+          <span class="btn-control__copy">
+            <span class="btn-control__label">Cancelar envio</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
 </aside>
