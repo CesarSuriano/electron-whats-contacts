@@ -29,6 +29,8 @@ const NON_CONVERSATION_LAST_MESSAGE_TYPES = new Set([
   'biz_content_placeholder'
 ]);
 const SYNCING_HIDE_DELAY_MS = 150;
+const BOOTSTRAP_CONTACTS_RETRY_DELAY_MS = 2000;
+const BOOTSTRAP_CONTACTS_MAX_RETRIES = 5;
 const INITIAL_SYNC_TOTAL_STEPS = 2;
 const INITIAL_SYNC_CONTACTS_STEP = 1;
 const INITIAL_SYNC_CONVERSATIONS_STEP = 2;
@@ -84,6 +86,7 @@ export class WhatsappStateService implements OnDestroy {
   private initialSyncDone = false;
   private instancesLoadStarted = false;
   private conversationContextRunId = 0;
+  private bootstrapRetryCount = 0;
   private readonly syncingSubject = new BehaviorSubject<boolean>(false);
   private readonly syncStatusSubject = new BehaviorSubject<WhatsappSyncStatus>(IDLE_SYNC_STATUS);
   private readonly contactHistoryInFlight = new Set<string>();
@@ -283,6 +286,7 @@ export class WhatsappStateService implements OnDestroy {
     this.pendingConversationContextJids.clear();
     this.clearConversationContextBatchTimer();
     this.initialSyncDone = false;
+    this.bootstrapRetryCount = 0;
     this.beginInitialSync();
     this.syncingSubject.next(true);
     this.selectedInstanceSubject.next(name);
@@ -1010,6 +1014,19 @@ export class WhatsappStateService implements OnDestroy {
           this.setLoading({ contacts: false });
 
           if (bootstrap) {
+            if (enriched.length === 0 && this.bootstrapRetryCount < BOOTSTRAP_CONTACTS_MAX_RETRIES) {
+              this.bootstrapRetryCount++;
+              const retryRunId = this.conversationContextRunId;
+              window.setTimeout(() => {
+                if (this.conversationContextRunId === retryRunId) {
+                  void this.loadContacts({ bootstrap: true });
+                }
+              }, BOOTSTRAP_CONTACTS_RETRY_DELAY_MS);
+              resolve();
+              return;
+            }
+
+            this.bootstrapRetryCount = 0;
             this.bootstrapConversationContextLoad();
             resolve();
             return;
