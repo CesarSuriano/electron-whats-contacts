@@ -1,6 +1,6 @@
 {
   "name": "uniq-system",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "main": "main.js",
   "scripts": {
     "ng": "ng",
@@ -19,6 +19,7 @@
   "build": {
     "appId": "com.uniq.system",
     "productName": "UniqSystem",
+    "beforeBuild": "scripts/before-build.js",
     "asar": true,
     "asarUnpack": [
       "whatsapp-webjs-bridge/**/*"

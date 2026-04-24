@@ -1,5 +1,5 @@
 {
-  "version": "2.1.2",
+  "version": "2.2.0",
   "url": "",
-  "notes": "- Tooltip indevido \"WhatsApp\" removido do cabeçalho\n- Botão de nova etiqueta adicionado na barra de filtros\n- Ponto colorido visível nos filtros de etiquetas\n- Seleção em massa respeita filtro de etiqueta ativo\n- Botão \"Disparar agora\" adicionado nos agendamentos pendentes\n- Imagem do template não persiste após envio em massa\n- Atalhos de teclado (Enter/Esc) no painel de envio em massa\n- Botão de retentar ao falhar na conexão do WhatsApp\n- Botões do modal de agendamento corrigidos\n- Fundo levemente cinza na busca e no compositor\n- Renomeado botão de seleção em massa para \"Definir mensagem\""
+  "notes": "- Menu de etiquetas na barra lateral com dropdown de filtro por etiqueta\n- Cabeçalho do chat exibe até 2 etiquetas com menu de overflow para as demais\n- Filtro de etiqueta ativo destacado no botão da barra lateral\n- Envio em massa vinculado ao agendamento: disparo registra conclusão ou cancelamento no agendamento correspondente\n- Persistência da fila de envio em massa com debounce para evitar travamentos\n- Correção: tela travando ao navegar no painel de envio em massa\n- Correção: digitação na busca de conversas causava travamento na interface\n- Correção: tela de QR code não carregava corretamente após a leitura\n- Correção: bridge do WhatsApp não iniciava corretamente na versão instalada"
 }
