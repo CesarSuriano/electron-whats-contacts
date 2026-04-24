@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
+import { Component, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 
 import { ThemeService } from '../../services/theme.service';
 
@@ -35,5 +35,38 @@ export class AppPageHeaderComponent {
 
   toggleTheme(): void {
     this.themeService.toggle();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.isMenuOpen) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      this.closeMenu();
+      return;
+    }
+
+    const path = (event.composedPath && event.composedPath()) || [];
+    for (const node of path) {
+      if (node instanceof HTMLElement && node.hasAttribute('data-header-menu-root')) {
+        return;
+      }
+    }
+
+    if (target.closest('[data-header-menu-root]')) {
+      return;
+    }
+
+    this.closeMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isMenuOpen) {
+      this.closeMenu();
+    }
   }
 }

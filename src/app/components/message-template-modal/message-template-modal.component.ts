@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 
 import { MessageTemplateService } from '../../services/message-template.service';
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../models/message-template.model';
@@ -16,7 +16,7 @@ interface TemplateHistoryEntry {
   templateUrl: './message-template-modal.component.html',
   styleUrls: ['./message-template-modal.component.scss']
 })
-export class MessageTemplateModalComponent implements OnChanges {
+export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
   @ViewChild('templateTextarea') templateTextarea?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('imageInput') imageInput?: ElementRef<HTMLInputElement>;
 
@@ -44,6 +44,8 @@ export class MessageTemplateModalComponent implements OnChanges {
   private history: TemplateHistoryEntry[] = [];
   private historyIndex = -1;
   private isRestoringHistory = false;
+  private pendingHistoryEntry: TemplateHistoryEntry | null = null;
+  private historyCommitTimer: number | null = null;
 
   constructor(private messageTemplateService: MessageTemplateService) {}
 
@@ -51,6 +53,10 @@ export class MessageTemplateModalComponent implements OnChanges {
     if (changes['initialTemplate'] || changes['isOpen']) {
       this.resetEditorState();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.clearPendingHistoryCommit();
   }
 
   get canUndo(): boolean {
@@ -122,7 +128,7 @@ export class MessageTemplateModalComponent implements OnChanges {
       return;
     }
 
-    this.pushHistorySnapshot({
+    this.scheduleHistorySnapshot({
       value: this.editableTemplate,
       selectionStart: textarea.selectionStart,
       selectionEnd: textarea.selectionEnd
@@ -148,6 +154,7 @@ export class MessageTemplateModalComponent implements OnChanges {
   }
 
   undo(): void {
+    this.flushPendingHistorySnapshot();
     if (!this.canUndo) {
       return;
     }
@@ -157,6 +164,7 @@ export class MessageTemplateModalComponent implements OnChanges {
   }
 
   redo(): void {
+    this.flushPendingHistorySnapshot();
     if (!this.canRedo) {
       return;
     }
@@ -199,6 +207,7 @@ export class MessageTemplateModalComponent implements OnChanges {
   }
 
   saveTemplate(): void {
+    this.flushPendingHistorySnapshot();
     this.save.emit({ text: this.editableTemplate, imageDataUrl: this.selectedImageDataUrl });
   }
 
@@ -244,6 +253,8 @@ export class MessageTemplateModalComponent implements OnChanges {
       return;
     }
 
+    this.flushPendingHistorySnapshot();
+
     this.editableTemplate =
       this.editableTemplate.slice(0, start) +
       replacement +
@@ -269,6 +280,7 @@ export class MessageTemplateModalComponent implements OnChanges {
       return;
     }
 
+    this.clearPendingHistoryCommit();
     this.editableTemplate = this.initialTemplate;
     this.selectedImageDataUrl = this.initialImageDataUrl;
     this.activeTab = 'edit';
@@ -293,6 +305,41 @@ export class MessageTemplateModalComponent implements OnChanges {
 
   private syncAvailableEmojis(): void {
     this.allEmojiOptions = this.messageTemplateService.getAllEmojis(this.baseEmojiOptions);
+  }
+
+  private scheduleHistorySnapshot(entry: TemplateHistoryEntry): void {
+    this.pendingHistoryEntry = entry;
+
+    if (this.historyCommitTimer !== null) {
+      window.clearTimeout(this.historyCommitTimer);
+    }
+
+    this.historyCommitTimer = window.setTimeout(() => {
+      this.flushPendingHistorySnapshot();
+    }, 160);
+  }
+
+  private flushPendingHistorySnapshot(): void {
+    if (this.historyCommitTimer !== null) {
+      window.clearTimeout(this.historyCommitTimer);
+      this.historyCommitTimer = null;
+    }
+
+    if (!this.pendingHistoryEntry) {
+      return;
+    }
+
+    this.pushHistorySnapshot(this.pendingHistoryEntry);
+    this.pendingHistoryEntry = null;
+  }
+
+  private clearPendingHistoryCommit(): void {
+    if (this.historyCommitTimer !== null) {
+      window.clearTimeout(this.historyCommitTimer);
+      this.historyCommitTimer = null;
+    }
+
+    this.pendingHistoryEntry = null;
   }
 
   private pushHistorySnapshot(entry: TemplateHistoryEntry): void {

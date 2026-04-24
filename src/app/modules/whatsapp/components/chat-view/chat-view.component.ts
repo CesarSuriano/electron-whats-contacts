@@ -10,8 +10,10 @@ import { AssistantFeedbackService } from '../../services/assistant-feedback.serv
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ComposerComponent } from '../composer/composer.component';
 
+const WHATSAPP_AI_FEATURE_ENABLED = false;
 const AUTO_SUGGESTION_IDLE_MS = 1800;
 const AUTO_SUGGESTION_BURST_IDLE_MS = 2800;
+const DRAFT_SYNC_DEBOUNCE_MS = 40;
 
 @Component({
   selector: 'app-chat-view',
@@ -34,6 +36,7 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   aiSuggestion = '';
   aiSuggestionError = '';
   aiFeedbackMessage = '';
+  readonly isAiFeatureEnabled = WHATSAPP_AI_FEATURE_ENABLED;
 
   private bulkImageWasSet = false;
   private lastRequestedAiContextKey = '';
@@ -43,6 +46,12 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   private aiSuggestionSequenceIndex = 0;
   private pendingAiSuggestionPromotion = false;
   private acceptedAiSuggestionDraft = '';
+  private pendingDraftSyncTimer: number | null = null;
+  private pendingDraftSyncJid = '';
+  private pendingDraftSyncValue = '';
+  private bulkQueueWasActive = false;
+  private pendingComposerFocusTimer: number | null = null;
+  private shouldRestoreComposerFocus = false;
 
   private readonly destroy$ = new Subject<void>();
 
@@ -54,24 +63,38 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    if (!this.isAiFeatureEnabled) {
+      this.disableAiFeature();
+    }
+
     this.state.selectedContact$.pipe(takeUntil(this.destroy$)).subscribe(contact => {
-      if (contact?.jid !== this.contact?.jid) {
+      const previousContactJid = this.contact?.jid || '';
+      const nextContactJid = contact?.jid || '';
+
+      if (nextContactJid !== previousContactJid) {
+        this.flushPendingDraftSync();
         this.resetSuggestionState();
         this.clearSuggestionProviders();
       }
 
       this.contact = contact;
+      this.draftText = nextContactJid ? this.state.getDraftTextForJid(nextContactJid) : '';
 
       if (!contact) {
+        this.clearComposerFocusRequest();
         this.clearSuggestionProviders();
       }
 
-      this.scheduleAiSuggestion();
+      if (this.isAiFeatureEnabled) {
+        this.scheduleAiSuggestion();
+      }
     });
 
     this.state.selectedMessages$.pipe(takeUntil(this.destroy$)).subscribe(messages => {
       this.messages = messages;
-      this.scheduleAiSuggestion();
+      if (this.isAiFeatureEnabled) {
+        this.scheduleAiSuggestion();
+      }
     });
 
     this.state.selectedContactJid$
@@ -81,21 +104,44 @@ export class ChatViewComponent implements OnInit, OnDestroy {
           return;
         }
 
-        setTimeout(() => this.composer?.focus(), 0);
+        this.scheduleComposerFocus();
       });
 
     this.state.loadingState$.pipe(takeUntil(this.destroy$)).subscribe(state => {
       this.isSending = state.sending;
       this.isSyncingMessages = state.messages;
-      this.scheduleAiSuggestion();
+
+      if (!this.isSyncingMessages) {
+        this.applyComposerFocus();
+      }
+
+      if (this.isAiFeatureEnabled) {
+        this.scheduleAiSuggestion();
+      }
+    });
+
+    this.bulkSend.queue$.pipe(takeUntil(this.destroy$)).subscribe(queue => {
+      const hasActiveQueue = Boolean(queue);
+
+      if (this.bulkQueueWasActive && !hasActiveQueue && this.contact && !this.disabled) {
+        this.scheduleComposerFocus();
+      }
+
+      this.bulkQueueWasActive = hasActiveQueue;
     });
 
     this.state.draftText$.pipe(takeUntil(this.destroy$)).subscribe(text => {
+      if (this.pendingDraftSyncJid && this.pendingDraftSyncJid === (this.contact?.jid || '') && text !== this.pendingDraftSyncValue) {
+        this.clearPendingDraftSync();
+      }
+
       if (text !== this.draftText) {
         this.draftText = text;
       }
 
-      this.scheduleAiSuggestion();
+      if (this.isAiFeatureEnabled) {
+        this.scheduleAiSuggestion();
+      }
     });
 
     this.state.draftImageDataUrl$.pipe(takeUntil(this.destroy$)).subscribe(dataUrl => {
@@ -108,29 +154,34 @@ export class ChatViewComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.agentService.settings$.pipe(takeUntil(this.destroy$)).subscribe(settings => {
-      const nextEnabled = settings.enabled;
-      const nextConfigured = settings.gemUrl.trim().length > 0;
+    if (this.isAiFeatureEnabled) {
+      this.agentService.settings$.pipe(takeUntil(this.destroy$)).subscribe(settings => {
+        const nextEnabled = settings.enabled;
+        const nextConfigured = settings.gemUrl.trim().length > 0;
 
-      if (nextEnabled !== this.isAgentEnabled || nextConfigured !== this.hasAgentConfiguration) {
-        this.resetSuggestionState();
-        this.clearSuggestionProviders();
-      }
+        if (nextEnabled !== this.isAgentEnabled || nextConfigured !== this.hasAgentConfiguration) {
+          this.resetSuggestionState();
+          this.clearSuggestionProviders();
+        }
 
-      this.isAgentEnabled = nextEnabled;
-      this.hasAgentConfiguration = nextConfigured;
-      this.scheduleAiSuggestion();
-    });
+        this.isAgentEnabled = nextEnabled;
+        this.hasAgentConfiguration = nextConfigured;
+        this.scheduleAiSuggestion();
+      });
 
-    this.agentService.suggestion$.pipe(takeUntil(this.destroy$)).subscribe(snapshot => {
-      this.applySuggestionSnapshot(snapshot);
-    });
+      this.agentService.suggestion$.pipe(takeUntil(this.destroy$)).subscribe(snapshot => {
+        this.applySuggestionSnapshot(snapshot);
+      });
+    }
   }
 
   ngOnDestroy(): void {
     if (this.suggestionTimerId !== null) {
       window.clearTimeout(this.suggestionTimerId);
     }
+
+    this.flushPendingDraftSync();
+    this.clearComposerFocusRequest();
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -140,6 +191,8 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     this.draftText = value;
 
     if (
+      this.isAiFeatureEnabled
+      &&
       this.acceptedAiSuggestionDraft
       && this.normalizeSuggestionComparableText(value) !== this.acceptedAiSuggestionDraft
     ) {
@@ -148,10 +201,14 @@ export class ChatViewComponent implements OnInit, OnDestroy {
       this.discardCurrentSuggestionSequence();
     }
 
-    this.state.setDraftText(value);
+    this.scheduleDraftSync(value);
   }
 
   onAcceptAiSuggestion(value: string): void {
+    if (!this.isAiFeatureEnabled) {
+      return;
+    }
+
     this.aiSuggestion = '';
     this.aiSuggestionError = '';
     this.acceptedAiSuggestionDraft = this.normalizeSuggestionComparableText(value);
@@ -163,15 +220,23 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   onRefreshAiSuggestion(): void {
+    if (!this.isAiFeatureEnabled) {
+      return;
+    }
+
     this.scheduleAiSuggestion(true);
   }
 
   onGuidedAiSuggestion(instruction: string): void {
+    if (!this.isAiFeatureEnabled) {
+      return;
+    }
+
     this.requestAiSuggestionNow(instruction);
   }
 
   onRateAiSuggestion(rating: 'up' | 'down'): void {
-    if (!this.contact || !this.aiSuggestion.trim()) {
+    if (!this.isAiFeatureEnabled || !this.contact || !this.aiSuggestion.trim()) {
       return;
     }
 
@@ -205,9 +270,10 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     this.state.sendText(this.contact.jid, text).subscribe({
       next: () => {
         if (!this.bulkSend.hasActiveQueue) {
+          this.clearPendingDraftSync();
           this.composer?.resetAfterSend();
           this.draftText = '';
-          this.state.setDraftText('');
+          this.state.setDraftTextForJid(this.contact!.jid, '');
           this.clearSuggestionProviders();
 
           if (!shouldPromoteQueuedSuggestion || !this.promoteQueuedSuggestion()) {
@@ -235,9 +301,10 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     this.state.sendMedia(this.contact.jid, payload.file, payload.caption).subscribe({
       next: () => {
         if (!this.bulkSend.hasActiveQueue) {
+          this.clearPendingDraftSync();
           this.composer?.resetAfterSend();
           this.draftText = '';
-          this.state.setDraftText('');
+          this.state.setDraftTextForJid(this.contact!.jid, '');
           this.clearSuggestionProviders();
 
           this.lastRequestedAiContextKey = '';
@@ -314,10 +381,14 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   get isSuggestionToggleOn(): boolean {
-    return this.isAgentEnabled;
+    return this.isAiFeatureEnabled && this.isAgentEnabled;
   }
 
   private scheduleAiSuggestion(force = false): void {
+    if (!this.isAiFeatureEnabled) {
+      return;
+    }
+
     if (this.suggestionTimerId !== null) {
       window.clearTimeout(this.suggestionTimerId);
       this.suggestionTimerId = null;
@@ -391,6 +462,10 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   private requestAiSuggestionNow(operatorInstruction: string): void {
+    if (!this.isAiFeatureEnabled) {
+      return;
+    }
+
     const trimmedInstruction = operatorInstruction.trim();
     if (!trimmedInstruction || !this.contact || !this.canGenerateWithActiveMode || this.disabled || this.isSyncingMessages) {
       return;
@@ -440,7 +515,99 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   private get canGenerateWithActiveMode(): boolean {
-    return this.isAgentEnabled && this.hasAgentConfiguration;
+    return this.isAiFeatureEnabled && this.isAgentEnabled && this.hasAgentConfiguration;
+  }
+
+  private disableAiFeature(): void {
+    if (this.suggestionTimerId !== null) {
+      window.clearTimeout(this.suggestionTimerId);
+      this.suggestionTimerId = null;
+    }
+
+    this.isAgentEnabled = false;
+    this.hasAgentConfiguration = false;
+    this.resetSuggestionState();
+    this.clearSuggestionProviders();
+  }
+
+  private scheduleDraftSync(value: string): void {
+    const jid = this.contact?.jid || '';
+    if (!jid) {
+      return;
+    }
+
+    this.pendingDraftSyncJid = jid;
+    this.pendingDraftSyncValue = value;
+
+    if (this.pendingDraftSyncTimer !== null) {
+      window.clearTimeout(this.pendingDraftSyncTimer);
+    }
+
+    this.pendingDraftSyncTimer = window.setTimeout(() => {
+      this.flushPendingDraftSync();
+    }, DRAFT_SYNC_DEBOUNCE_MS);
+  }
+
+  private flushPendingDraftSync(): void {
+    if (!this.pendingDraftSyncJid) {
+      this.clearPendingDraftSync();
+      return;
+    }
+
+    const jid = this.pendingDraftSyncJid;
+    const value = this.pendingDraftSyncValue;
+    this.clearPendingDraftSync();
+    this.state.setDraftTextForJid(jid, value);
+  }
+
+  private clearPendingDraftSync(): void {
+    if (this.pendingDraftSyncTimer !== null) {
+      window.clearTimeout(this.pendingDraftSyncTimer);
+      this.pendingDraftSyncTimer = null;
+    }
+
+    this.pendingDraftSyncJid = '';
+    this.pendingDraftSyncValue = '';
+  }
+
+  private scheduleComposerFocus(): void {
+    if (!this.contact) {
+      return;
+    }
+
+    this.shouldRestoreComposerFocus = true;
+
+    if (this.pendingComposerFocusTimer !== null) {
+      window.clearTimeout(this.pendingComposerFocusTimer);
+    }
+
+    this.pendingComposerFocusTimer = window.setTimeout(() => {
+      this.pendingComposerFocusTimer = null;
+      this.applyComposerFocus();
+    }, 0);
+  }
+
+  private applyComposerFocus(): void {
+    if (!this.shouldRestoreComposerFocus || !this.contact || this.disabled || this.isSyncingMessages) {
+      return;
+    }
+
+    const composer = this.composer;
+    if (!composer) {
+      return;
+    }
+
+    this.shouldRestoreComposerFocus = false;
+    composer.focus();
+  }
+
+  private clearComposerFocusRequest(): void {
+    if (this.pendingComposerFocusTimer !== null) {
+      window.clearTimeout(this.pendingComposerFocusTimer);
+      this.pendingComposerFocusTimer = null;
+    }
+
+    this.shouldRestoreComposerFocus = false;
   }
 
   private get hasInboundTurnToAnswer(): boolean {

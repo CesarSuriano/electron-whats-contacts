@@ -4,30 +4,30 @@
   </div>
 
   <article
-    *ngFor="let message of messages; trackBy: trackById"
+    *ngFor="let message of viewMessages; trackBy: trackById"
     class="message-list__bubble"
     [class.message-list__bubble--from-me]="message.isFromMe"
   >
-    <div class="message-list__media" *ngIf="isMediaMessage(message)">
-      <img class="message-list__image" *ngIf="isImageMessage(message)" [src]="imagePreviewUrl(message)" alt="Imagem anexada" />
+    <div class="message-list__media" *ngIf="message.media as media">
+      <img class="message-list__image" *ngIf="media.kind === 'image' && media.previewUrl" [src]="media.previewUrl" alt="Imagem anexada" />
 
-      <div class="message-list__file" *ngIf="!isImageMessage(message)">
+      <div class="message-list__file" *ngIf="media.kind !== 'image' || !media.previewUrl">
         <span class="material-symbols-outlined message-list__file-icon">description</span>
         <div class="message-list__file-copy">
-          <strong class="message-list__file-label">{{ mediaLabel(message) }}</strong>
-          <small class="message-list__file-name">{{ mediaFilename(message) }}</small>
+          <strong class="message-list__file-label">{{ media.label }}</strong>
+          <small class="message-list__file-name">{{ media.filename }}</small>
         </div>
       </div>
     </div>
 
-    <p class="message-list__text" *ngIf="messageText(message) as text">{{ text }}</p>
+    <p class="message-list__text" *ngIf="message.text as text">{{ text }}</p>
     <div class="message-list__footer">
       <time class="message-list__time">{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
       <span
-        *ngIf="message.isFromMe && getAckIcon(message)"
+        *ngIf="message.isFromMe && message.ackIcon"
         class="material-symbols-outlined message-list__ack"
-        [class.message-list__ack--read]="isAckRead(message)"
-      >{{ getAckIcon(message) }}</span>
+        [class.message-list__ack--read]="message.ackRead"
+      >{{ message.ackIcon }}</span>
     </div>
   </article>
 </div>

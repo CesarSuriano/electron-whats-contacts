@@ -147,6 +147,17 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(upcoming => (this.upcomingSchedule = upcoming));
 
+    this.bulkSend.scheduleLifecycle$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.outcome === 'completed') {
+          this.scheduledMessageService.completeExecution(event.scheduleId);
+          return;
+        }
+
+        this.scheduledMessageService.cancelExecution(event.scheduleId);
+      });
+
     this.scheduleListLauncher.openRequests$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -371,7 +382,8 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       .filter((c): c is WhatsappContact => c !== null);
 
     if (matchedContacts.length) {
-      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl);
+      this.scheduledMessageService.beginExecution(schedule.id);
+      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
     }
     this.isScheduleListModalOpen = false;
   }
@@ -382,9 +394,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       .filter((c): c is WhatsappContact => c !== null);
 
     if (matchedContacts.length) {
-      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl);
+      this.scheduledMessageService.beginExecution(schedule.id);
+      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
     }
-    this.scheduledMessageService.markDone(schedule.id);
   }
 
   onNotificationDismiss(id: string): void {

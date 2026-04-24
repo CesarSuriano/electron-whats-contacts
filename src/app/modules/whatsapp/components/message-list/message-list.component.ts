@@ -1,26 +1,48 @@
-import { AfterViewChecked, Component, ElementRef, Input, ViewChild } from '@angular/core';
+import { AfterViewChecked, ChangeDetectionStrategy, Component, ElementRef, Input, OnChanges, ViewChild } from '@angular/core';
 
 import { MessageAck, WhatsappMessage } from '../../../../models/whatsapp.model';
+
+interface MessageListItem {
+  id: string;
+  sentAt: string;
+  isFromMe: boolean;
+  text: string;
+  ackIcon: string;
+  ackRead: boolean;
+  media: {
+    kind: string;
+    filename: string;
+    previewUrl: string | null;
+    label: string;
+  } | null;
+}
 
 @Component({
   selector: 'app-message-list',
   templateUrl: './message-list.component.html',
-  styleUrls: ['./message-list.component.scss']
+  styleUrls: ['./message-list.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MessageListComponent implements AfterViewChecked {
+export class MessageListComponent implements AfterViewChecked, OnChanges {
   @Input() messages: WhatsappMessage[] = [];
   @ViewChild('scrollContainer') scrollContainer?: ElementRef<HTMLDivElement>;
 
+  viewMessages: MessageListItem[] = [];
+
   private lastMessageCount = 0;
 
+  ngOnChanges(): void {
+    this.viewMessages = this.messages.map(message => this.toMessageListItem(message));
+  }
+
   ngAfterViewChecked(): void {
-    if (this.messages.length !== this.lastMessageCount) {
+    if (this.viewMessages.length !== this.lastMessageCount) {
       this.scrollToBottom();
-      this.lastMessageCount = this.messages.length;
+      this.lastMessageCount = this.viewMessages.length;
     }
   }
 
-  trackById(_: number, message: WhatsappMessage): string {
+  trackById(_: number, message: { id: string }): string {
     return message.id;
   }
 
@@ -135,8 +157,96 @@ export class MessageListComponent implements AfterViewChecked {
     return { kind, filename, previewUrl };
   }
 
-  private nonTextLabel(message: WhatsappMessage): string {
-    if (this.isMediaMessage(message)) {
+  private toMessageListItem(message: WhatsappMessage): MessageListItem {
+    const media = this.mediaInfo(message);
+    return {
+      id: message.id,
+      sentAt: message.sentAt,
+      isFromMe: message.isFromMe,
+      text: this.resolveMessageText(message, media),
+      ackIcon: this.resolveAckIcon(message),
+      ackRead: this.resolveAckRead(message),
+      media: media
+        ? {
+            ...media,
+            label: this.mediaLabelFromInfo(media)
+          }
+        : null
+    };
+  }
+
+  private resolveAckIcon(message: WhatsappMessage): string {
+    if (!message.isFromMe) {
+      return '';
+    }
+
+    const ack = message.ack ?? (message.payload?.['ack'] as number | undefined) ?? null;
+    if (ack === null || ack === undefined) {
+      return 'done';
+    }
+    if (ack <= MessageAck.PENDING) {
+      return 'schedule';
+    }
+    if (ack === MessageAck.SERVER) {
+      return 'done';
+    }
+    if (ack === MessageAck.DEVICE) {
+      return 'done_all';
+    }
+
+    return 'done_all';
+  }
+
+  private resolveAckRead(message: WhatsappMessage): boolean {
+    if (!message.isFromMe) {
+      return false;
+    }
+
+    const ack = message.ack ?? (message.payload?.['ack'] as number | undefined) ?? null;
+    return ack !== null && ack !== undefined && ack >= MessageAck.READ;
+  }
+
+  private mediaLabelFromInfo(info: { kind: string }): string {
+    if (info.kind === 'image') {
+      return 'Imagem';
+    }
+
+    if (info.kind === 'video') {
+      return 'Video';
+    }
+
+    if (info.kind === 'audio') {
+      return 'Audio';
+    }
+
+    return 'Documento';
+  }
+
+  private resolveMessageText(
+    message: WhatsappMessage,
+    media: { kind: string; filename: string; previewUrl: string | null } | null
+  ): string {
+    if (typeof message.text !== 'string') {
+      return this.nonTextLabel(message, media);
+    }
+
+    const trimmed = message.text.trim();
+    if (!trimmed) {
+      return this.nonTextLabel(message, media);
+    }
+
+    if (/^data:[^,]+,/i.test(trimmed) || this.looksLikeRawImageBase64(trimmed)) {
+      return '';
+    }
+
+    return message.text;
+  }
+
+  private nonTextLabel(
+    message: WhatsappMessage,
+    media: { kind: string; filename: string; previewUrl: string | null } | null = this.mediaInfo(message)
+  ): string {
+    if (media) {
       return '';
     }
 

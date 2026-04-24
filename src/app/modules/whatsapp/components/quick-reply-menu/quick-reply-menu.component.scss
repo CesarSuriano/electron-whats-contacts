@@ -1,33 +1,14 @@
 .quick-reply-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 12px;
-  right: 12px;
-  max-height: 320px;
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 40;
+  @apply absolute bottom-[calc(100%+8px)] left-3 right-3 z-40 flex max-h-[320px] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_12px_32px_rgba(15,23,42,0.14)];
 }
 
 .quick-reply-menu__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border, #e2e8f0);
-  background: var(--color-surface-muted, #f8fafc);
-  font-size: 12px;
-  color: var(--color-text-muted, #64748b);
+  @apply flex flex-wrap items-center gap-2 border-b border-border bg-bg-subtle px-3 py-2 text-[12px] text-txt-muted;
 }
 
 .quick-reply-menu__header-icon { font-size: 18px; color: #f59e0b; }
 .quick-reply-menu__header-title { font-weight: 600; color: var(--color-text, #0f172a); }
-.quick-reply-menu__header-hint { margin-left: auto; font-size: 11px; }
+.quick-reply-menu__header-hint { @apply ml-auto text-[11px]; }
 .quick-reply-menu__manage {
   margin-left: 8px;
   border: none;

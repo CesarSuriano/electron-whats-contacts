@@ -5,8 +5,10 @@ import { BehaviorSubject, EMPTY, of, throwError } from 'rxjs';
 
 import { AgentService } from '../../../../services/agent.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
+import { ScheduledMessage } from '../../../../models/scheduled-message.model';
 import { WhatsappPageComponent } from './whatsapp-page.component';
 
 const makeStatus = (status: string): WhatsappSessionStatus => ({
@@ -26,6 +28,7 @@ describe('WhatsappPageComponent', () => {
   let wsSpy: jasmine.SpyObj<WhatsappWsService>;
   let scheduleListLauncherSpy: jasmine.SpyObj<ScheduleListLauncherService>;
   let gemSettingsSubject: BehaviorSubject<any>;
+  let schedulesSubject: BehaviorSubject<ScheduledMessage[]>;
 
   beforeEach(async () => {
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -53,6 +56,7 @@ describe('WhatsappPageComponent', () => {
     });
     agentSpy.openAgentWindow.and.returnValue(Promise.resolve({ ok: true, message: 'Janela aberta.' }));
     scheduleListLauncherSpy = jasmine.createSpyObj('ScheduleListLauncherService', ['requestOpen']);
+    schedulesSubject = new BehaviorSubject<ScheduledMessage[]>([]);
 
     await TestBed.configureTestingModule({
       declarations: [WhatsappPageComponent],
@@ -61,7 +65,8 @@ describe('WhatsappPageComponent', () => {
         { provide: AgentService, useValue: agentSpy },
         { provide: WhatsappWebjsGatewayService, useValue: gatewaySpy },
         { provide: WhatsappWsService, useValue: wsSpy },
-        { provide: ScheduleListLauncherService, useValue: scheduleListLauncherSpy }
+        { provide: ScheduleListLauncherService, useValue: scheduleListLauncherSpy },
+        { provide: ScheduledMessageService, useValue: { schedules$: schedulesSubject.asObservable() } }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -121,6 +126,40 @@ describe('WhatsappPageComponent', () => {
   it('openScheduleList requests opening the schedule list', () => {
     component.openScheduleList();
     expect(scheduleListLauncherSpy.requestOpen).toHaveBeenCalled();
+  });
+
+  it('keeps the schedules badge count synced with pending and notified schedules', () => {
+    schedulesSubject.next([
+      {
+        id: 'pending-1',
+        scheduledAt: '2026-04-24T10:00:00.000Z',
+        recurrence: 'none',
+        template: 'Mensagem',
+        contacts: [],
+        status: 'pending',
+        createdAt: '2026-04-24T09:00:00.000Z'
+      },
+      {
+        id: 'notified-1',
+        scheduledAt: '2026-04-24T10:30:00.000Z',
+        recurrence: 'daily',
+        template: 'Mensagem',
+        contacts: [],
+        status: 'notified',
+        createdAt: '2026-04-24T09:00:00.000Z'
+      },
+      {
+        id: 'done-1',
+        scheduledAt: '2026-04-24T11:00:00.000Z',
+        recurrence: 'weekly',
+        template: 'Mensagem',
+        contacts: [],
+        status: 'done',
+        createdAt: '2026-04-24T09:00:00.000Z'
+      }
+    ]);
+
+    expect(component.schedulesBadgeCount).toBe(2);
   });
 
   it('opens the quick reply manager from the header action', () => {

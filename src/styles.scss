@@ -1187,7 +1187,7 @@ select {
 	}
 
 .conversation-list__filters {
-	@apply relative flex flex-wrap items-center gap-2 bg-wa-surface px-4 pb-3;
+	@apply relative flex flex-nowrap items-center gap-1.5 bg-wa-surface px-3 pb-3;
 }
 
 .conversation-list__filter-chip {
@@ -1208,7 +1208,7 @@ select {
 }
 
 .conversation-list__label-menu-toggle {
-	@apply inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted transition disabled:cursor-not-allowed disabled:opacity-60;
+	@apply inline-flex min-w-0 max-w-[10rem] items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-[0.82rem] font-medium text-txt-muted transition disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .conversation-list__label-menu-toggle:hover:not(:disabled) {

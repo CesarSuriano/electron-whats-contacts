@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 
 import { MessageTemplateModalComponent } from './message-template-modal.component';
@@ -118,4 +118,28 @@ describe('MessageTemplateModalComponent', () => {
     component.editableTemplate = '*bold*';
     expect(typeof component.previewHtml).toBe('string');
   });
+
+  it('coalesces rapid typing into a single history snapshot', fakeAsync(() => {
+    const textarea = document.createElement('textarea');
+    component.isOpen = true;
+    component.initialTemplate = 'Oi';
+    component.templateTextarea = { nativeElement: textarea } as any;
+    component.ngOnChanges({ isOpen: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false } });
+
+    textarea.selectionStart = 3;
+    textarea.selectionEnd = 3;
+    component.editableTemplate = 'Oi!';
+    component.onTemplateInput();
+
+    textarea.selectionStart = 4;
+    textarea.selectionEnd = 4;
+    component.editableTemplate = 'Oi!!';
+    component.onTemplateInput();
+
+    tick(200);
+
+    const history = (component as any).history as Array<unknown>;
+    expect(history.length).toBe(2);
+    expect((history[1] as any).value).toBe('Oi!!');
+  }));
 });

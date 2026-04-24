@@ -30,9 +30,13 @@
       Envio pausado. Retome quando quiser continuar.
     </p>
 
+    <p class="bulk-panel-window-summary" *ngIf="hiddenItemCount > 0">
+      Mostrando {{ visibleItems.length }} de {{ queue.items.length }} contatos para reduzir o uso de recursos.
+    </p>
+
     <ul class="bulk-panel-list">
       <li
-        *ngFor="let item of queue.items; trackBy: trackByJid"
+        *ngFor="let item of visibleItems; trackBy: trackByJid"
         class="bulk-item"
         [class.status-current]="item.status === 'current'"
         [class.status-done]="item.status === 'done'"
@@ -44,27 +48,31 @@
       </li>
     </ul>
 
-    <p class="bulk-panel-shortcut-hint" *ngIf="!queue.isPaused">
-      <span class="material-symbols-outlined">keyboard</span>
-      Enter: enviar · Esc: pular
-    </p>
-
     <footer class="bulk-panel-controls">
-      <button type="button" class="btn-control" *ngIf="!queue.isPaused" (click)="pause()">
-        <span class="material-symbols-outlined">pause</span>
-        Pausar
+      <button type="button" class="btn-control" (click)="togglePauseResume()">
+        <span class="material-symbols-outlined">{{ queue.isPaused ? 'play_arrow' : 'pause' }}</span>
+        <span class="btn-control__copy">
+          <span class="btn-control__label">{{ queue.isPaused ? 'Retomar' : 'Pausar' }}</span>
+        </span>
       </button>
-      <button type="button" class="btn-control" *ngIf="queue.isPaused" (click)="resume()">
-        <span class="material-symbols-outlined">play_arrow</span>
-        Retomar
-      </button>
-      <button type="button" class="btn-control" (click)="skip()" [disabled]="queue.isPaused">
+      <button type="button" class="btn-control" (click)="skip()" [disabled]="queue.isPaused || isSendingCurrent">
         <span class="material-symbols-outlined">skip_next</span>
-        Pular
+        <span class="btn-control__copy">
+          <span class="btn-control__label">Pular</span>
+        </span>
       </button>
-      <button type="button" class="btn-control danger" (click)="cancel()">
+      <button type="button" class="btn-control danger" (click)="cancel()" [disabled]="isSendingCurrent">
         <span class="material-symbols-outlined">stop_circle</span>
-        Cancelar
+        <span class="btn-control__copy">
+          <span class="btn-control__label">Cancelar</span>
+        </span>
+      </button>
+      <button type="button" class="btn-control btn-control--primary" (click)="send()" [disabled]="!canSendCurrent">
+        <span class="material-symbols-outlined">send</span>
+        <span class="btn-control__copy">
+          <span class="btn-control__label">Enviar</span>
+          <span class="btn-control__shortcut">Enter</span>
+        </span>
       </button>
     </footer>
   </div>

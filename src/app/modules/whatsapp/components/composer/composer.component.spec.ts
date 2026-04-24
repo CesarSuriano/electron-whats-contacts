@@ -217,6 +217,59 @@ describe('ComposerComponent', () => {
     });
   });
 
+  describe('popover coordination', () => {
+    it('closes the other popovers when opening quick replies', () => {
+      component.isEmojiPickerOpen = true;
+      component.isAttachMenuOpen = true;
+
+      component.toggleQuickReplyMenu();
+
+      expect(component.isQuickReplyMenuOpen).toBeTrue();
+      expect(component.isEmojiPickerOpen).toBeFalse();
+      expect(component.isAttachMenuOpen).toBeFalse();
+    });
+
+    it('closes the other popovers when opening the emoji picker', () => {
+      component.isQuickReplyMenuOpen = true;
+      component.isAttachMenuOpen = true;
+
+      component.toggleEmojiPicker();
+
+      expect(component.isEmojiPickerOpen).toBeTrue();
+      expect(component.isQuickReplyMenuOpen).toBeFalse();
+      expect(component.isAttachMenuOpen).toBeFalse();
+    });
+
+    it('closes the emoji and attach popovers on outside click', () => {
+      component.isEmojiPickerOpen = true;
+      component.isAttachMenuOpen = true;
+
+      component.onDocumentClick({
+        target: document.body,
+        composedPath: () => [document.body]
+      } as unknown as MouseEvent);
+
+      expect(component.isEmojiPickerOpen).toBeFalse();
+      expect(component.isAttachMenuOpen).toBeFalse();
+    });
+
+    it('keeps the popovers open when clicking inside a composer popover root', () => {
+      const root = document.createElement('div');
+      root.setAttribute('data-composer-popover-root', '');
+
+      component.isEmojiPickerOpen = true;
+      component.isAttachMenuOpen = true;
+
+      component.onDocumentClick({
+        target: root,
+        composedPath: () => [root]
+      } as unknown as MouseEvent);
+
+      expect(component.isEmojiPickerOpen).toBeTrue();
+      expect(component.isAttachMenuOpen).toBeTrue();
+    });
+  });
+
   describe('onDocumentKeydown', () => {
     it('accepts the suggestion when Tab is pressed with focus on the AI button', () => {
       const aiButton = document.createElement('button');
@@ -240,5 +293,11 @@ describe('ComposerComponent', () => {
     it('starts as false', () => {
       expect(component.isAttachMenuOpen).toBeFalse();
     });
+  });
+
+  it('renders the quick reply button in the full-width popover anchor group', () => {
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.composer__control-group--quick-reply')).toBeTruthy();
   });
 });

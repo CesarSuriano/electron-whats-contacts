@@ -1,6 +1,7 @@
 <div class="whatsapp-page">
   <app-shell-sidebar
     activeSection="whatsapp"
+    [schedulesBadge]="schedulesBadgeCount"
     (sectionSelect)="onShellSectionSelect($event)"
     (about)="openAboutModal()"
   ></app-shell-sidebar>

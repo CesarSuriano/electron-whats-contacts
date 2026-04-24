@@ -150,4 +150,13 @@ describe('MessageListComponent', () => {
     expect(component.isImageMessage(msg)).toBeTrue();
     expect(component.imagePreviewUrl(msg)).toContain('data:image/jpeg;base64,/9j/');
   });
+
+  it('precomputes the rendered messages list when the input changes', () => {
+    component.messages = [makeMsg({ id: 'msg-1' }), makeMsg({ id: 'msg-2', isFromMe: true })];
+
+    component.ngOnChanges();
+
+    expect(component.viewMessages.length).toBe(2);
+    expect(component.viewMessages[1].ackIcon).toBe('done');
+  });
 });

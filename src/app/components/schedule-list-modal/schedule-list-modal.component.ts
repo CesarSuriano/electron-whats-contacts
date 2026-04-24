@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 
 import {
   ScheduledMessage,
@@ -19,12 +19,21 @@ export interface ScheduleCreateRequest {
   contacts: ScheduledContact[];
 }
 
+interface SearchableContact {
+  contact: WhatsappContact;
+  nameLower: string;
+  phoneDigits: string;
+  phoneDigitsNoCountry: string;
+}
+
 @Component({
   selector: 'app-schedule-list-modal',
   templateUrl: './schedule-list-modal.component.html',
   styleUrls: ['./schedule-list-modal.component.scss']
 })
-export class ScheduleListModalComponent implements OnChanges {
+export class ScheduleListModalComponent implements OnChanges, OnDestroy {
+  @ViewChild('contactSearchInput') contactSearchInput?: ElementRef<HTMLInputElement>;
+
   @Input() isOpen = false;
   @Input() schedules: ScheduledMessage[] = [];
   @Input() availableContacts: WhatsappContact[] = [];
@@ -44,6 +53,15 @@ export class ScheduleListModalComponent implements OnChanges {
   editRecurrence: ScheduleRecurrence = 'none';
   editSelectedJids = new Set<string>();
   contactInputFocused = false;
+  autocompleteResults: WhatsappContact[] = [];
+  autocompleteMessage = '';
+  highlightedAutocompleteIndex = -1;
+
+  private contactBlurTimer: number | null = null;
+  private autocompleteUpdateTimer: number | null = null;
+  private availableContactsByJid = new Map<string, WhatsappContact>();
+  private indexedContactsSource: WhatsappContact[] | null = null;
+  private searchableContacts: SearchableContact[] = [];
 
   recurrenceOptions: { value: ScheduleRecurrence; label: string }[] = [
     { value: 'none', label: RECURRENCE_LABELS.none },
@@ -57,40 +75,39 @@ export class ScheduleListModalComponent implements OnChanges {
     if (changes['isOpen'] && this.isOpen) {
       this.view = 'list';
       this.editingSchedule = null;
+      this.resetAutocompleteState();
     }
+
+    if (changes['availableContacts']) {
+      this.rebuildContactIndexes();
+    }
+
+    if (changes['availableContacts'] || changes['contactsLoading']) {
+      this.scheduleAutocompleteUpdate({ preserveHighlight: true });
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.clearContactBlurTimer();
+    this.clearAutocompleteUpdateTimer();
   }
 
   get showAutocomplete(): boolean {
     return this.contactInputFocused && !!this.contactSearch.trim() && (!!this.autocompleteResults.length || !!this.autocompleteMessage);
   }
 
-  get autocompleteMessage(): string {
-    const term = this.contactSearch.trim();
-    if (!term) {
-      return '';
-    }
-
-    if (this.contactsLoading && this.availableContacts.length === 0) {
-      return 'Carregando contatos do WhatsApp...';
-    }
-
-    if (!this.autocompleteResults.length && this.availableContacts.length === 0) {
-      return 'Nenhum contato do WhatsApp foi carregado ainda.';
-    }
-
-    if (!this.autocompleteResults.length) {
-      return 'Nenhum contato encontrado.';
-    }
-
-    return '';
-  }
-
   onContactInputFocus(): void {
+    this.clearContactBlurTimer();
     this.contactInputFocused = true;
+    this.scheduleAutocompleteUpdate({ preserveHighlight: true });
   }
 
   onContactInputBlur(): void {
-    setTimeout(() => { this.contactInputFocused = false; }, 200);
+    this.clearContactBlurTimer();
+    this.contactBlurTimer = window.setTimeout(() => {
+      this.contactInputFocused = false;
+      this.contactBlurTimer = null;
+    }, 120);
   }
 
   get pendingSchedules(): ScheduledMessage[] {
@@ -106,25 +123,12 @@ export class ScheduleListModalComponent implements OnChanges {
       .slice(0, 20);
   }
 
-  get autocompleteResults(): WhatsappContact[] {
-    const term = this.contactSearch.trim().toLowerCase();
-    if (!term) return [];
-    const digits = term.replace(/\D/g, '');
-    return this.availableContacts
-      .filter(c => !c.isGroup && !this.editSelectedJids.has(c.jid))
-      .filter(c => {
-        if ((c.name || '').toLowerCase().includes(term)) return true;
-        const phone = (c.phone || '').replace(/\D/g, '');
-        if (digits && (phone.includes(digits) || phone.replace(/^55/, '').includes(digits))) return true;
-        return false;
-      })
-      .slice(0, 10);
-  }
-
   get selectedContactsList(): { jid: string; name: string; phone: string }[] {
+    this.ensureContactIndexes();
+
     const result: { jid: string; name: string; phone: string }[] = [];
     for (const jid of this.editSelectedJids) {
-      const found = this.availableContacts.find(c => c.jid === jid);
+      const found = this.availableContactsByJid.get(jid);
       if (found) {
         result.push({ jid: found.jid, name: found.name, phone: found.phone });
       } else if (this.editingSchedule) {
@@ -192,8 +196,7 @@ export class ScheduleListModalComponent implements OnChanges {
     this.editTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     this.editRecurrence = 'none';
     this.editSelectedJids = new Set();
-    this.contactSearch = '';
-    this.contactInputFocused = false;
+    this.resetAutocompleteState();
   }
 
   onEdit(schedule: ScheduledMessage): void {
@@ -205,8 +208,7 @@ export class ScheduleListModalComponent implements OnChanges {
     this.editTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     this.editRecurrence = schedule.recurrence;
     this.editSelectedJids = new Set(schedule.contacts.map(c => c.jid));
-    this.contactSearch = '';
-    this.contactInputFocused = false;
+    this.resetAutocompleteState();
   }
 
   onEditMessage(): void {
@@ -232,12 +234,80 @@ export class ScheduleListModalComponent implements OnChanges {
     }
   }
 
+  onContactSearchChange(value: string): void {
+    this.contactSearch = value;
+    this.contactInputFocused = true;
+    this.scheduleAutocompleteUpdate();
+  }
+
+  onContactSearchKeydown(event: KeyboardEvent): void {
+    this.flushAutocompleteUpdate();
+
+    if (!this.contactSearch.trim()) {
+      if (event.key === 'Escape') {
+        this.contactInputFocused = false;
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      if (!this.autocompleteResults.length) {
+        return;
+      }
+
+      event.preventDefault();
+      this.highlightedAutocompleteIndex = Math.min(
+        this.highlightedAutocompleteIndex + 1,
+        this.autocompleteResults.length - 1
+      );
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      if (!this.autocompleteResults.length) {
+        return;
+      }
+
+      event.preventDefault();
+      this.highlightedAutocompleteIndex = Math.max(this.highlightedAutocompleteIndex - 1, 0);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      if (!this.autocompleteResults.length) {
+        return;
+      }
+
+      event.preventDefault();
+      const selectedIndex = this.highlightedAutocompleteIndex >= 0 ? this.highlightedAutocompleteIndex : 0;
+      this.onSelectAutocomplete(this.autocompleteResults[selectedIndex]);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.contactInputFocused = false;
+    }
+  }
+
+  onAutocompleteItemMouseDown(contact: WhatsappContact, event: MouseEvent): void {
+    event.preventDefault();
+    this.onSelectAutocomplete(contact);
+  }
+
+  onAutocompleteItemMouseEnter(index: number): void {
+    this.highlightedAutocompleteIndex = index;
+  }
+
   onSelectAutocomplete(contact: WhatsappContact): void {
     const next = new Set(this.editSelectedJids);
     next.add(contact.jid);
     this.editSelectedJids = next;
     this.contactSearch = '';
-    this.contactInputFocused = false;
+    this.contactInputFocused = true;
+    this.clearAutocompleteUpdateTimer();
+    this.updateAutocompleteState();
+    this.focusContactSearchInput();
   }
 
   toggleContact(jid: string): void {
@@ -248,6 +318,7 @@ export class ScheduleListModalComponent implements OnChanges {
       next.add(jid);
     }
     this.editSelectedJids = next;
+    this.scheduleAutocompleteUpdate({ preserveHighlight: true });
   }
 
   isContactSelected(jid: string): boolean {
@@ -257,6 +328,11 @@ export class ScheduleListModalComponent implements OnChanges {
   onBackToList(): void {
     this.view = 'list';
     this.editingSchedule = null;
+    this.resetAutocompleteState();
+  }
+
+  trackAutocompleteContact(_index: number, contact: WhatsappContact): string {
+    return contact.jid;
   }
 
   onTriggerNow(id: string): void {
@@ -265,6 +341,11 @@ export class ScheduleListModalComponent implements OnChanges {
   }
 
   onDelete(id: string): void {
+    const confirmed = window.confirm('Excluir este agendamento? Esta ação não pode ser desfeita.');
+    if (!confirmed) {
+      return;
+    }
+
     this.deleteSchedule.emit(id);
     if (this.editingSchedule?.id === id) {
       this.view = 'list';
@@ -312,5 +393,132 @@ export class ScheduleListModalComponent implements OnChanges {
       status: 'pending',
       createdAt: new Date().toISOString()
     };
+  }
+
+  private updateAutocompleteState(options: { preserveHighlight?: boolean } = {}): void {
+    this.ensureContactIndexes();
+
+    const term = this.contactSearch.trim().toLowerCase();
+    const previousHighlightedJid = options.preserveHighlight && this.highlightedAutocompleteIndex >= 0
+      ? this.autocompleteResults[this.highlightedAutocompleteIndex]?.jid || ''
+      : '';
+
+    if (!term) {
+      this.autocompleteResults = [];
+      this.autocompleteMessage = '';
+      this.highlightedAutocompleteIndex = -1;
+      return;
+    }
+
+    const digits = term.replace(/\D/g, '');
+    const results = this.searchableContacts
+      .filter(({ contact }) => !contact.isGroup && !this.editSelectedJids.has(contact.jid))
+      .filter(({ nameLower, phoneDigits, phoneDigitsNoCountry }) => {
+        if (nameLower.includes(term)) {
+          return true;
+        }
+
+        return !!digits && (phoneDigits.includes(digits) || phoneDigitsNoCountry.includes(digits));
+      })
+      .map(({ contact }) => contact)
+      .slice(0, 10);
+
+    this.autocompleteResults = results;
+
+    if (this.contactsLoading && this.availableContacts.length === 0) {
+      this.autocompleteMessage = 'Carregando contatos do WhatsApp...';
+    } else if (!results.length && this.availableContacts.length === 0) {
+      this.autocompleteMessage = 'Nenhum contato do WhatsApp foi carregado ainda.';
+    } else if (!results.length) {
+      this.autocompleteMessage = 'Nenhum contato encontrado.';
+    } else {
+      this.autocompleteMessage = '';
+    }
+
+    if (!results.length) {
+      this.highlightedAutocompleteIndex = -1;
+      return;
+    }
+
+    if (previousHighlightedJid) {
+      const nextIndex = results.findIndex(contact => contact.jid === previousHighlightedJid);
+      if (nextIndex >= 0) {
+        this.highlightedAutocompleteIndex = nextIndex;
+        return;
+      }
+    }
+
+    this.highlightedAutocompleteIndex = 0;
+  }
+
+  private resetAutocompleteState(): void {
+    this.clearContactBlurTimer();
+    this.clearAutocompleteUpdateTimer();
+    this.contactSearch = '';
+    this.contactInputFocused = false;
+    this.autocompleteResults = [];
+    this.autocompleteMessage = '';
+    this.highlightedAutocompleteIndex = -1;
+  }
+
+  private clearContactBlurTimer(): void {
+    if (this.contactBlurTimer !== null) {
+      window.clearTimeout(this.contactBlurTimer);
+      this.contactBlurTimer = null;
+    }
+  }
+
+  private scheduleAutocompleteUpdate(options: { preserveHighlight?: boolean } = {}): void {
+    this.clearAutocompleteUpdateTimer();
+    this.autocompleteUpdateTimer = window.setTimeout(() => {
+      this.autocompleteUpdateTimer = null;
+      this.updateAutocompleteState(options);
+    }, 50);
+  }
+
+  private flushAutocompleteUpdate(): void {
+    if (this.autocompleteUpdateTimer === null) {
+      return;
+    }
+
+    window.clearTimeout(this.autocompleteUpdateTimer);
+    this.autocompleteUpdateTimer = null;
+    this.updateAutocompleteState();
+  }
+
+  private clearAutocompleteUpdateTimer(): void {
+    if (this.autocompleteUpdateTimer !== null) {
+      window.clearTimeout(this.autocompleteUpdateTimer);
+      this.autocompleteUpdateTimer = null;
+    }
+  }
+
+  private rebuildContactIndexes(): void {
+    this.indexedContactsSource = this.availableContacts;
+    this.availableContactsByJid = new Map(this.availableContacts.map(contact => [contact.jid, contact]));
+    this.searchableContacts = this.availableContacts.map(contact => {
+      const phoneDigits = (contact.phone || '').replace(/\D/g, '');
+      return {
+        contact,
+        nameLower: (contact.name || '').toLowerCase(),
+        phoneDigits,
+        phoneDigitsNoCountry: phoneDigits.replace(/^55/, '')
+      };
+    });
+  }
+
+  private ensureContactIndexes(): void {
+    if (this.indexedContactsSource === this.availableContacts) {
+      return;
+    }
+
+    this.rebuildContactIndexes();
+  }
+
+  private focusContactSearchInput(): void {
+    this.clearContactBlurTimer();
+    window.setTimeout(() => {
+      this.contactSearchInput?.nativeElement.focus();
+    }, 0);
   }
 }

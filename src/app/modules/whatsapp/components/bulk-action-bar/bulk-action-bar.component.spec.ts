@@ -66,6 +66,15 @@ describe('BulkActionBarComponent', () => {
     expect(emitted).toBe(true);
   });
 
+  it('renders the select-all action as Selecionar tudo', () => {
+    fixture.detectChanges();
+
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('.btn-link')) as HTMLButtonElement[];
+    const selectAllButton = buttons.find(button => button.textContent?.includes('Selecionar'));
+
+    expect(selectAllButton?.textContent).toContain('Selecionar tudo');
+  });
+
   it('accepts input overrides', () => {
     component.selectedCount = 3;
     component.totalVisible = 10;

@@ -4,6 +4,10 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
 }
 
+.schedule-list-modal--edit {
+  @apply overflow-visible;
+}
+
 .schedule-list-actions {
   @apply flex justify-end;
 }
@@ -73,10 +77,6 @@
   @apply text-danger bg-danger-soft;
 }
 
-.schedule-action-trigger:hover {
-  @apply text-accent bg-accent-soft;
-}
-
 .schedule-action-btn .material-symbols-outlined {
   @apply text-[1.15rem];
 }
@@ -88,6 +88,10 @@
 /* Edit view */
 .edit-form {
   @apply flex max-h-[64vh] flex-col gap-4 overflow-y-auto;
+}
+
+.schedule-list-modal--edit .edit-form {
+  @apply overflow-visible;
 }
 
 .edit-row {
@@ -185,8 +189,7 @@
 }
 
 .contact-autocomplete-dropdown {
-  @apply relative z-[5] mt-[0.35rem] max-h-[200px] overflow-y-auto rounded-[10px] border border-border bg-surface;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  @apply absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 max-h-[200px] overflow-y-auto rounded-[10px] border border-border bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.12)];
 }
 
 .contact-autocomplete-item {
@@ -201,6 +204,11 @@
 
 .contact-autocomplete-item:hover {
   @apply bg-bg-subtle;
+}
+
+.contact-autocomplete-item--active,
+.contact-autocomplete-item--active:hover {
+  @apply bg-accent-soft;
 }
 
 .contact-autocomplete-info {

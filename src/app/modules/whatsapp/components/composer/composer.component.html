@@ -47,7 +47,7 @@
     </div>
   </div>
 
-  <div class="composer__emoji-panel" *ngIf="isEmojiPickerOpen">
+  <div class="composer__emoji-panel" *ngIf="isEmojiPickerOpen" data-composer-popover-root>
     <div class="composer__emoji-grid">
       <button
         *ngFor="let emoji of emojiList"
@@ -59,7 +59,7 @@
   </div>
 
   <div class="composer__row">
-    <div class="composer__control-group">
+    <div class="composer__control-group" data-composer-popover-root>
       <button
         type="button"
         class="composer__icon-button composer__icon-button--plain"
@@ -71,7 +71,7 @@
       </button>
     </div>
 
-    <div class="composer__control-group">
+    <div class="composer__control-group composer__control-group--quick-reply" data-composer-popover-root>
       <button
         type="button"
         class="composer__icon-button composer__icon-button--plain"
@@ -93,7 +93,7 @@
       ></app-quick-reply-menu>
     </div>
 
-    <div class="composer__control-group">
+    <div class="composer__control-group" data-composer-popover-root>
       <button
         type="button"
         class="composer__icon-button composer__icon-button--plain"

@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 
 import { AppPageHeaderComponent } from './app-page-header.component';
 
@@ -15,6 +16,7 @@ class HostComponent {}
 
 describe('AppPageHeaderComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
+  let headerComponent: AppPageHeaderComponent;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -22,6 +24,7 @@ describe('AppPageHeaderComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(HostComponent);
+    headerComponent = fixture.debugElement.query(By.directive(AppPageHeaderComponent)).componentInstance;
     fixture.detectChanges();
   });
 
@@ -41,5 +44,28 @@ describe('AppPageHeaderComponent', () => {
 
     expect(menuItem).toBeTruthy();
     expect(menuItem.textContent).toContain('Configuração');
+  });
+
+  it('closes the config menu when clicking outside the header menu', () => {
+    const menuButton = fixture.nativeElement.querySelectorAll('.app-page-header__menu-button')[1] as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(headerComponent.isMenuOpen).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.header-config-menu')).toBeFalsy();
+  });
+
+  it('closes the config menu on Escape', () => {
+    const menuButton = fixture.nativeElement.querySelectorAll('.app-page-header__menu-button')[1] as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+
+    expect(headerComponent.isMenuOpen).toBeFalse();
   });
 });

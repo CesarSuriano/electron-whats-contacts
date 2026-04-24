@@ -13,6 +13,7 @@ export class ScheduledMessageService implements OnDestroy {
   private readonly schedulesSubject = new BehaviorSubject<ScheduledMessage[]>([]);
   private checkTimer: number | null = null;
   private readonly upcomingSubject = new BehaviorSubject<ScheduledMessage | null>(null);
+  private readonly executingScheduleIds = new Set<string>();
 
   schedules$: Observable<ScheduledMessage[]> = this.schedulesSubject.asObservable();
 
@@ -59,7 +60,41 @@ export class ScheduledMessageService implements OnDestroy {
   }
 
   remove(id: string): void {
+    this.executingScheduleIds.delete(id);
     this.setSchedules(this.schedulesSubject.value.filter(s => s.id !== id));
+    if (this.upcomingSubject.value?.id === id) {
+      this.upcomingSubject.next(null);
+    }
+  }
+
+  beginExecution(id: string): void {
+    const schedule = this.getById(id);
+    if (!schedule) {
+      return;
+    }
+
+    this.executingScheduleIds.add(id);
+
+    if (schedule.status === 'notified') {
+      const list = this.schedulesSubject.value.map(s =>
+        s.id === id ? { ...s, status: 'pending' as const } : s
+      );
+      this.setSchedules(list);
+    }
+
+    if (this.upcomingSubject.value?.id === id) {
+      this.upcomingSubject.next(null);
+    }
+  }
+
+  completeExecution(id: string): void {
+    this.executingScheduleIds.delete(id);
+    this.markDone(id);
+  }
+
+  cancelExecution(id: string): void {
+    this.executingScheduleIds.delete(id);
+
     if (this.upcomingSubject.value?.id === id) {
       this.upcomingSubject.next(null);
     }
@@ -113,7 +148,7 @@ export class ScheduledMessageService implements OnDestroy {
     const schedules = this.schedulesSubject.value;
 
     for (const schedule of schedules) {
-      if (schedule.status !== 'pending') continue;
+      if (schedule.status !== 'pending' || this.executingScheduleIds.has(schedule.id)) continue;
 
       const targetMs = new Date(schedule.scheduledAt).getTime();
       if (!Number.isFinite(targetMs)) continue;

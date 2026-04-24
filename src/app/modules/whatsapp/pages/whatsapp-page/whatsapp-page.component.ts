@@ -9,6 +9,7 @@ import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper'
 import { AgentService } from '../../../../services/agent.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
+import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 
@@ -35,6 +36,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   sessionErrorMessage = '';
   isAgentEnabled = false;
   hasAgentConfiguration = false;
+  schedulesBadgeCount = 0;
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
@@ -49,6 +51,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     private whatsappGatewayService: WhatsappWebjsGatewayService,
     private ws: WhatsappWsService,
     private scheduleListLauncher: ScheduleListLauncherService,
+    private scheduledMessageService: ScheduledMessageService,
     private managerLaunch: ManagerLaunchService
   ) {}
 
@@ -78,6 +81,14 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.managerLaunch.openLabelManager$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => (this.isLabelManagerOpen = true));
+
+    this.scheduledMessageService.schedules$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(list => {
+        this.schedulesBadgeCount = list.filter(schedule =>
+          schedule.status === 'pending' || schedule.status === 'notified'
+        ).length;
+      });
   }
 
   ngOnDestroy(): void {

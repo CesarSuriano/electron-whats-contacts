@@ -1,6 +1,11 @@
 <ng-container *ngIf="isOpen">
   <div class="modal-backdrop" (click)="close.emit()"></div>
-  <section class="schedule-list-modal" aria-modal="true" role="dialog">
+  <section
+    class="schedule-list-modal"
+    [class.schedule-list-modal--edit]="view === 'edit'"
+    aria-modal="true"
+    role="dialog"
+  >
 
     <!-- LIST VIEW -->
     <ng-container *ngIf="view === 'list'">
@@ -128,20 +133,26 @@
             <div class="contact-picker-search">
               <span class="material-symbols-outlined contact-search-icon">search</span>
               <input
+                #contactSearchInput
                 type="text"
                 class="schedule-input contact-search-input"
                 placeholder="Buscar contato para adicionar..."
                 [(ngModel)]="contactSearch"
+                (ngModelChange)="onContactSearchChange($event)"
                 (focus)="onContactInputFocus()"
                 (blur)="onContactInputBlur()"
+                (keydown)="onContactSearchKeydown($event)"
+                autocomplete="off"
               />
             </div>
             <div class="contact-autocomplete-dropdown" *ngIf="showAutocomplete">
               <button
                 type="button"
                 class="contact-autocomplete-item"
-                *ngFor="let c of autocompleteResults"
-                (mousedown)="onSelectAutocomplete(c)"
+                *ngFor="let c of autocompleteResults; let i = index; trackBy: trackAutocompleteContact"
+                [class.contact-autocomplete-item--active]="i === highlightedAutocompleteIndex"
+                (mousedown)="onAutocompleteItemMouseDown(c, $event)"
+                (mouseenter)="onAutocompleteItemMouseEnter(i)"
               >
                 <div class="contact-autocomplete-info">
                   <span class="contact-autocomplete-name" *ngIf="c.name">{{ c.name }}</span>

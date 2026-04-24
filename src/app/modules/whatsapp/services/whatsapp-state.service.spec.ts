@@ -311,6 +311,22 @@ describe('WhatsappStateService', () => {
       service.selectContact(mockContact.jid);
       expect(draft).toBe('rascunho da Alice');
     });
+
+    it('can clear draft text for multiple conversations at once', () => {
+      let draft = '';
+      (service as any).contactsSubject.next([mockContact, secondMockContact]);
+      service.draftText$.subscribe(value => (draft = value));
+
+      service.selectContact(mockContact.jid);
+      service.setDraftText('rascunho da Alice');
+      service.selectContact(secondMockContact.jid);
+      service.setDraftText('rascunho do Bob');
+
+      service.clearDraftTextsForJids([mockContact.jid, secondMockContact.jid]);
+      service.selectContact(mockContact.jid, { loadHistory: false, markAsRead: false });
+
+      expect(draft).toBe('');
+    });
   });
 
   describe('setDraftImageDataUrl', () => {
@@ -392,6 +408,15 @@ describe('WhatsappStateService', () => {
 
       expect(gateway.loadChatMessages).not.toHaveBeenCalled();
       expect(loadingState.messages).toBeFalse();
+    });
+
+    it('supports lightweight contact selection without history loading or mark-as-read', () => {
+      gateway.loadChatMessages.and.returnValue(of([]));
+
+      service.selectContact(mockContact.jid, { loadHistory: false, markAsRead: false });
+
+      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
+      expect(gateway.markChatSeen).not.toHaveBeenCalled();
     });
 
     it('still loads full history when the chat only has shallow preview messages', () => {

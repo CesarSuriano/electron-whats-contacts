@@ -60,11 +60,15 @@
 }
 
 .composer__row {
-  @apply flex items-center gap-2;
+  @apply relative flex items-center gap-2;
 }
 
 .composer__control-group {
   @apply relative;
+}
+
+.composer__control-group--quick-reply {
+  @apply static;
 }
 
 .composer__icon-button {

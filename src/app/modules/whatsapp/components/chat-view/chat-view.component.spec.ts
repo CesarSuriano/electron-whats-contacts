@@ -32,6 +32,7 @@ describe('ChatViewComponent', () => {
   let bulkSpy: jasmine.SpyObj<BulkSendService>;
   let feedbackSpy: jasmine.SpyObj<AssistantFeedbackService>;
   let agentSpy: jasmine.SpyObj<AgentService>;
+  let queueSubject: BehaviorSubject<any>;
   let jidSubject: BehaviorSubject<string>;
   let draftSubject: BehaviorSubject<string>;
   let draftImageSubject: BehaviorSubject<string | null>;
@@ -58,7 +59,7 @@ describe('ChatViewComponent', () => {
     selectedContactSubject = new BehaviorSubject<WhatsappContact | null>(contact);
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'getMessagesFor', 'setDraftText', 'sendText', 'sendMedia'
+      'getMessagesFor', 'getDraftTextForJid', 'setDraftText', 'setDraftTextForJid', 'sendText', 'sendMedia'
     ], {
       selectedContactJid$: jidSubject.asObservable(),
       contacts$: contacts$.asObservable(),
@@ -71,13 +72,17 @@ describe('ChatViewComponent', () => {
       selectedContact$: selectedContactSubject.asObservable()
     });
     stateSpy.getMessagesFor.and.returnValue([]);
+    stateSpy.getDraftTextForJid.and.returnValue('');
     return stateSpy;
   };
 
   beforeEach(async () => {
     const spy = makeStateSpyWith(null);
 
+    queueSubject = new BehaviorSubject<any>(null);
+
     bulkSpy = jasmine.createSpyObj('BulkSendService', [], {
+      queue$: queueSubject.asObservable(),
       hasActiveQueue: false
     });
 
@@ -134,11 +139,58 @@ describe('ChatViewComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('onDraftChange updates draftText and notifies state', () => {
+  it('onDraftChange updates draftText and syncs state after a short debounce', fakeAsync(() => {
+    component.contact = makeContact('a@c.us');
+
     component.onDraftChange('new text');
+
     expect(component.draftText).toBe('new text');
-    expect(stateSpy.setDraftText).toHaveBeenCalledWith('new text');
+    expect(stateSpy.setDraftTextForJid).not.toHaveBeenCalled();
+
+    tick(40);
+
+    expect(stateSpy.setDraftTextForJid).toHaveBeenCalledWith('a@c.us', 'new text');
+  }));
+
+  it('cancels a pending draft sync when the external state clears the draft', () => {
+    component.contact = makeContact('a@c.us');
+
+    component.onDraftChange('texto antigo');
+    draftSubject.next('');
+
+    expect(stateSpy.setDraftTextForJid).not.toHaveBeenCalled();
+    expect(component.draftText).toBe('');
   });
+
+  it('restores composer focus when an active bulk queue is cancelled', fakeAsync(() => {
+    component.contact = makeContact('a@c.us');
+    const composerSpy = jasmine.createSpyObj('ComposerComponent', ['focus']);
+    component.composer = composerSpy;
+
+    queueSubject.next({ items: [] });
+    queueSubject.next(null);
+    tick();
+
+    expect(composerSpy.focus).toHaveBeenCalled();
+  }));
+
+  it('retries composer focus after bulk cancel once message syncing finishes', fakeAsync(() => {
+    component.contact = makeContact('a@c.us');
+    const composerSpy = jasmine.createSpyObj('ComposerComponent', ['focus']);
+    component.composer = composerSpy;
+
+    loadingSubject.next({ instances: false, contacts: false, messages: true, sending: false });
+    queueSubject.next({ items: [] });
+    queueSubject.next(null);
+    tick();
+
+    expect(composerSpy.focus).not.toHaveBeenCalled();
+
+    loadingSubject.next({ instances: false, contacts: false, messages: false, sending: false });
+    tick();
+
+    expect(composerSpy.focus).toHaveBeenCalledTimes(1);
+  }));
 
   it('onSendText calls state.sendText with correct args', () => {
     component.contact = makeContact('a@c.us');
@@ -151,7 +203,7 @@ describe('ChatViewComponent', () => {
     expect(stateSpy.sendText).toHaveBeenCalledWith('a@c.us', 'hello');
   });
 
-  it('waits a bit before generating a suggestion so consecutive customer messages can be grouped', fakeAsync(() => {
+  it('keeps AI disabled even when agent settings are enabled', fakeAsync(() => {
     const contact = makeContact('a@c.us');
     gemSettingsSubject.next({
       enabled: true,
@@ -167,22 +219,14 @@ describe('ChatViewComponent', () => {
       makeMessage('1', 'quero ver a calça', false)
     ]);
 
-    tick(1500);
-  expect(agentSpy.generateSuggestion).not.toHaveBeenCalled();
+    tick(4000);
 
-    selectedMessagesSubject.next([
-      makeMessage('1', 'quero ver a calça', false),
-      makeMessage('2', 'no 36', false)
-    ]);
-
-    tick(2000);
     expect(agentSpy.generateSuggestion).not.toHaveBeenCalled();
-
-    tick(900);
-    expect(agentSpy.generateSuggestion).toHaveBeenCalledTimes(1);
+    expect(component.isSuggestionToggleOn).toBeFalse();
+    expect(component.aiStatusMessage).toBe('');
   }));
 
-  it('ignores ready snapshots from the same contact when the context key is stale', fakeAsync(() => {
+  it('ignores manual refresh and guided suggestion requests while AI is disabled', fakeAsync(() => {
     const contact = makeContact('a@c.us');
     gemSettingsSubject.next({
       enabled: true,
@@ -193,123 +237,22 @@ describe('ChatViewComponent', () => {
     });
     selectedContactSubject.next(contact);
     jidSubject.next(contact.jid);
-    selectedMessagesSubject.next([
-      makeMessage('1', 'quero ver o 36', false)
-    ]);
+    selectedMessagesSubject.next([makeMessage('1', 'quero ver o 36', false)]);
 
-    tick(1900);
+    component.onRefreshAiSuggestion();
+    component.onGuidedAiSuggestion('responda curto e direto');
+    tick();
 
-    gemSuggestionSubject.next({
-      status: 'ready',
-      contactJid: contact.jid,
-      contextKey: 'contexto-antigo',
-      suggestion: 'resposta velha',
-      errorMessage: '',
-      source: 'gem',
-      updatedAt: new Date().toISOString()
-    });
-
-    expect(component.aiSuggestion).toBe('');
+    expect(agentSpy.generateSuggestion).not.toHaveBeenCalled();
   }));
 
-  it('queues follow-up messages when the agent returns multiple parts', () => {
+  it('does not record agent feedback while AI is disabled', () => {
     const contact = makeContact('a@c.us');
     component.contact = contact;
-    selectedContactSubject.next(contact);
-    jidSubject.next(contact.jid);
-    selectedMessagesSubject.next([makeMessage('1', 'quero saber horario e parcelamento', false)]);
-    stateSpy.sendText.and.returnValue(of(undefined));
-    agentSpy.clearSuggestion.and.callFake(() => {
-      gemSuggestionSubject.next({
-        status: 'idle',
-        contactJid: contact.jid,
-        contextKey: 'a@c.us::1',
-        suggestion: '',
-        errorMessage: '',
-        source: 'none',
-        updatedAt: null
-      });
-    });
-
-    gemSuggestionSubject.next({
-      status: 'ready',
-      contactJid: 'a@c.us',
-      contextKey: 'a@c.us::1',
-      suggestion: 'Primeira resposta ||| Segunda resposta',
-      errorMessage: '',
-      source: 'gem',
-      updatedAt: new Date().toISOString()
-    });
-
-    component.onAcceptAiSuggestion('Primeira resposta');
-    component.onSendText('Primeira resposta');
-
-    expect(component.aiSuggestion).toBe('Segunda resposta');
-  });
-
-  it('does not promote a queued follow-up after a manual send changes the topic', () => {
-    const contact = makeContact('a@c.us');
-    component.contact = contact;
-    selectedContactSubject.next(contact);
-    jidSubject.next(contact.jid);
-    selectedMessagesSubject.next([makeMessage('1', 'oi', false)]);
-    stateSpy.sendText.and.returnValue(of(undefined));
-
-    gemSuggestionSubject.next({
-      status: 'ready',
-      contactJid: 'a@c.us',
-      contextKey: 'a@c.us::1',
-      suggestion: 'Temos sim o modelo flare no 36. ||| Vou te enviar as fotos das opções que temos no azul e no modelo flare agora mesmo.',
-      errorMessage: '',
-      source: 'gem',
-      updatedAt: new Date().toISOString()
-    });
-
-    component.onDraftChange('Estou procurando a camisa italiana');
-    component.onSendText('Estou procurando a camisa italiana');
-
-    expect(component.aiSuggestion).toBe('');
-  });
-
-  it('passes the operator instruction when requesting a guided suggestion', () => {
-    const contact = makeContact('a@c.us');
-    component.contact = contact;
-    component.disabled = false;
-    component.isSyncingMessages = false;
-    gemSettingsSubject.next({
-      enabled: true,
-      gemUrl: 'https://gemini.google.com/gem/teste',
-      responseMode: 'reasoning',
-      googleAccounts: [{ id: 'primary', label: 'Conta principal', createdAt: new Date().toISOString(), lastUsedAt: null }],
-      activeGoogleAccountId: 'primary'
-    });
-    selectedContactSubject.next(contact);
-    jidSubject.next(contact.jid);
-    selectedMessagesSubject.next([
-      makeMessage('1', 'quero o valor', false)
-    ]);
-
-    component.onGuidedAiSuggestion('responda curto e direto');
-
-    expect(agentSpy.generateSuggestion).toHaveBeenCalledWith(jasmine.objectContaining({
-      operatorInstruction: 'responda curto e direto'
-    }));
-  });
-
-  it('records feedback as Gem feedback', () => {
-    const contact = makeContact('a@c.us');
-    component.contact = contact;
-    selectedMessagesSubject.next([
-      makeMessage('1', 'oi', false)
-    ]);
     component.aiSuggestion = 'Resposta pronta';
 
     component.onRateAiSuggestion('up');
 
-    expect(feedbackSpy.record).toHaveBeenCalledWith(jasmine.objectContaining({
-      provider: 'gem',
-      rating: 'up',
-      contactJid: 'a@c.us'
-    }));
+    expect(feedbackSpy.record).not.toHaveBeenCalled();
   });
 });

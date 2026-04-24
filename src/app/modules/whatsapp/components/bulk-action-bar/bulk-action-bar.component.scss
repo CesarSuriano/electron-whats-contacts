@@ -12,7 +12,7 @@
 
 .btn-icon:disabled,
 .btn-link:disabled,
-.btn-primary:disabled {
+.bulk-bar__primary-action:disabled {
   @apply cursor-not-allowed opacity-55;
 }
 
@@ -36,15 +36,19 @@
   @apply bg-transparent;
 }
 
-.btn-primary {
+.bulk-bar__primary-action {
   @apply inline-flex cursor-pointer items-center gap-[0.4rem] rounded-[18px] border-none bg-white px-3.5 py-[0.45rem] text-[0.9rem] font-medium text-[#00755a];
 }
 
-.btn-primary:disabled {
+.bulk-bar__primary-action:hover:not(:disabled) {
+  @apply bg-white/90;
+}
+
+.bulk-bar__primary-action:disabled {
   @apply cursor-not-allowed opacity-55;
 }
 
-.btn-primary .material-symbols-outlined {
+.bulk-bar__primary-action .material-symbols-outlined {
   @apply text-[1.1rem];
 }
 

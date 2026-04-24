@@ -7,7 +7,7 @@
 
   <div class="bulk-actions">
     <button type="button" class="btn-link" *ngIf="!allSelected" [disabled]="disabled" (click)="selectAll.emit()">
-      Selecionar todas
+      Selecionar tudo
     </button>
     <button type="button" class="btn-link" *ngIf="selectedCount > 0" [disabled]="disabled" (click)="clearSelection.emit()">
       Limpar
@@ -32,7 +32,7 @@
     </button>
     <button
       type="button"
-      class="btn-primary"
+      class="bulk-bar__primary-action"
       [disabled]="disabled || selectedCount === 0"
       (click)="openBulkSend.emit()"
     >

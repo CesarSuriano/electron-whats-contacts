@@ -7,6 +7,11 @@ import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } fro
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
 
+export interface SelectContactOptions {
+  loadHistory?: boolean;
+  markAsRead?: boolean;
+}
+
 const LOCAL_MESSAGE_TTL_MS = 30000;
 const PHOTO_BATCH_SIZE = 6;
 const PHOTO_NULL_RETRY_MS = 30 * 60 * 1000;
@@ -215,12 +220,24 @@ export class WhatsappStateService implements OnDestroy {
     return this.selectedContactJidSubject.value;
   }
 
+  get isSending(): boolean {
+    return this.loadingStateSubject.value.sending;
+  }
+
   get contacts(): WhatsappContact[] {
     return this.contactsSubject.value;
   }
 
   getContact(jid: string): WhatsappContact | null {
     return this.contactsSubject.value.find(contact => contact.jid === jid) || null;
+  }
+
+  getDraftTextForJid(jid: string): string {
+    return jid ? this.draftTextByJidSubject.value[jid] || '' : '';
+  }
+
+  getDraftImageDataUrlForJid(jid: string): string | null {
+    return jid ? this.draftImageDataUrlByJidSubject.value[jid] ?? null : null;
   }
 
   getMessagesFor(jid: string): WhatsappMessage[] {
@@ -278,11 +295,16 @@ export class WhatsappStateService implements OnDestroy {
     void this.loadContacts({ bootstrap: true });
   }
 
-  selectContact(jid: string): Promise<void> {
-    this.selectedContactJidSubject.next(jid);
-    this.markContactAsRead(jid);
+  selectContact(jid: string, options: SelectContactOptions = {}): Promise<void> {
+    const shouldMarkAsRead = options.markAsRead ?? true;
+    const shouldLoadHistory = options.loadHistory ?? true;
 
-    if (this.shouldForceHistoryLoad(jid)) {
+    this.selectedContactJidSubject.next(jid);
+    if (shouldMarkAsRead) {
+      this.markContactAsRead(jid);
+    }
+
+    if (shouldLoadHistory && this.shouldForceHistoryLoad(jid)) {
       return this.loadHistorySilentlyForContact(jid);
     }
 
@@ -671,6 +693,10 @@ export class WhatsappStateService implements OnDestroy {
 
   setDraftText(text: string): void {
     const jid = this.selectedContactJid;
+    this.setDraftTextForJid(jid, text);
+  }
+
+  setDraftTextForJid(jid: string, text: string): void {
     if (!jid) {
       return;
     }
@@ -698,8 +724,20 @@ export class WhatsappStateService implements OnDestroy {
     });
   }
 
+  clearDraftTextsForJids(jids: string[]): void {
+    const next = this.removeDraftEntries(this.draftTextByJidSubject.value, jids);
+
+    if (next !== this.draftTextByJidSubject.value) {
+      this.draftTextByJidSubject.next(next);
+    }
+  }
+
   setDraftImageDataUrl(dataUrl: string | null): void {
     const jid = this.selectedContactJid;
+    this.setDraftImageDataUrlForJid(jid, dataUrl);
+  }
+
+  setDraftImageDataUrlForJid(jid: string, dataUrl: string | null): void {
     if (!jid) {
       return;
     }
@@ -724,6 +762,37 @@ export class WhatsappStateService implements OnDestroy {
       ...current,
       [jid]: dataUrl
     });
+  }
+
+  clearDraftImageDataUrlsForJids(jids: string[]): void {
+    const next = this.removeDraftEntries(this.draftImageDataUrlByJidSubject.value, jids);
+
+    if (next !== this.draftImageDataUrlByJidSubject.value) {
+      this.draftImageDataUrlByJidSubject.next(next);
+    }
+  }
+
+  private removeDraftEntries<T>(current: Record<string, T>, jids: string[]): Record<string, T> {
+    if (!jids.length) {
+      return current;
+    }
+
+    let next: Record<string, T> | null = null;
+
+    for (const jid of new Set(jids.filter(Boolean))) {
+      const source = next ?? current;
+      if (!(jid in source)) {
+        continue;
+      }
+
+      if (!next) {
+        next = { ...current };
+      }
+
+      delete next[jid];
+    }
+
+    return next ?? current;
   }
 
   private notifyMessageSent(jid: string): void {

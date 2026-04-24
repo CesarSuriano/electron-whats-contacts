@@ -18,20 +18,36 @@ export interface BulkItem {
 export interface BulkQueue {
   template: string;
   imageDataUrl?: string;
+  scheduleId?: string;
   items: BulkItem[];
   isPaused: boolean;
   createdAt: string;
 }
 
+export interface BulkStartOptions {
+  scheduleId?: string;
+}
+
+export interface BulkScheduleLifecycleEvent {
+  scheduleId: string;
+  outcome: 'completed' | 'cancelled';
+}
+
 const STORAGE_KEY = 'uniq-system.whatsapp.bulk-queue';
+const QUEUE_PERSIST_DEBOUNCE_MS = 120;
 
 @Injectable({ providedIn: 'root' })
 export class BulkSendService implements OnDestroy {
   private readonly queueSubject = new BehaviorSubject<BulkQueue | null>(null);
   private readonly destroy$ = new Subject<void>();
+  private readonly scheduleLifecycleSubject = new Subject<BulkScheduleLifecycleEvent>();
   private sentSubscription: Subscription | null = null;
+  private persistTimerId: number | null = null;
+  private pendingPersistQueue: BulkQueue | null = null;
+  private readonly draftStateJids = new Set<string>();
 
   queue$: Observable<BulkQueue | null> = this.queueSubject.asObservable();
+  scheduleLifecycle$: Observable<BulkScheduleLifecycleEvent> = this.scheduleLifecycleSubject.asObservable();
 
   constructor(private state: WhatsappStateService) {
     this.restoreQueue();
@@ -39,6 +55,7 @@ export class BulkSendService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.flushPendingPersist();
     this.destroy$.next();
     this.destroy$.complete();
     this.sentSubscription?.unsubscribe();
@@ -53,25 +70,42 @@ export class BulkSendService implements OnDestroy {
     return Boolean(this.queueSubject.value);
   }
 
-  start(contacts: WhatsappContact[], template: string, imageDataUrl?: string): void {
+  get isSendingCurrent(): boolean {
+    return this.state.isSending;
+  }
+
+  get canSendCurrent(): boolean {
+    const queue = this.queueSubject.value;
+    const current = this.currentItem;
+    if (!queue || queue.isPaused || !current || this.isSendingCurrent) {
+      return false;
+    }
+
+    return !!this.state.getDraftTextForJid(current.jid).trim() || !!this.resolveCurrentImageDataUrl(current.jid, queue);
+  }
+
+  start(contacts: WhatsappContact[], template: string, imageDataUrl?: string, options: BulkStartOptions = {}): void {
     if (!contacts.length || !template.trim()) {
       return;
     }
 
+    this.clearDraftStateForJids(Array.from(this.draftStateJids));
+
     const queue: BulkQueue = {
       template,
       imageDataUrl,
-      items: contacts.map(contact => ({
+      scheduleId: options.scheduleId,
+      items: contacts.map((contact, index) => ({
         jid: contact.jid,
         name: contact.name || contact.phone,
-        status: 'pending'
+        status: index === 0 ? 'current' : 'pending'
       })),
       isPaused: false,
       createdAt: new Date().toISOString()
     };
 
     this.setQueue(queue);
-    this.advanceToNext();
+    this.openCurrent();
   }
 
   pause(): void {
@@ -97,14 +131,66 @@ export class BulkSendService implements OnDestroy {
   }
 
   skipCurrent(): void {
+    if (this.isSendingCurrent) {
+      return;
+    }
+
+    const current = this.currentItem;
+
     this.updateCurrent('skipped');
+    this.clearDraftStateForJids(current ? [current.jid] : []);
     this.advanceToNext();
   }
 
+  sendCurrent(): void {
+    const queue = this.queueSubject.value;
+    const current = this.currentItem;
+    if (!queue || queue.isPaused || !current || this.isSendingCurrent) {
+      return;
+    }
+
+    const caption = this.state.getDraftTextForJid(current.jid).trim();
+    const imageDataUrl = this.resolveCurrentImageDataUrl(current.jid, queue);
+
+    if (imageDataUrl) {
+      const file = this.dataUrlToFile(imageDataUrl);
+      if (!file) {
+        return;
+      }
+
+      this.state.sendMedia(current.jid, file, caption).subscribe({
+        next: () => {},
+        error: () => {}
+      });
+      return;
+    }
+
+    if (!caption) {
+      return;
+    }
+
+    this.state.sendText(current.jid, caption).subscribe({
+      next: () => {},
+      error: () => {}
+    });
+  }
+
   cancel(): void {
+    const queue = this.queueSubject.value;
+    if (this.isSendingCurrent) {
+      return;
+    }
+
+    if (!queue) {
+      return;
+    }
+
+    this.clearQueueDraftState();
     this.setQueue(null);
-    this.state.setDraftText('');
-    this.state.setDraftImageDataUrl(null);
+
+    if (queue.scheduleId) {
+      this.scheduleLifecycleSubject.next({ scheduleId: queue.scheduleId, outcome: 'cancelled' });
+    }
   }
 
   private openCurrent(): void {
@@ -118,9 +204,51 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
-    this.state.selectContact(current.jid);
-    this.state.setDraftText(renderBulkTemplate(queue.template, current.name));
-    this.state.setDraftImageDataUrl(queue.imageDataUrl ?? null);
+    if (this.state.selectedContactJid !== current.jid) {
+      void this.state.selectContact(current.jid, { loadHistory: false, markAsRead: false });
+    }
+
+    this.state.setDraftTextForJid(current.jid, renderBulkTemplate(queue.template, current.name));
+    this.state.setDraftImageDataUrlForJid(current.jid, queue.imageDataUrl ?? null);
+    this.draftStateJids.add(current.jid);
+  }
+
+  private resolveCurrentImageDataUrl(jid: string, queue: BulkQueue): string | null {
+    return queue.imageDataUrl ?? this.state.getDraftImageDataUrlForJid(jid);
+  }
+
+  private dataUrlToFile(dataUrl: string): File | null {
+    try {
+      const commaIndex = dataUrl.indexOf(',');
+      if (commaIndex === -1) {
+        return null;
+      }
+
+      const header = dataUrl.slice(0, commaIndex);
+      const base64Data = dataUrl.slice(commaIndex + 1);
+      const mimeMatch = header.match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const byteString = atob(base64Data);
+      const bytes = new Uint8Array(byteString.length);
+
+      for (let index = 0; index < byteString.length; index += 1) {
+        bytes[index] = byteString.charCodeAt(index);
+      }
+
+      const extension = this.detectExtensionFromMime(mime);
+      return new File([bytes], `bulk-template.${extension}`, { type: mime });
+    } catch {
+      return null;
+    }
+  }
+
+  private detectExtensionFromMime(mime: string): string {
+    const subtype = mime.split('/')[1] || 'bin';
+    const normalized = subtype.split(';')[0].toLowerCase();
+    if (normalized === 'jpeg') {
+      return 'jpg';
+    }
+    return normalized.includes('+') ? normalized.split('+')[0] : normalized;
   }
 
   private advanceToNext(): void {
@@ -148,9 +276,16 @@ export class BulkSendService implements OnDestroy {
   }
 
   private finishQueue(): void {
+    const queue = this.queueSubject.value;
+    if (queue) {
+      this.clearQueueDraftState();
+    }
+
     this.setQueue(null);
-    this.state.setDraftText('');
-    this.state.setDraftImageDataUrl(null);
+
+    if (queue?.scheduleId) {
+      this.scheduleLifecycleSubject.next({ scheduleId: queue.scheduleId, outcome: 'completed' });
+    }
   }
 
   private updateCurrent(status: BulkItemStatus, errorMessage?: string): void {
@@ -179,13 +314,58 @@ export class BulkSendService implements OnDestroy {
         }
 
         this.updateCurrent('done');
+        this.clearDraftStateForJids([current.jid]);
         this.advanceToNext();
       });
   }
 
   private setQueue(queue: BulkQueue | null): void {
     this.queueSubject.next(queue);
-    this.persistQueue(queue);
+    this.schedulePersist(queue);
+  }
+
+  private clearQueueDraftState(): void {
+    this.clearDraftStateForJids(Array.from(this.draftStateJids));
+  }
+
+  private clearDraftStateForJids(jids: string[]): void {
+    if (!jids.length) {
+      return;
+    }
+
+    this.state.clearDraftTextsForJids(jids);
+    this.state.clearDraftImageDataUrlsForJids(jids);
+    jids.forEach(jid => this.draftStateJids.delete(jid));
+  }
+
+  private schedulePersist(queue: BulkQueue | null): void {
+    this.pendingPersistQueue = queue;
+
+    if (this.persistTimerId !== null) {
+      window.clearTimeout(this.persistTimerId);
+      this.persistTimerId = null;
+    }
+
+    if (!queue) {
+      this.persistQueue(null);
+      return;
+    }
+
+    this.persistTimerId = window.setTimeout(() => {
+      const snapshot = this.pendingPersistQueue;
+      this.persistTimerId = null;
+      this.persistQueue(snapshot);
+    }, QUEUE_PERSIST_DEBOUNCE_MS);
+  }
+
+  private flushPendingPersist(): void {
+    if (this.persistTimerId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.persistTimerId);
+    this.persistTimerId = null;
+    this.persistQueue(this.pendingPersistQueue);
   }
 
   private persistQueue(queue: BulkQueue | null): void {

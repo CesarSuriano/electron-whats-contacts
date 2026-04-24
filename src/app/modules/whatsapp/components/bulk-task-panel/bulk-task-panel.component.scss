@@ -1,7 +1,5 @@
 ﻿.bulk-panel {
-  @apply fixed right-5 z-30 flex w-[340px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bottom-[5.75rem] flex-col overflow-hidden rounded-[14px] bg-surface;
-  border: 1px solid var(--border);
-  box-shadow: 0 20px 40px rgba(11, 20, 26, 0.18);
+  @apply fixed bottom-[5.75rem] right-5 z-30 flex max-h-[calc(100vh-8rem)] w-[340px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_20px_40px_rgba(11,20,26,0.18)];
   animation: slideUp 0.25s ease-out;
 }
 
@@ -16,7 +14,7 @@
 
 .bulk-panel-header {
   @apply flex items-center justify-between gap-2 px-[0.85rem] pt-3 pb-[0.6rem] text-white;
-  background: linear-gradient(135deg, #006e5a 0%, #00a884 100%);
+  @apply bg-[linear-gradient(135deg,#006e5a_0%,#00a884_100%)];
 }
 
 .bulk-panel-title {
@@ -75,6 +73,10 @@
   @apply mt-[0.05rem] shrink-0 text-[1.05rem];
 }
 
+.bulk-panel-window-summary {
+  @apply m-0 border-b border-border bg-surface-2 py-[0.45rem] px-[0.85rem] text-[0.76rem] text-txt-subtle;
+}
+
 .bulk-panel-list {
   @apply m-0 max-h-[260px] flex-1 list-none overflow-y-auto p-0;
 }
@@ -106,20 +108,12 @@
 .bulk-item.status-error                   { @apply text-danger; }
 .bulk-item.status-error .bulk-item-icon   { @apply text-danger; }
 
-.bulk-panel-shortcut-hint {
-  @apply m-0 flex items-center gap-1.5 border-b border-border px-[0.85rem] py-[0.45rem] text-[0.74rem] text-txt-subtle;
-}
-
-.bulk-panel-shortcut-hint .material-symbols-outlined {
-  @apply text-[0.95rem];
-}
-
 .bulk-panel-controls {
-  @apply grid grid-cols-2 gap-1 border-t border-border bg-surface-2 py-[0.65rem] px-3;
+  @apply grid grid-cols-2 gap-2 border-t border-border bg-surface-2 py-[0.75rem] px-3;
 }
 
 .btn-control {
-  @apply inline-flex cursor-pointer items-center justify-center gap-1 rounded-lg border border-border-strong bg-surface py-[0.45rem] px-[0.55rem] text-[0.82rem] text-txt-muted transition-colors;
+  @apply inline-flex min-h-[3.15rem] cursor-pointer items-center gap-2 rounded-lg border border-border-strong bg-surface px-3 py-[0.55rem] text-left text-[0.82rem] text-txt-muted transition-colors;
 }
 
 .btn-control:hover:not(:disabled) {
@@ -134,10 +128,39 @@
   @apply text-[1rem];
 }
 
+.btn-control__copy {
+  @apply flex min-w-0 flex-1 flex-col;
+}
+
+.btn-control__label {
+  @apply text-[0.82rem] font-medium leading-tight;
+}
+
+.btn-control__shortcut {
+  @apply text-[0.68rem] uppercase tracking-[0.05em] text-txt-subtle;
+}
+
+.btn-control--primary {
+  @apply border-[#00a884] bg-[#00a884] text-white;
+}
+
+.btn-control--primary:hover:not(:disabled) {
+  @apply border-[#008f72] bg-[#008f72];
+}
+
+.btn-control--primary:disabled {
+  @apply border-[#00a884] bg-[#00a884];
+}
+
 .btn-control.danger {
   @apply text-danger border-danger-soft;
 }
 
 .btn-control.danger:hover:not(:disabled) {
   @apply bg-danger-soft;
+}
+
+.btn-control.danger .btn-control__shortcut,
+.btn-control--primary .btn-control__shortcut {
+  @apply text-current opacity-70;
 }

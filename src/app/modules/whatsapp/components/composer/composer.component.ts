@@ -115,14 +115,40 @@ export class ComposerComponent {
     this.updateQuickReplyMenuFromText(value);
   }
 
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      this.closeTransientPopovers();
+      return;
+    }
+
+    const path = (event.composedPath && event.composedPath()) || [];
+    for (const node of path) {
+      if (node instanceof HTMLElement && node.hasAttribute('data-composer-popover-root')) {
+        return;
+      }
+    }
+
+    if (target.closest('[data-composer-popover-root]')) {
+      return;
+    }
+
+    this.closeTransientPopovers();
+  }
+
   toggleQuickReplyMenu(): void {
     if (this.disabled || this.isSending) {
       return;
     }
-    if (this.isQuickReplyMenuOpen) {
-      this.closeQuickReplyMenu();
+
+    const shouldOpen = !this.isQuickReplyMenuOpen;
+    this.closeTransientPopovers(shouldOpen ? 'quickReply' : undefined);
+
+    if (!shouldOpen) {
       return;
     }
+
     this.isQuickReplyForcedOpen = true;
     this.quickReplyQuery = this.extractQuickReplyQuery(this.draftText);
     this.isQuickReplyMenuOpen = true;
@@ -156,6 +182,7 @@ export class ComposerComponent {
   private updateQuickReplyMenuFromText(value: string): void {
     const match = value.match(QUICK_REPLY_TRIGGER_REGEX);
     if (match) {
+      this.closeTransientPopovers('quickReply');
       this.quickReplyQuery = match[1] || '';
       this.isQuickReplyMenuOpen = true;
       return;
@@ -366,7 +393,10 @@ export class ComposerComponent {
     if (this.disabled || this.isSending) {
       return;
     }
-    this.isAttachMenuOpen = !this.isAttachMenuOpen;
+
+    const shouldOpen = !this.isAttachMenuOpen;
+    this.closeTransientPopovers(shouldOpen ? 'attach' : undefined);
+    this.isAttachMenuOpen = shouldOpen;
   }
 
   chooseFile(kind: 'image' | 'document'): void {
@@ -449,7 +479,10 @@ export class ComposerComponent {
 
   toggleEmojiPicker(): void {
     if (this.disabled || this.isSending) return;
-    this.isEmojiPickerOpen = !this.isEmojiPickerOpen;
+
+    const shouldOpen = !this.isEmojiPickerOpen;
+    this.closeTransientPopovers(shouldOpen ? 'emoji' : undefined);
+    this.isEmojiPickerOpen = shouldOpen;
   }
 
   insertEmoji(emoji: string): void {
@@ -545,6 +578,20 @@ export class ComposerComponent {
     if (this.filePreviewUrl) {
       URL.revokeObjectURL(this.filePreviewUrl);
       this.filePreviewUrl = null;
+    }
+  }
+
+  private closeTransientPopovers(except?: 'emoji' | 'quickReply' | 'attach'): void {
+    if (except !== 'emoji') {
+      this.isEmojiPickerOpen = false;
+    }
+
+    if (except !== 'attach') {
+      this.isAttachMenuOpen = false;
+    }
+
+    if (except !== 'quickReply') {
+      this.closeQuickReplyMenu();
     }
   }
 }
