@@ -160,9 +160,10 @@ function startWhatsappBridge() {
       PORT: process.env.PORT || '3344',
       ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
       WWEBJS_DATA_PATH: app.getPath('userData'),
-      // Flags necessárias para o Chrome do Puppeteer funcionar dentro do
-      // ambiente empacotado do Electron (GPU compartilhada, sem zygote, etc.)
-      PUPPETEER_ARGS: '--no-sandbox,--disable-setuid-sandbox,--disable-gpu,--disable-dev-shm-usage,--disable-accelerated-2d-canvas,--no-first-run,--no-zygote'
+      // Apenas as flags mínimas necessárias. NAO incluir --disable-gpu nem
+      // --no-zygote: ambas impedem o whatsapp-web.js de injetar a Store
+      // após a autenticação, deixando o cliente eternamente em "authenticated".
+      PUPPETEER_ARGS: '--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--no-first-run'
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true

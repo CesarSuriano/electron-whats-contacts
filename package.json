@@ -1,6 +1,6 @@
 {
   "name": "uniq-system",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "main": "main.js",
   "scripts": {
     "ng": "ng",
@@ -11,6 +11,7 @@
     "build": "npm run bridge:build && ng build",
     "watch": "ng build --watch --configuration development",
     "dist": "npm run bridge:build && ng build --configuration production && electron-builder",
+    "release": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --win --x64",
     "test": "ng test",
     "make:installer": "npm run bridge:build && ng build --configuration production && electron-builder",
     "package": "npm run bridge:build && electron-forge package",

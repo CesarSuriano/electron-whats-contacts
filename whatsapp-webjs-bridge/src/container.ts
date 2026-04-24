@@ -149,8 +149,16 @@ export function bindClientEvents(container: Container): void {
     sessionState.status = 'authenticated';
     sessionState.qr = null;
     sessionState.lastError = '';
-    console.log('[whatsapp-webjs-bridge] Sessao autenticada.');
+    console.log('[whatsapp-webjs-bridge] Sessao autenticada. Aguardando WhatsApp Web carregar (Store)...');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+  });
+
+  client.on('loading_screen', (percent: number, message: string) => {
+    console.log(`[whatsapp-webjs-bridge] loading_screen ${percent}%: ${message}`);
+  });
+
+  client.on('change_state', (state: string) => {
+    console.log(`[whatsapp-webjs-bridge] change_state: ${state}`);
   });
 
   client.on('ready', async () => {
