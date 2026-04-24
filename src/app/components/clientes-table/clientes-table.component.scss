@@ -7,11 +7,11 @@
 }
 
 .clientes-table__head {
-  @apply bg-surface-2;
+  @apply sticky top-0 z-20 bg-surface-2;
 }
 
 .clientes-table__head-cell {
-  @apply sticky top-0 z-20 cursor-pointer select-none whitespace-nowrap bg-surface-2 px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-txt-muted;
+  @apply cursor-pointer select-none whitespace-nowrap bg-surface-2 px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-txt-muted;
   border-bottom: 1px solid var(--border);
 }
 

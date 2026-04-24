@@ -392,6 +392,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       const result = this.clientesDataService.saveUploadedXml(this.selectedFileName, this.pendingXmlContent);
       this.applyLoadResult(result);
       this.showSuccessToast('Clientes importados com sucesso.');
+      this.isSavingUpload = false;
       this.closeUploadModal();
     } catch (error) {
       console.error('Erro ao salvar XML enviado', error);

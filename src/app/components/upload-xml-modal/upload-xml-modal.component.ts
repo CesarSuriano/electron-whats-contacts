@@ -22,8 +22,22 @@ export class UploadXmlModalComponent {
   @Output() save = new EventEmitter<void>();
   @Output() dragStateChange = new EventEmitter<boolean>();
 
+  // Timestamp usado para ignorar o click sintético que o Electron/Chromium
+  // dispara no documento após fechar o seletor nativo de arquivos.
+  private pickerOpenedAt = 0;
+
   openFilePicker(): void {
+    this.pickerOpenedAt = Date.now();
     this.xmlFileInput?.nativeElement.click();
+  }
+
+  onBackdropClick(): void {
+    // Ignora cliques dentro de ~500ms após abrir o file picker para evitar
+    // que o backdrop feche o modal por causa do click sintético do Electron.
+    if (Date.now() - this.pickerOpenedAt < 500) {
+      return;
+    }
+    this.close.emit();
   }
 
   onFileSelected(event: Event): void {

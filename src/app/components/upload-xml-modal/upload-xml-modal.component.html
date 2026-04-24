@@ -1,5 +1,5 @@
 <ng-container *ngIf="isOpen">
-	<div class="modal-backdrop" (click)="close.emit()"></div>
+	<div class="modal-backdrop" (click)="onBackdropClick()"></div>
 	<section class="upload-modal" aria-modal="true" role="dialog">
 		<div class="upload-modal-loading" *ngIf="isSavingUpload">
 			<div class="loading-spinner"></div>

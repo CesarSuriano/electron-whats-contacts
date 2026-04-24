@@ -17,6 +17,10 @@
   @apply flex-1 overflow-y-auto overflow-x-hidden px-5 py-5;
 }
 
+.home-main--clients {
+  @apply flex flex-col overflow-hidden;
+}
+
 .home-settings,
 .home-center-section {
   @apply mx-auto flex w-full max-w-[1240px] flex-col gap-5;

@@ -148,6 +148,10 @@ function startWhatsappBridge() {
   const bridgeDir = path.join(bridgeBase, 'whatsapp-webjs-bridge');
   const bridgeEntry = path.join(bridgeDir, 'dist', 'server.js');
 
+  const bridgeLogPath = path.join(app.getPath('userData'), 'bridge.log');
+  const bridgeLogStream = fs.createWriteStream(bridgeLogPath, { flags: 'a' });
+  const logStamp = () => `[${new Date().toISOString()}] `;
+
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
     cwd: bridgeDir,
     env: {
@@ -155,10 +159,25 @@ function startWhatsappBridge() {
       ELECTRON_RUN_AS_NODE: '1',
       PORT: process.env.PORT || '3344',
       ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
-      WWEBJS_DATA_PATH: app.getPath('userData')
+      WWEBJS_DATA_PATH: app.getPath('userData'),
+      // Flags necessárias para o Chrome do Puppeteer funcionar dentro do
+      // ambiente empacotado do Electron (GPU compartilhada, sem zygote, etc.)
+      PUPPETEER_ARGS: '--no-sandbox,--disable-setuid-sandbox,--disable-gpu,--disable-dev-shm-usage,--disable-accelerated-2d-canvas,--no-first-run,--no-zygote'
     },
-    stdio: 'inherit',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
+  });
+
+  bridgeProcess.stdout.on('data', (data) => {
+    const text = String(data);
+    process.stdout.write(text);
+    bridgeLogStream.write(logStamp() + text);
+  });
+
+  bridgeProcess.stderr.on('data', (data) => {
+    const text = String(data);
+    process.stderr.write(text);
+    bridgeLogStream.write(logStamp() + '[ERR] ' + text);
   });
 
   bridgeProcess.on('exit', (code) => {

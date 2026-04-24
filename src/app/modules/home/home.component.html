@@ -31,7 +31,7 @@
       </button>
     </app-page-header>
 
-    <main class="home-main">
+    <main class="home-main" [class.home-main--clients]="activeSection === 'clients'">
       <ng-container [ngSwitch]="activeSection">
         <app-home-dashboard-section
           *ngSwitchCase="'home'"
