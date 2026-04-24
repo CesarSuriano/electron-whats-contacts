@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
+  "version": "2.1.1",
   "url": "",
-  "notes": "- Barra lateral abre expandida por padrão\n- Remoção do card \"Conversas não lidas\" do dashboard\n- Botão de verificação de atualizações movido para o modal Sobre\n- Isolamento de dados entre ambiente de desenvolvimento e release\n- Correções de acentuação em toda a interface\n- Correção de erro na verificação de atualizações"
+  "notes": "- Rolagem da tabela de clientes corrigida\n- Modal \"Sobre\" agora exibe versão e novidades diretamente do version.json\n- Correções de acentuação em toda a interface\n- Arquivo clientes.xml removido do pacote de instalação"
 }

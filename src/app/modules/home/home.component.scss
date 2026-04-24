@@ -1,9 +1,9 @@
 :host {
-  @apply block min-h-full;
+  @apply block h-full;
 }
 
 .home-shell {
-  @apply flex min-h-screen bg-bg;
+  @apply flex h-full bg-bg;
 }
 
 .home-content {

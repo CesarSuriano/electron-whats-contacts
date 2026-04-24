@@ -148,13 +148,13 @@ export class MessageListComponent implements AfterViewChecked {
       case 'revoked':
         return 'Mensagem apagada';
       case 'location':
-        return 'Localizacao';
+        return 'Localização';
       case 'vcard':
       case 'multi_vcard':
       case 'contact_card':
         return 'Contato';
       case 'reaction':
-        return 'Reacao';
+        return 'Reação';
       case 'poll_creation':
         return 'Enquete';
       case 'event_creation':

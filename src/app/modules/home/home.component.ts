@@ -157,13 +157,13 @@ export class HomeComponent implements OnInit, OnDestroy {
       case 'clients':
         return `Base completa • ${this.clientes.length.toLocaleString('pt-BR')} cadastros`;
       case 'messages':
-        return 'Templates para envio rapido';
+        return 'Templates para envio rápido';
       case 'schedules':
         return 'Mensagens programadas';
       case 'settings':
-        return 'Preferencias e atalhos do sistema';
+        return 'Preferências e atalhos do sistema';
       default:
-        return 'Visao geral da loja';
+        return 'Visão geral da loja';
     }
   }
 
@@ -446,7 +446,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const date = new Date(isoDate);
 
     if (!Number.isFinite(date.getTime())) {
-      return 'Horario indefinido';
+      return 'Horário indefinido';
     }
 
     return new Intl.DateTimeFormat('pt-BR', {

@@ -133,7 +133,7 @@ describe('MessageListComponent', () => {
         payload: { type: 'location' }
       });
 
-      expect(component.messageText(msg)).toBe('Localizacao');
+      expect(component.messageText(msg)).toBe('Localização');
     });
   });
 

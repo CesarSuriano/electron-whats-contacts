@@ -46,7 +46,7 @@
         </div>
 
         <div class="schedule-section" *ngIf="doneSchedules.length">
-          <h3 class="schedule-section-title">Concluidos</h3>
+          <h3 class="schedule-section-title">Concluídos</h3>
           <div class="schedule-card schedule-card-done" *ngFor="let sch of doneSchedules">
             <div class="schedule-card-main">
               <div class="schedule-card-date">
@@ -74,7 +74,7 @@
       <header class="upload-modal-header">
         <div>
           <h2>{{ editingSchedule ? 'Editar agendamento' : 'Novo agendamento' }}</h2>
-          <p>{{ editingSchedule ? 'Altere data, repeticao, contatos ou mensagem.' : 'Defina data, repeticao e contatos.' }}</p>
+          <p>{{ editingSchedule ? 'Altere data, repetição, contatos ou mensagem.' : 'Defina data, repetição e contatos.' }}</p>
         </div>
         <button class="modal-close" type="button" (click)="onBackToList()" aria-label="Voltar">
           <span class="material-symbols-outlined">close</span>
@@ -88,13 +88,13 @@
             <input type="date" class="schedule-input" [(ngModel)]="editDate" />
           </div>
           <div class="schedule-field">
-            <label class="schedule-label">Horario</label>
+            <label class="schedule-label">Horário</label>
             <input type="time" class="schedule-input" [(ngModel)]="editTime" />
           </div>
         </div>
 
         <div class="schedule-field">
-          <label class="schedule-label">Repeticao</label>
+          <label class="schedule-label">Repetição</label>
           <div class="recurrence-options">
             <button
               *ngFor="let opt of recurrenceOptions"

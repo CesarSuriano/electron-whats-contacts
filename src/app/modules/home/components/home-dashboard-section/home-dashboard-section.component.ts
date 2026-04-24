@@ -31,7 +31,7 @@ export class HomeDashboardSectionComponent {
     const date = new Date(isoDate);
 
     if (!Number.isFinite(date.getTime())) {
-      return 'Horario indefinido';
+      return 'Horário indefinido';
     }
 
     return new Intl.DateTimeFormat('pt-BR', {

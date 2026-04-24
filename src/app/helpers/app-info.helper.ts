@@ -1,7 +1,8 @@
-export const APP_VERSION = '2.0.0';
+import versionData from '../../../version.json';
 
-export const APP_WHATS_NEW = [
-  'Mensagens de parabéns e avaliação configuráveis pelo header.',
-  'Editor com negrito, itálico, nome do cliente, quebra de linha, preview e histórico.',
-  'Emojis rápidos com priorização automática dos mais usados.'
-];
+export const APP_VERSION: string = versionData.version;
+
+export const APP_WHATS_NEW: string[] = versionData.notes
+  .split('\n')
+  .map((line: string) => line.replace(/^-\s*/, '').trim())
+  .filter((line: string) => line.length > 0);

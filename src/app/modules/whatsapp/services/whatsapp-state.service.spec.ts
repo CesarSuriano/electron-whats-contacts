@@ -197,7 +197,7 @@ describe('WhatsappStateService', () => {
         jid: 'older-unread@s.whatsapp.net',
         getChatsTimestampMs: 1,
         unreadCount: 3,
-        lastMessagePreview: 'nao lida'
+        lastMessagePreview: 'não lida'
       };
       contacts[119] = unreadTailContact;
       gateway.loadContacts.and.returnValue(of(contacts));
@@ -509,7 +509,7 @@ describe('WhatsappStateService', () => {
       ]);
 
       const updated = (service as any).contactsSubject.value as WhatsappContact[];
-      expect(updated[0].lastMessagePreview).toBe('Localizacao');
+      expect(updated[0].lastMessagePreview).toBe('Localização');
     });
   });
 
