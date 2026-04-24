@@ -19,6 +19,13 @@ export class AboutModalComponent {
   updateDownloadUrl = '';
   updateErrorMessage = '';
 
+  get updateNotesList(): string[] {
+    return this.updateNotes
+      .split('\n')
+      .map(line => line.replace(/^-\s*/, '').trim())
+      .filter(line => line.length > 0);
+  }
+
   constructor(private appUpdateService: AppUpdateService) {}
 
   async checkForUpdate(): Promise<void> {

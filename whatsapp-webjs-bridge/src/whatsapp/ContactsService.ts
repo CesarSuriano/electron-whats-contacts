@@ -31,7 +31,8 @@ const LINKED_CHAT_CANONICAL_RESOLVE_LIMIT = 25;
 const LINKED_CHAT_CANONICAL_RESOLVE_TIMEOUT_MS = 2500;
 const LINKED_CHAT_CANONICAL_RESOLVE_CONCURRENCY = 4;
 const CONTACTS_REFRESH_COOLDOWN_MS = 25 * 1000;
-const CONTACTS_REFRESH_TIMEOUT_MS = 20 * 1000;
+const CONTACTS_REFRESH_TIMEOUT_MS = 90 * 1000;
+const CONTACTS_FETCH_TIMEOUT_MS = 45 * 1000;
 const CONTACTS_EMPTY_CACHE_WAIT_MS = 1500;
 
 interface PhotoCacheEntry {
@@ -329,9 +330,18 @@ export class ContactsService {
       ? Promise.resolve(preloadedChats)
       : clientWithChats.getChats();
 
+    const contactsPromise: Promise<RawContact[]> = withTimeout(
+      clientWithChats.getContacts(),
+      CONTACTS_FETCH_TIMEOUT_MS,
+      'getContacts'
+    ).catch(err => {
+      console.warn('[whatsapp-webjs-bridge] getContacts demorou demais, continuando só com dados dos chats:', (err as { message?: string } | null)?.message || String(err));
+      return [] as RawContact[];
+    });
+
     const [chats, contacts, labelsMap] = await Promise.all([
       chatsPromise,
-      clientWithChats.getContacts(),
+      contactsPromise,
       this.loadLabelsMap()
     ]);
     const resolvedCanonicalByLid = await this.resolveRecentLinkedChatCanonicals(chats);

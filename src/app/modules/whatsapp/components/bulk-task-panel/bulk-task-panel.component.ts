@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -55,6 +55,17 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
 
   skip(): void {
     this.bulkSend.skipCurrent();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if (!this.queue || this.queue.isPaused || this.isMinimized) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.skip();
+    }
   }
 
   cancel(): void {

@@ -44,6 +44,11 @@
       </li>
     </ul>
 
+    <p class="bulk-panel-shortcut-hint" *ngIf="!queue.isPaused">
+      <span class="material-symbols-outlined">keyboard</span>
+      Enter: enviar · Esc: pular
+    </p>
+
     <footer class="bulk-panel-controls">
       <button type="button" class="btn-control" *ngIf="!queue.isPaused" (click)="pause()">
         <span class="material-symbols-outlined">pause</span>

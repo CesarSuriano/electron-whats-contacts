@@ -1,5 +1,5 @@
 {
-  "version": "2.1.1",
+  "version": "2.1.2",
   "url": "",
-  "notes": "- Rolagem da tabela de clientes corrigida\n- Modal \"Sobre\" agora exibe versão e novidades diretamente do version.json\n- Correções de acentuação em toda a interface\n- Arquivo clientes.xml removido do pacote de instalação"
+  "notes": "- Tooltip indevido \"WhatsApp\" removido do cabeçalho\n- Botão de nova etiqueta adicionado na barra de filtros\n- Ponto colorido visível nos filtros de etiquetas\n- Seleção em massa respeita filtro de etiqueta ativo\n- Botão \"Disparar agora\" adicionado nos agendamentos pendentes\n- Imagem do template não persiste após envio em massa\n- Atalhos de teclado (Enter/Esc) no painel de envio em massa\n- Botão de retentar ao falhar na conexão do WhatsApp\n- Botões do modal de agendamento corrigidos\n- Fundo levemente cinza na busca e no compositor\n- Renomeado botão de seleção em massa para \"Definir mensagem\""
 }

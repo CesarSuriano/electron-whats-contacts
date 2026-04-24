@@ -66,6 +66,15 @@
         </div>
 
         <p class="whatsapp-page__session-error" *ngIf="sessionErrorMessage">{{ sessionErrorMessage }}</p>
+        <button
+          *ngIf="sessionErrorMessage"
+          type="button"
+          class="btn btn-outline btn-sm whatsapp-page__retry-btn"
+          (click)="retrySession()"
+        >
+          <span class="material-symbols-outlined">refresh</span>
+          Tentar novamente
+        </button>
       </div>
     </section>
   </ng-template>

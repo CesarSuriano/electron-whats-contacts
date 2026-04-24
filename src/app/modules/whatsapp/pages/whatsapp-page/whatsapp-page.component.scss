@@ -64,6 +64,14 @@
   @apply m-0 rounded-2xl border border-danger-soft bg-danger-soft px-4 py-3 text-[0.88rem] text-danger;
 }
 
+.whatsapp-page__retry-btn {
+  @apply inline-flex items-center gap-1.5;
+}
+
+.whatsapp-page__retry-btn .material-symbols-outlined {
+  @apply text-[1rem];
+}
+
 .whatsapp-page__disconnect-modal {
   @apply fixed left-1/2 top-1/2 z-[21] flex -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-[1.35rem] bg-surface p-5;
   width: min(28rem, calc(100vw - 2rem));

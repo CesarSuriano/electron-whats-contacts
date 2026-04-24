@@ -28,6 +28,7 @@ const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
 export class ConversationListComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() disabled = false;
   @Output() scheduleMessage = new EventEmitter<WhatsappContact>();
+  @Output() filteredContactsChange = new EventEmitter<WhatsappContact[]>();
   @ViewChild('scrollContainer')
   set scrollContainerRef(value: ElementRef<HTMLDivElement> | undefined) {
     this.scrollContainer = value;
@@ -312,6 +313,10 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     this.closeContextMenu();
   }
 
+  openLabelManager(): void {
+    this.managerLaunch.openLabelManager();
+  }
+
   onContextManageLabels(): void {
     this.managerLaunch.openLabelManager();
     this.closeContextMenu();
@@ -381,6 +386,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       return digits.length > 0 && phone.includes(digits);
     });
 
+    this.filteredContactsChange.emit(this.filteredContacts);
     this.scheduleVisiblePhotoPrefetch();
   }
 

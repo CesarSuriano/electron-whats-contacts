@@ -35,6 +35,7 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   aiSuggestionError = '';
   aiFeedbackMessage = '';
 
+  private bulkImageWasSet = false;
   private lastRequestedAiContextKey = '';
   private suggestionTimerId: number | null = null;
   private queuedAiSuggestionParts: string[] = [];
@@ -99,7 +100,11 @@ export class ChatViewComponent implements OnInit, OnDestroy {
 
     this.state.draftImageDataUrl$.pipe(takeUntil(this.destroy$)).subscribe(dataUrl => {
       if (dataUrl) {
+        this.bulkImageWasSet = true;
         setTimeout(() => this.composer?.setAttachmentFromDataUrl(dataUrl, 'imagem-template.jpg'), 0);
+      } else if (this.bulkImageWasSet) {
+        this.bulkImageWasSet = false;
+        setTimeout(() => this.composer?.forceResetAttachment(), 0);
       }
     });
 

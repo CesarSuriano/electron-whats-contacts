@@ -154,7 +154,8 @@ function startWhatsappBridge() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       PORT: process.env.PORT || '3344',
-      ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*'
+      ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
+      WWEBJS_DATA_PATH: app.getPath('userData')
     },
     stdio: 'inherit',
     windowsHide: true

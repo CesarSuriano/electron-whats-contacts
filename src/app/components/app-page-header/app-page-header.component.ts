@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
 
 import { ThemeService } from '../../services/theme.service';
 
@@ -8,6 +8,8 @@ import { ThemeService } from '../../services/theme.service';
   styleUrls: ['./app-page-header.component.scss']
 })
 export class AppPageHeaderComponent {
+  @HostBinding('attr.title') readonly hostTitle: null = null;
+
   @Input() title = '';
   @Input() subtitle = '';
   @Input() navIcon = '';

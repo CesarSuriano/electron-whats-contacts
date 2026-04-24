@@ -7,6 +7,7 @@ export interface BridgeConfig {
   puppeteerExecutablePath: string | undefined;
   puppeteerArgs: string[];
   maxUploadBytes: number;
+  dataPath: string | undefined;
 }
 
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
@@ -30,6 +31,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     enableProfilePhotoFetch: String(env.WA_ENABLE_PROFILE_PHOTO_FETCH || 'true').toLowerCase() !== 'false',
     puppeteerExecutablePath: env.PUPPETEER_EXECUTABLE_PATH || undefined,
     puppeteerArgs,
-    maxUploadBytes: 50 * 1024 * 1024
+    maxUploadBytes: 50 * 1024 * 1024,
+    dataPath: env.WWEBJS_DATA_PATH || undefined
   };
 }

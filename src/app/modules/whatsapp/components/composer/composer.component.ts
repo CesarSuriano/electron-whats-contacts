@@ -459,6 +459,10 @@ export class ComposerComponent {
     setTimeout(() => this.focus(), 0);
   }
 
+  forceResetAttachment(): void {
+    this.clearAttachmentInternal();
+  }
+
   resetAfterSend(): void {
     this.draftText = '';
     this.draftTextChange.emit('');

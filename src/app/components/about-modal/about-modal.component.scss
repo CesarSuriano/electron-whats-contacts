@@ -1,34 +1,113 @@
 .about-modal {
 }
 
-.about-update-section {
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--color-border);
+.about-version-label {
+  @apply m-0 text-xs font-semibold uppercase tracking-[0.06em] text-txt-muted;
 }
 
-.about-update-section__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.about-version-value {
+  @apply m-0 mt-0.5 text-2xl font-semibold tracking-tight text-txt;
 }
 
-.about-update-status {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--color-txt-muted);
+.about-whats-new {
+  @apply mt-4;
 
-  &--error {
-    color: var(--color-danger);
+  h3 {
+    @apply m-0 mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-txt-muted;
+  }
+
+  ul {
+    @apply m-0 flex flex-col gap-1 pl-4;
+  }
+
+  li {
+    @apply text-sm text-txt;
   }
 }
 
-.about-update-status__icon {
-  font-size: 1.1rem;
+.about-update-section {
+  @apply mt-5 border-t border-border pt-5;
+}
 
-  &--ok { color: var(--color-success); }
-  &--new { color: var(--color-accent); }
+.about-update-section__actions {
+  @apply flex flex-wrap gap-2;
+}
+
+.about-update-btn {
+  @apply inline-flex min-w-[11rem] cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors;
+
+  &--primary {
+    @apply border border-accent bg-accent text-accent-text;
+
+    &:hover:not(:disabled) {
+      @apply bg-accent-hover border-accent-hover;
+    }
+  }
+
+  &--download {
+    @apply border border-border-strong bg-surface text-txt;
+
+    &:hover:not(:disabled) {
+      @apply bg-bg-subtle border-txt-subtle;
+    }
+  }
+
+  &:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+}
+
+.about-update-btn__icon {
+  @apply text-[1.1rem] leading-none;
+  font-variation-settings: 'wght' 500;
+}
+
+.about-update-btn .loading-spinner {
+  @apply h-4 w-4;
+  border-width: 2px;
+}
+
+.about-update-btn--primary .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+}
+
+.about-update-btn--download .loading-spinner {
+  border-color: var(--border-strong);
+  border-top-color: var(--accent);
+}
+
+.about-update-status {
+  @apply mt-3 flex items-center gap-1.5 text-sm text-txt-muted;
+
+  &--available {
+    @apply mt-3 flex flex-col gap-1;
+  }
+
+  &--error {
+    @apply text-red-500;
+
+    .about-update-status__icon {
+      @apply text-red-500;
+    }
+  }
+}
+
+.about-update-status__header {
+  @apply flex items-center gap-1.5 text-sm text-txt-muted;
+}
+
+.about-update-status__icon {
+  @apply text-[1.1rem];
+
+  &--ok  { @apply text-green-500; }
+  &--new { @apply text-accent; }
+}
+
+.about-update-notes {
+  @apply m-0 flex flex-col gap-0.5 pl-6;
+
+  li {
+    @apply text-xs text-txt-muted;
+  }
 }

@@ -31,7 +31,7 @@
 }
 
 .conversation-list__search {
-  @apply mx-4 mb-3 flex items-center gap-2 rounded-2xl bg-wa-surface px-4 py-3;
+  @apply mx-4 mb-3 flex items-center gap-2 rounded-2xl bg-bg-subtle px-4 py-3;
 }
 
 .conversation-list__search-icon {
@@ -51,7 +51,7 @@
 }
 
 .conversation-list__filter-chip {
-  @apply appearance-none whitespace-nowrap rounded-full border-none bg-wa-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
+  @apply inline-flex items-center gap-1.5 appearance-none whitespace-nowrap rounded-full border-none bg-wa-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .conversation-list__filter-chip:hover {
@@ -60,6 +60,22 @@
 
 .conversation-list__filter-chip--active {
   @apply bg-accent text-accent-text;
+}
+
+.conversation-list__filter-chip-dot {
+  @apply inline-block h-2 w-2 shrink-0 rounded-full;
+}
+
+.conversation-list__add-label-btn {
+  @apply inline-flex shrink-0 cursor-pointer appearance-none items-center justify-center rounded-full border-none bg-transparent p-1.5 text-txt-subtle shadow-none transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.conversation-list__add-label-btn:hover {
+  @apply bg-wa-hover text-txt;
+}
+
+.conversation-list__add-label-btn .material-symbols-outlined {
+  @apply text-[1.1rem];
 }
 
 .conversation-list__sync-bar {
@@ -157,7 +173,7 @@
   background: color-mix(in srgb, var(--label-color, var(--color-primary)) 16%, transparent);
 }
 
-.conversation-list__item:hover .conversation-list__label-chip:not(:hover):not(:disabled) {
+.conversation-list__item:hover .conversation-list__label-chip:not(:hover):not(:disabled):not(.conversation-list__label-chip--active) {
   border-color: color-mix(in srgb, var(--label-color, var(--color-primary)) 24%, var(--color-border, #e2e8f0));
   background: color-mix(in srgb, var(--label-color, var(--color-primary)) 10%, transparent);
 }

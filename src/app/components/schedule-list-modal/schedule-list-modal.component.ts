@@ -33,6 +33,7 @@ export class ScheduleListModalComponent implements OnChanges {
   @Output() createNew = new EventEmitter<ScheduleCreateRequest>();
   @Output() editSchedule = new EventEmitter<ScheduleEditRequest>();
   @Output() deleteSchedule = new EventEmitter<string>();
+  @Output() triggerSchedule = new EventEmitter<string>();
 
   view: 'list' | 'edit' = 'list';
   editingSchedule: ScheduledMessage | null = null;
@@ -256,6 +257,11 @@ export class ScheduleListModalComponent implements OnChanges {
   onBackToList(): void {
     this.view = 'list';
     this.editingSchedule = null;
+  }
+
+  onTriggerNow(id: string): void {
+    this.triggerSchedule.emit(id);
+    this.close.emit();
   }
 
   onDelete(id: string): void {

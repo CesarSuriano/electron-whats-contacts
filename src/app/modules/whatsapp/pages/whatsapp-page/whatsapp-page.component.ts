@@ -214,6 +214,10 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  retrySession(): void {
+    this.startInitialSessionCheck();
+  }
+
   private startInitialSessionCheck(): void {
     this.stopSessionStatusRetry();
     this.stopConnectRetry();

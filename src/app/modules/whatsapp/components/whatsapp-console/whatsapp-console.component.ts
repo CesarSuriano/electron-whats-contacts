@@ -65,6 +65,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   scheduleEditInitialImage: string | undefined;
 
   allContacts: WhatsappContact[] = [];
+  visibleContacts: WhatsappContact[] = [];
   isBulkLabelModalOpen = false;
   bulkLabelJids: string[] = [];
   private selectedJidSet = new Set<string>();
@@ -120,8 +121,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         this.allContacts = contacts;
         this.selectedJidSet = selectedJids;
         this.selectedCount = selectedJids.size;
-        this.totalVisible = contacts.length;
-        this.allSelected = contacts.length > 0 && contacts.every(c => selectedJids.has(c.jid));
+        const visible = this.visibleContacts.length ? this.visibleContacts : contacts;
+        this.totalVisible = visible.length;
+        this.allSelected = visible.length > 0 && visible.every(c => selectedJids.has(c.jid));
       });
 
     const pending = this.pendingBulkSendService.consume();
@@ -180,7 +182,14 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   onSelectAll(): void {
-    this.state.selectAll(this.allContacts.map(c => c.jid));
+    const toSelect = this.visibleContacts.length ? this.visibleContacts : this.allContacts;
+    this.state.selectAll(toSelect.map(c => c.jid));
+  }
+
+  onFilteredContactsChange(contacts: WhatsappContact[]): void {
+    this.visibleContacts = contacts;
+    this.totalVisible = contacts.length;
+    this.allSelected = contacts.length > 0 && contacts.every(c => this.selectedJidSet.has(c.jid));
   }
 
   onClearSelection(): void {
@@ -351,6 +360,20 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   onDeleteSchedule(id: string): void {
     this.scheduledMessageService.remove(id);
+  }
+
+  onTriggerSchedule(id: string): void {
+    const schedule = this.schedules.find(s => s.id === id);
+    if (!schedule) return;
+
+    const matchedContacts = schedule.contacts
+      .map(sc => this.allContacts.find(c => c.jid === sc.jid))
+      .filter((c): c is WhatsappContact => c !== null);
+
+    if (matchedContacts.length) {
+      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl);
+    }
+    this.isScheduleListModalOpen = false;
   }
 
   onNotificationAction(schedule: ScheduledMessage): void {

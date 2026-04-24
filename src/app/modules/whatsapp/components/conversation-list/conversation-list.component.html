@@ -48,6 +48,16 @@
       ></span>
       {{ chip.label }}
     </button>
+    <button
+      type="button"
+      class="conversation-list__add-label-btn"
+      [disabled]="disabled"
+      (click)="openLabelManager()"
+      aria-label="Nova etiqueta"
+      title="Nova etiqueta"
+    >
+      <span class="material-symbols-outlined">add</span>
+    </button>
   </div>
 
   <div class="sync-bar conversation-list__sync-bar" *ngIf="isSyncing">

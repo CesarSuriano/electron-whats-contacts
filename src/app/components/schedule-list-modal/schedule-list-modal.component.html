@@ -15,7 +15,7 @@
       </header>
 
       <div class="schedule-list-actions">
-        <button class="btn btn-icon" type="button" (click)="onStartCreate()">
+        <button class="btn btn-primary" type="button" (click)="onStartCreate()">
           <span class="material-symbols-outlined btn-icon-symbol">add</span>
           Novo agendamento
         </button>
@@ -35,6 +35,9 @@
               <span class="schedule-card-contacts">{{ sch.contacts.length }} {{ sch.contacts.length === 1 ? 'contato' : 'contatos' }}</span>
             </div>
             <div class="schedule-card-actions">
+              <button type="button" class="schedule-action-btn schedule-action-trigger" (click)="onTriggerNow(sch.id)" title="Disparar agora">
+                <span class="material-symbols-outlined">send</span>
+              </button>
               <button type="button" class="schedule-action-btn" (click)="onEdit(sch)" title="Editar">
                 <span class="material-symbols-outlined">edit</span>
               </button>
@@ -160,7 +163,7 @@
           Editar mensagem
         </button>
         <button
-          class="btn btn-icon"
+          class="btn btn-primary"
           type="button"
           [disabled]="editSelectedCount === 0 || !editDate || !editTime"
           (click)="onSaveEdit()"

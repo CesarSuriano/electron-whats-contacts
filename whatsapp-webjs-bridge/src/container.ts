@@ -57,7 +57,7 @@ export function buildContainer(config: BridgeConfig): Container {
   }
 
   const client = new Client({
-    authStrategy: new LocalAuth({ clientId: config.instanceName }),
+    authStrategy: new LocalAuth({ clientId: config.instanceName, dataPath: config.dataPath }),
     puppeteer: puppeteerOptions
   });
 

@@ -73,6 +73,10 @@
   @apply text-danger bg-danger-soft;
 }
 
+.schedule-action-trigger:hover {
+  @apply text-accent bg-accent-soft;
+}
+
 .schedule-action-btn .material-symbols-outlined {
   @apply text-[1.15rem];
 }
