@@ -11,6 +11,7 @@ if (!app.isPackaged) {
 }
 
 let bridgeProcess = null;
+let bridgeLogStream = null;
 let agentWindow = null;
 let agentWindowPartition = '';
 let isAppQuitting = false;
@@ -28,6 +29,92 @@ const AGENT_IGNORED_RESPONSE_PATTERNS = [
   /^share gem\.?$/i,
   /^compartilhar gem\.?$/i
 ];
+
+function getErrorLogDir() {
+  // Tenta primeiro a raiz da pasta de instalação (pedido do usuário).
+  // Se o Windows bloquear a escrita (Program Files, por ex.), cai para userData,
+  // que é sempre gravável. Deixa uma pista em ambos os lados para o usuário achar.
+  const candidates = [];
+
+  if (app.isPackaged) {
+    candidates.push(path.join(path.dirname(process.execPath), 'error'));
+  } else {
+    candidates.push(path.join(__dirname, 'error'));
+  }
+
+  candidates.push(path.join(app.getPath('userData'), 'error'));
+
+  for (const dir of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const probe = path.join(dir, '.write-test');
+      fs.writeFileSync(probe, '');
+      fs.unlinkSync(probe);
+      return dir;
+    } catch { /* tenta proximo */ }
+  }
+
+  return null;
+}
+
+function openBridgeLog() {
+  const logDir = getErrorLogDir();
+  if (!logDir) {
+    bridgeLogStream = null;
+    return;
+  }
+
+  try {
+    const date = new Date().toISOString().slice(0, 10);
+    const logFile = path.join(logDir, `bridge-${date}.log`);
+    bridgeLogStream = fs.createWriteStream(logFile, { flags: 'a' });
+
+    // Breadcrumb: escreve o caminho do log na pasta de instalação quando possível,
+    // para o usuário achar facilmente mesmo se o log real foi para userData.
+    if (app.isPackaged) {
+      try {
+        const installRoot = path.dirname(process.execPath);
+        fs.writeFileSync(
+          path.join(installRoot, 'onde-estao-os-logs.txt'),
+          `Logs da bridge em: ${logFile}\n`
+        );
+      } catch { /* sem permissao: ignora */ }
+    }
+  } catch {
+    bridgeLogStream = null;
+  }
+}
+
+function findSystemChromium() {
+  const env = process.env;
+  const pf = env['PROGRAMFILES'] || 'C:\\Program Files';
+  const pf86 = env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+  const local = env['LOCALAPPDATA'] || '';
+
+  const candidates = [
+    path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(local, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe')
+  ];
+
+  return candidates.find(p => p && fs.existsSync(p)) || null;
+}
+
+function writeBridgeLog(text) {
+  if (!bridgeLogStream) return;
+  try {
+    bridgeLogStream.write(`[${new Date().toISOString()}] ${text}`);
+  } catch { /* silent */ }
+}
+
+function closeBridgeLog() {
+  if (!bridgeLogStream) return;
+  try { bridgeLogStream.end(); } catch { /* silent */ }
+  bridgeLogStream = null;
+}
 
 function buildAgentPartition(googleAccountId) {
   const normalizedId = String(googleAccountId || 'primary')
@@ -148,9 +235,19 @@ function startWhatsappBridge() {
   const bridgeDir = path.join(bridgeBase, 'whatsapp-webjs-bridge');
   const bridgeEntry = path.join(bridgeDir, 'dist', 'server.js');
 
-  const bridgeLogPath = path.join(app.getPath('userData'), 'bridge.log');
-  const bridgeLogStream = fs.createWriteStream(bridgeLogPath, { flags: 'a' });
-  const logStamp = () => `[${new Date().toISOString()}] `;
+  openBridgeLog();
+
+  const systemBrowser = findSystemChromium();
+  if (!systemBrowser) {
+    const msg = 'Nao foi possivel localizar Microsoft Edge nem Google Chrome no sistema. '
+      + 'Instale o Edge (padrao no Windows 10/11) ou o Chrome e tente novamente.\n';
+    console.error(`[electron] ${msg}`);
+    writeBridgeLog(`[electron] ERRO: ${msg}`);
+    closeBridgeLog();
+    return;
+  }
+
+  writeBridgeLog(`[electron] usando navegador: ${systemBrowser}\n`);
 
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
     cwd: bridgeDir,
@@ -160,6 +257,7 @@ function startWhatsappBridge() {
       PORT: process.env.PORT || '3344',
       ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
       WWEBJS_DATA_PATH: app.getPath('userData'),
+      PUPPETEER_EXECUTABLE_PATH: systemBrowser,
       // Apenas as flags mínimas necessárias. NAO incluir --disable-gpu nem
       // --no-zygote: ambas impedem o whatsapp-web.js de injetar a Store
       // após a autenticação, deixando o cliente eternamente em "authenticated".
@@ -172,22 +270,28 @@ function startWhatsappBridge() {
   bridgeProcess.stdout.on('data', (data) => {
     const text = String(data);
     process.stdout.write(text);
-    bridgeLogStream.write(logStamp() + text);
+    writeBridgeLog(text);
   });
 
   bridgeProcess.stderr.on('data', (data) => {
     const text = String(data);
     process.stderr.write(text);
-    bridgeLogStream.write(logStamp() + '[ERR] ' + text);
+    writeBridgeLog('[ERR] ' + text);
   });
 
   bridgeProcess.on('exit', (code) => {
-    console.log(`[electron] whatsapp-webjs bridge finalizada (code=${code ?? 'null'})`);
+    const msg = `whatsapp-webjs bridge finalizada (code=${code ?? 'null'})\n`;
+    console.log(`[electron] ${msg}`);
+    writeBridgeLog(`[electron] ${msg}`);
+    closeBridgeLog();
     bridgeProcess = null;
   });
 
   bridgeProcess.on('error', (error) => {
-    console.error('[electron] falha ao iniciar whatsapp-webjs bridge:', error);
+    const msg = `falha ao iniciar bridge: ${error.message}\n`;
+    console.error(`[electron] ${msg}`);
+    writeBridgeLog(`[electron] ERRO: ${msg}`);
+    closeBridgeLog();
     bridgeProcess = null;
   });
 }

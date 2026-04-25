@@ -1,6 +1,6 @@
 {
   "name": "uniq-system",
-  "version": "2.2.2",
+  "version": "2.2.4",
   "main": "main.js",
   "scripts": {
     "ng": "ng",
@@ -10,10 +10,10 @@
     "bridge:build": "npm --prefix whatsapp-webjs-bridge run build",
     "build": "npm run bridge:build && ng build",
     "watch": "ng build --watch --configuration development",
-    "dist": "npm run bridge:build && ng build --configuration production && electron-builder",
-    "release": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --win --x64",
+    "dist": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --publish never",
+    "release": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --win --x64 --publish never",
     "test": "ng test",
-    "make:installer": "npm run bridge:build && ng build --configuration production && electron-builder",
+    "make:installer": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --publish never",
     "package": "npm run bridge:build && electron-forge package",
     "make": "npm run bridge:build && electron-forge make"
   },
