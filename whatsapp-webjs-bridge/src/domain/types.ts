@@ -72,6 +72,7 @@ export interface WhatsappLabel {
   id: string;
   name: string;
   hexColor: string | null;
+  chatJids?: string[];
 }
 
 export interface HistoryDiagnostics {

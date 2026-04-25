@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 
 import { WhatsappWebjsGatewayService, WhatsappSessionStatus } from './whatsapp-webjs-gateway.service';
-import { WhatsappContact, WhatsappEvent, WhatsappInstance } from '../models/whatsapp.model';
+import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappLabel } from '../models/whatsapp.model';
 
 const BASE = 'http://localhost:3344/api/whatsapp';
 
@@ -10,6 +10,7 @@ const mockStatus: WhatsappSessionStatus = { instanceName: 'inst', status: 'ready
 const mockInstance: WhatsappInstance = { name: 'inst', token: 't', connected: true, jid: 'jid', webhook: '' };
 const mockContact: WhatsappContact = { jid: '5511@s.whatsapp.net', phone: '5511', name: 'Test', found: true };
 const mockEvent: WhatsappEvent = { id: 'e1', source: 'src', receivedAt: '2024-01-01', isFromMe: false, chatJid: 'jid', phone: '11', text: 'hi', payload: {} };
+const mockLabel: WhatsappLabel = { id: 'lab-1', name: 'VIP', hexColor: '#25D366' };
 
 describe('WhatsappWebjsGatewayService', () => {
   let service: WhatsappWebjsGatewayService;
@@ -103,6 +104,28 @@ describe('WhatsappWebjsGatewayService', () => {
     );
     req.flush({ instanceName: 'inst', events: [mockEvent] });
     expect(result).toEqual([mockEvent]);
+  });
+
+  it('loadLabels – extracts valid labels from /labels', () => {
+    let result: WhatsappLabel[] | undefined;
+    service.loadLabels().subscribe(r => (result = r));
+
+    const req = httpMock.expectOne(`${BASE}/labels`);
+    expect(req.request.method).toBe('GET');
+
+    req.flush({
+      instanceName: 'inst',
+      labels: [
+        { ...mockLabel, chatJids: ['5511987654321@c.us', '  5511977778888@c.us  '] },
+        { id: '  ', name: 'Sem id' },
+        { id: 'lab-2', name: '  Financeiro  ', hexColor: null }
+      ]
+    });
+
+    expect(result).toEqual([
+      { id: 'lab-1', name: 'VIP', hexColor: '#25D366', chatJids: ['5511987654321@c.us', '5511977778888@c.us'] },
+      { id: 'lab-2', name: 'Financeiro' }
+    ]);
   });
 
   it('loadChatMessages – encodes JID and sends params', () => {

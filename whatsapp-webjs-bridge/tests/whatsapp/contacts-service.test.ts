@@ -196,6 +196,33 @@ describe('ContactsService.refreshContactsFromChats', () => {
   });
 });
 
+describe('ContactsService.loadLabels', () => {
+  it('includes chat jids assigned to each label', async () => {
+    const { service } = createService({
+      getLabels: async () => [
+        {
+          id: '1',
+          name: 'Importante',
+          hexColor: '#25D366',
+          getChats: async () => [
+            { id: { _serialized: '5511987654321@c.us' } },
+            { id: { _serialized: '5511977778888@c.us' } }
+          ]
+        }
+      ]
+    });
+
+    const labels = await service.loadLabels();
+
+    assert.deepEqual(labels, [{
+      id: '1',
+      name: 'Importante',
+      hexColor: '#25D366',
+      chatJids: ['5511987654321@c.us', '5511977778888@c.us']
+    }]);
+  });
+});
+
 describe('ContactsService.waitForContactsWarmup', () => {
   it('retries a refresh immediately when the cache is still empty after a recent ready warmup', async () => {
     let getChatsCalls = 0;

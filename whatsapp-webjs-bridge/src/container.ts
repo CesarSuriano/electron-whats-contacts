@@ -56,8 +56,20 @@ export function buildContainer(config: BridgeConfig): Container {
     puppeteerOptions.executablePath = config.puppeteerExecutablePath;
   }
 
+  const localAuthOptions: {
+    clientId: string;
+    dataPath?: string;
+    rmMaxRetries: number;
+  } = {
+    clientId: config.instanceName,
+    dataPath: config.dataPath,
+    // Windows may keep Chromium profile journal files locked for a short time.
+    // More retries reduces false-fatal EBUSY errors during logout/cleanup.
+    rmMaxRetries: 12
+  };
+
   const client = new Client({
-    authStrategy: new LocalAuth({ clientId: config.instanceName, dataPath: config.dataPath }),
+    authStrategy: new LocalAuth(localAuthOptions),
     puppeteer: puppeteerOptions,
     // Pin a known WhatsApp Web HTML to avoid the "stuck after authenticated"
     // bug that happens when WhatsApp updates its frontend and breaks Store injection.
@@ -194,8 +206,10 @@ export function bindClientEvents(container: Container): void {
 
   client.on('disconnected', (reason: string) => {
     sessionState.status = 'disconnected';
-    sessionState.lastError = String(reason || 'Disconnected');
-    console.warn('[whatsapp-webjs-bridge] Cliente desconectado:', reason);
+    sessionState.qr = null;
+    const reasonText = String(reason || 'Disconnected');
+    sessionState.lastError = reasonText;
+    console.warn('[whatsapp-webjs-bridge] Cliente desconectado:', reasonText);
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
   });
 

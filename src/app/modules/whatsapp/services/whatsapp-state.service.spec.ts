@@ -567,6 +567,44 @@ describe('WhatsappStateService', () => {
     }));
   });
 
+  describe('synthetic contact phone resolution', () => {
+    it('prefers chatJid digits for personal chats when event.phone is inconsistent', () => {
+      (service as any).contactsSubject.next([]);
+
+      (service as any).ensureContactForEvent({
+        id: 'evt-phone-1',
+        source: 'ws',
+        receivedAt: '2024-01-01T00:00:00.000Z',
+        isFromMe: false,
+        chatJid: '5511987654321@c.us',
+        phone: '120363999999999999',
+        text: 'oi',
+        payload: {}
+      });
+
+      const contacts = (service as any).contactsSubject.value as WhatsappContact[];
+      expect(contacts[0]?.phone).toBe('5511987654321');
+    });
+
+    it('does not expose linked-id digits as phone for @lid chats', () => {
+      (service as any).contactsSubject.next([]);
+
+      (service as any).ensureContactForEvent({
+        id: 'evt-phone-2',
+        source: 'ws',
+        receivedAt: '2024-01-01T00:00:00.000Z',
+        isFromMe: false,
+        chatJid: '120363999999999999@lid',
+        phone: '120363999999999999',
+        text: 'oi',
+        payload: {}
+      });
+
+      const contacts = (service as any).contactsSubject.value as WhatsappContact[];
+      expect(contacts[0]?.phone).toBe('');
+    });
+  });
+
   describe('requestConversationContext', () => {
     beforeEach(() => {
       (service as unknown as { selectedInstanceSubject: { next(value: string): void } }).selectedInstanceSubject.next(mockInstance.name);

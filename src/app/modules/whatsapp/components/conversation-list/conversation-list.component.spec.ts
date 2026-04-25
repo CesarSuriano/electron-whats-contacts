@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 
 import { AppLabel } from '../../../../models/app-label.model';
-import { WhatsappContact } from '../../../../models/whatsapp.model';
+import { WhatsappContact, WhatsappLabel } from '../../../../models/whatsapp.model';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ConversationListComponent } from './conversation-list.component';
 
@@ -209,12 +209,72 @@ describe('ConversationListComponent', () => {
   });
 
   it('separates base filters from label filters for the dropdown menu', () => {
-    component.labelFilters = ['VIP Externo'];
+    component.whatsappLabels = [{ id: 'wa-vip', name: 'VIP Externo', hexColor: '#25D366' } as WhatsappLabel];
     component.appLabels = [{ id: 'vip', name: 'VIP', color: '#ef4444', createdAt: '2026-04-24T00:00:00.000Z' } as AppLabel];
 
     (component as any).rebuildFilterChips();
 
     expect(component.baseFilterChips.map(chip => chip.id)).toEqual(['all', 'conversations', 'unread']);
     expect(component.labelFilterChips.map(chip => chip.label)).toEqual(['VIP', 'VIP Externo']);
+  });
+
+  it('links contacts to WhatsApp labels by id or by name and filters correctly', () => {
+    component.whatsappLabels = [{ id: 'lab-1', name: 'Cliente quente', hexColor: '#16a34a' } as WhatsappLabel];
+
+    contacts$.next([
+      { ...makeContact('a@c.us', 'Ana'), labels: ['lab-1'] },
+      { ...makeContact('b@c.us', 'Bia'), labels: ['Cliente quente'] },
+      { ...makeContact('c@c.us', 'Carlos'), labels: ['Outro'] }
+    ]);
+
+    const anaLabels = component.getWhatsappLabelsForContact(component.contacts[0]);
+    const biaLabels = component.getWhatsappLabelsForContact(component.contacts[1]);
+
+    expect(anaLabels.length).toBe(1);
+    expect(biaLabels.length).toBe(1);
+    expect(anaLabels[0].name).toBe('Cliente quente');
+    expect(biaLabels[0].name).toBe('Cliente quente');
+
+    component.activeFilter = `label:${encodeURIComponent(anaLabels[0].key)}` as any;
+    (component as any).applyFilter();
+
+    expect(component.filteredContacts.map(contact => contact.jid)).toEqual(['a@c.us', 'b@c.us']);
+  });
+
+  it('preserves the active WhatsApp label filter when the catalog upgrades a fallback name key to an id key', () => {
+    contacts$.next([
+      { ...makeContact('a@c.us', 'Ana'), labels: ['Cliente quente'] },
+      { ...makeContact('b@c.us', 'Bia'), labels: ['Outro'] }
+    ]);
+
+    const fallbackLabel = component.getWhatsappLabelsForContact(component.contacts[0])[0];
+    component.activeFilter = `label:${encodeURIComponent(fallbackLabel.key)}` as any;
+
+    component.whatsappLabels = [{ id: 'lab-1', name: 'Cliente quente', hexColor: '#16a34a' } as WhatsappLabel];
+
+    expect(component.activeFilter).toBe(`label:${encodeURIComponent('id:lab-1')}` as any);
+    expect(component.filteredContacts.map(contact => contact.jid)).toEqual(['a@c.us']);
+  });
+
+  it('filters contacts using chat membership returned by the labels endpoint even when contact.labels is empty', () => {
+    contacts$.next([
+      { ...makeContact('a@c.us', 'Ana'), labels: [] },
+      { ...makeContact('b@c.us', 'Bia'), labels: [] }
+    ]);
+
+    component.whatsappLabels = [{
+      id: 'lab-1',
+      name: 'Cliente quente',
+      hexColor: '#16a34a',
+      chatJids: ['a@c.us']
+    } as WhatsappLabel];
+
+    const filterChip = component.labelFilterChips.find(chip => chip.label === 'Cliente quente');
+    expect(filterChip).toBeTruthy();
+
+    component.activeFilter = filterChip!.id as any;
+    (component as any).applyFilter();
+
+    expect(component.filteredContacts.map(contact => contact.jid)).toEqual(['a@c.us']);
   });
 });

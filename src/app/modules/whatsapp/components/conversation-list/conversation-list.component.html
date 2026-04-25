@@ -145,7 +145,24 @@
           <span class="unread-badge conversation-list__unread-badge" *ngIf="getUnreadCount(contact) > 0">{{ getUnreadCount(contact) }}</span>
         </div>
 
-        <div class="conversation-row conversation-list__row conversation-list__row--labels" *ngIf="getAppLabelsForContact(contact).length">
+        <div
+          class="conversation-row conversation-list__row conversation-list__row--labels"
+          *ngIf="getWhatsappLabelsForContact(contact).length || getAppLabelsForContact(contact).length"
+        >
+          <button
+            *ngFor="let label of getWhatsappLabelsForContact(contact)"
+            type="button"
+            class="conversation-list__label-chip"
+            [class.conversation-list__label-chip--active]="isWhatsappLabelFilterActive(label)"
+            [style.--label-color]="label.color"
+            [title]="isWhatsappLabelFilterActive(label) ? 'Remover filtro da etiqueta ' + label.name : 'Filtrar por etiqueta ' + label.name"
+            [disabled]="disabled || isSelectionMode"
+            (click)="onWhatsappLabelChipClick(label, $event)"
+          >
+            <span class="conversation-list__label-chip-dot" [style.background]="label.color"></span>
+            <span class="conversation-list__label-chip-text">{{ label.name }}</span>
+          </button>
+
           <button
             *ngFor="let label of getAppLabelsForContact(contact)"
             type="button"

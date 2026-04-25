@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { WhatsappContact, WhatsappEvent, WhatsappInstance } from '../models/whatsapp.model';
+import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappLabel } from '../models/whatsapp.model';
 
 interface InstancesResponse {
   instances: WhatsappInstance[];
@@ -22,6 +22,11 @@ interface EventsResponse {
 interface SendResponse {
   instanceName: string;
   result: unknown;
+}
+
+interface LabelsResponse {
+  instanceName: string;
+  labels: Array<WhatsappLabel & { hexColor?: string | null; chatJids?: string[] | null }>;
 }
 
 interface PhotoResponse {
@@ -93,6 +98,19 @@ export class WhatsappWebjsGatewayService {
 
     return this.http.get<EventsResponse>(`${this.baseUrl}/events`, { params }).pipe(
       map(response => response.events)
+    );
+  }
+
+  loadLabels(): Observable<WhatsappLabel[]> {
+    return this.http.get<LabelsResponse>(`${this.baseUrl}/labels`).pipe(
+      map(response => (response.labels || []).map(label => ({
+        id: String(label.id || '').trim(),
+        name: String(label.name || '').trim(),
+        ...(label.hexColor ? { hexColor: String(label.hexColor).trim() } : {}),
+        ...(Array.isArray(label.chatJids)
+          ? { chatJids: label.chatJids.map(chatJid => String(chatJid || '').trim()).filter(Boolean) }
+          : {})
+      })).filter(label => Boolean(label.id && label.name)))
     );
   }
 

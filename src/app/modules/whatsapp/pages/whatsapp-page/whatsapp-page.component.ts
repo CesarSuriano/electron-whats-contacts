@@ -1,11 +1,12 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import * as QRCode from 'qrcode';
 
 import { AppShellSection } from '../../../../models/shell.model';
 import { APP_VERSION, APP_WHATS_NEW } from '../../../../helpers/app-info.helper';
+import { WhatsappLabel } from '../../../../models/whatsapp.model';
 import { AgentService } from '../../../../services/agent.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
@@ -16,6 +17,7 @@ import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 const BRIDGE_STARTUP_GRACE_PERIOD_MS = 10_000;
 const SESSION_STATUS_RETRY_INTERVAL_MS = 1_000;
 const SESSION_CONNECT_RETRY_INTERVAL_MS = 1_500;
+const WHATSAPP_LABELS_RETRY_INTERVAL_MS = 2_500;
 
 @Component({
   selector: 'app-whatsapp-page',
@@ -37,11 +39,18 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   isAgentEnabled = false;
   hasAgentConfiguration = false;
   schedulesBadgeCount = 0;
+  whatsappInitLabels: WhatsappLabel[] = [];
+  isLoadingWhatsappLabels = false;
+  whatsappLabelsStatusText = 'Tentando carregar etiquetas do WhatsApp durante a inicialização...';
+  whatsappLabelsError = '';
   readonly appVersion = APP_VERSION;
   readonly appWhatsNew = APP_WHATS_NEW;
 
   private sessionStatusRetryTimerId: number | null = null;
   private connectRetryTimerId: number | null = null;
+  private labelsRetryTimerId: number | null = null;
+  private labelsLoadSubscription: Subscription | null = null;
+  private hasLoadedLabelsAfterReady = false;
   private sessionStatusErrorGraceUntil = 0;
   private readonly destroy$ = new Subject<void>();
 
@@ -58,6 +67,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.ws.connect();
     this.startInitialSessionCheck();
+    this.requestWhatsappLabelsLoad(true);
 
     // Real-time session state via WebSocket
     this.ws.on<WhatsappSessionStatus>('session_state').pipe(takeUntil(this.destroy$)).subscribe(status => {
@@ -96,6 +106,20 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
     this.stopSessionStatusRetry();
     this.stopConnectRetry();
+    this.cancelWhatsappLabelsLoad();
+    this.stopWhatsappLabelsRetry();
+  }
+
+  trackByWhatsappLabelId(_index: number, label: WhatsappLabel): string {
+    return label.id;
+  }
+
+  getWhatsappLabelColor(label: WhatsappLabel): string {
+    const raw = (label.hexColor || '').trim();
+    if (!raw) {
+      return '#128c7e';
+    }
+    return raw.startsWith('#') ? raw : `#${raw}`;
   }
 
   goToHome(): void {
@@ -329,6 +353,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   private updateSessionState(status: WhatsappSessionStatus): void {
     this.currentSessionStatus = status.status;
     this.isSessionReady = status.status === 'ready';
+    this.syncLabelsLoadWithSessionState(status.status);
 
     if (this.isSessionReady) {
       this.stopConnectRetry();
@@ -354,7 +379,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     if (status.status === 'disconnected') {
       this.sessionStatusText = 'WhatsApp desconectado. Aguardando novo QR code...';
       this.qrCodeDataUrl = '';
-      this.scheduleConnectRetry();
+      this.stopConnectRetry();
       return;
     }
 
@@ -388,5 +413,100 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       this.qrCodeDataUrl = '';
       this.sessionErrorMessage = 'Não foi possível renderizar o QR code. Use o QR do terminal.';
     }
+  }
+
+  private syncLabelsLoadWithSessionState(status: string): void {
+    if (status === 'disconnected' || status === 'auth_failure' || status === 'init_error') {
+      this.hasLoadedLabelsAfterReady = false;
+      this.cancelWhatsappLabelsLoad();
+      this.stopWhatsappLabelsRetry();
+      this.whatsappInitLabels = [];
+      this.whatsappLabelsError = '';
+      this.whatsappLabelsStatusText = status === 'disconnected'
+        ? 'Sessão desconectada. As etiquetas serão recarregadas quando o WhatsApp voltar.'
+        : 'Aguardando sessão pronta para listar etiquetas...';
+      return;
+    }
+
+    if (status === 'ready') {
+      this.requestWhatsappLabelsLoad(true);
+      return;
+    }
+
+    this.requestWhatsappLabelsLoad();
+  }
+
+  private requestWhatsappLabelsLoad(immediate = false): void {
+    if (this.isLoadingWhatsappLabels) {
+      return;
+    }
+
+    if (immediate) {
+      this.stopWhatsappLabelsRetry();
+      this.loadWhatsappLabels();
+      return;
+    }
+
+    if (this.labelsRetryTimerId !== null) {
+      return;
+    }
+
+    this.labelsRetryTimerId = window.setTimeout(() => {
+      this.labelsRetryTimerId = null;
+      this.loadWhatsappLabels();
+    }, WHATSAPP_LABELS_RETRY_INTERVAL_MS);
+  }
+
+  private stopWhatsappLabelsRetry(): void {
+    if (this.labelsRetryTimerId !== null) {
+      window.clearTimeout(this.labelsRetryTimerId);
+      this.labelsRetryTimerId = null;
+    }
+  }
+
+  private cancelWhatsappLabelsLoad(): void {
+    this.labelsLoadSubscription?.unsubscribe();
+    this.labelsLoadSubscription = null;
+    this.isLoadingWhatsappLabels = false;
+  }
+
+  private loadWhatsappLabels(): void {
+    this.cancelWhatsappLabelsLoad();
+    this.isLoadingWhatsappLabels = true;
+    this.whatsappLabelsError = '';
+
+    this.labelsLoadSubscription = this.whatsappGatewayService.loadLabels().subscribe({
+      next: labels => {
+        this.labelsLoadSubscription = null;
+        this.isLoadingWhatsappLabels = false;
+        this.whatsappInitLabels = [...labels].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+        if (this.currentSessionStatus === 'ready') {
+          this.hasLoadedLabelsAfterReady = true;
+          this.whatsappLabelsStatusText = this.whatsappInitLabels.length
+            ? `${this.whatsappInitLabels.length} etiqueta(s) carregada(s) do WhatsApp.`
+            : 'Sessão pronta. Nenhuma etiqueta retornada no WhatsApp.';
+          this.stopWhatsappLabelsRetry();
+          return;
+        }
+
+        this.whatsappLabelsStatusText = this.whatsappInitLabels.length
+          ? `${this.whatsappInitLabels.length} etiqueta(s) encontrada(s) durante a inicialização.`
+          : 'Inicializando WhatsApp. Aguardando sessão pronta para listar etiquetas...';
+
+        this.requestWhatsappLabelsLoad();
+      },
+      error: () => {
+        this.labelsLoadSubscription = null;
+        this.isLoadingWhatsappLabels = false;
+        this.whatsappLabelsError = 'Não foi possível buscar etiquetas agora. Tentando novamente...';
+
+        if (this.currentSessionStatus === 'ready' && this.hasLoadedLabelsAfterReady) {
+          return;
+        }
+
+        this.requestWhatsappLabelsLoad();
+      }
+    });
   }
 }

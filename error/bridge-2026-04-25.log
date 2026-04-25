@@ -1,0 +1,439 @@
+[2026-04-25T00:30:45.854Z] [electron] usando navegador: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+[2026-04-25T00:30:49.230Z] [ERR] [whatsapp-webjs-bridge] porta 3344 ja esta em uso. Usando instancia existente.
+[2026-04-25T00:30:49.240Z] [electron] whatsapp-webjs bridge finalizada (code=0)
+[2026-04-25T00:37:19.910Z] [electron] usando navegador: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+[2026-04-25T00:37:20.977Z] [whatsapp-webjs-bridge] listening on http://localhost:3344
+[2026-04-25T00:37:20.977Z] [whatsapp-webjs-bridge] WebSocket server attached.
+[2026-04-25T00:37:26.515Z] [ERR] [whatsapp-webjs-bridge] Cliente desconectado: LOGOUT
+[2026-04-25T00:37:32.921Z] [ERR] D:\uniq\uniq-system\whatsapp-webjs-bridge\node_modules\whatsapp-web.js\src\authStrategies\LocalAuth.js:65
+                    throw new Error(e);
+                          ^
+
+Error: Error: EBUSY: resource busy or locked, unlink 'C:\Users\cesar\AppData\Roaming\uniq-system-dev\session-local-webjs\first_party_sets.db-journal'
+    at D:\uniq\uniq-system\whatsapp-webjs-bridge\node_modules\whatsapp-web.js\src\authStrategies\LocalAuth.js:65:27
+    at async LocalAuth.logout (D:\uniq\uniq-system\whatsapp-webjs-bridge\node_modules\whatsapp-web.js\src\authStrategies\LocalAuth.js:58:13)
+    at async D:\uniq\uniq-system\whatsapp-webjs-bridge\node_modules\whatsapp-web.js\src\Client.js:498:17
+
+Node.js v20.16.0
+[2026-04-25T00:37:32.939Z] [electron] whatsapp-webjs bridge finalizada (code=1)
+[2026-04-25T00:42:40.136Z] [electron] usando navegador: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+[2026-04-25T00:42:41.061Z] [whatsapp-webjs-bridge] listening on http://localhost:3344
+[2026-04-25T00:42:41.062Z] [whatsapp-webjs-bridge] WebSocket server attached.
+[2026-04-25T00:43:11.784Z] [ERR] [whatsapp-webjs-bridge] Falha ao inicializar cliente: auth timeout
+[2026-04-25T00:48:00.427Z] [electron] whatsapp-webjs bridge finalizada (code=null)
+[2026-04-25T00:48:23.929Z] [electron] usando navegador: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+[2026-04-25T00:48:25.364Z] [whatsapp-webjs-bridge] listening on http://localhost:3344
+[2026-04-25T00:48:25.364Z] [whatsapp-webjs-bridge] WebSocket server attached.
+[2026-04-25T00:48:43.633Z] ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█ ▄▄▄▄▄ █▄ ▀ ▀▄ ▄█▀▀▀█  ▄▄▄█ ▄ ▄▀▀█▀▄▀ ▀▀▄█  ▀ ▄ ██ ▄▄▄▄▄ █
+█ █   █ █ █ ▄█▀███▀ ▄█▄█   ████▄▀▄▄ ▀▀ █▄▄ █ ▄▀▄ ██ █   █ █
+█ █▄▄▄█ █▄▀ ▄▄ ▀▀▀▄  ▀▄  █▀ ▄▄▄ █▄▄▀ █▄▄ ▀▀▀█▄▄▀▄██ █▄▄▄█ █
+█▄▄▄▄▄▄▄█▄█▄█ █▄█▄█ ▀▄▀ ▀▄█ █▄█ ▀ ▀ █ █▄█ █ █▄▀▄█ █▄▄▄▄▄▄▄█
+█▄▄▄ █▀▄█▄█ ▀▄▀██▄▄▀ ▄   ▀▀ ▄▄   █ ▄▀█▀▄▄▄  ▄▀▄▄▀ ▄█▀ ▄ █ █
+█ ▄ ▄█▄▄   ▄▄█ ▀█  ██ ▄▄ █▄▄█▀▀▀▀ ▀ ▀▀▀▄▄█▄▀▄ █▀▀▀ ▀   ▄ ▄█
+█▄▀   █▄██▀  ▀▄ ▀██▄▀▀█▄▀█▀ ███▀ █▀█▄   ▀▀█▄▄█▄▄▄█ ▀▀██▄ ██
+█▄▀▄ ▀▄▄██▀▀▀█ ▄▀  ▄█▀██▀ ▀█ ▄▀▀███ █▄█▄▀▄▀ ▀█▄█▀▄▄▀▀ ▀▀ ██
+██▀ ███▄█▄▄▀    ▄ ▀███▄█ ▄ ▄▄▄▀▄▄▄▄  ▀▄▄▄█▀▄▄▄█ █▄▄█ ▀█▀█ █
+█▄▄█▄█▀▄  ▀▄▄█▀▀▀▀▄▄ ▄ ▄   ▀█ ▄▄▀██ ▀  ▀▀▀▄█▀▀  ▄▄▀ ▄█▄▄▀██
+█▀     ▄▄ █ ▄█ ██ ▀████ ▀█  ▄▄▀▀ ██▄ ▀▀██   █▀▀▄▄ ▀█ ▄ ▀ ▀█
+█ ▀███▄▄██▀█ ▄▀▀▀▄██ ▄▄▄  █▀▀  ▄▀█ █▀▀█ ▀ ▀▀▀▀▄ █▄▀ ██ ▄█ █
+█▀██▀█ ▄▄▀▀▄ ▄█  █  █ █▀█▄▀██▀██▄▄▄█▄ ▄ █▀▄█▄▀▀███ ▀▀█▀█  █
+█▄  ▄ ▄▄▄ ▄▄▀███▀█▄▄▀▀█▄██▀ ▄▄▄ ▀ ▄▀███ ▀█▀▀▄█  ▄ ▄▄▄ ▀▀█▀█
+█ ▄▄  █▄█ ▀ ▄▀ ▄▀ █▄▄█▀▀▀██ █▄█ ▀ ▀ ████ █ ▄▄ ▀▀▄ █▄█ ▄██▀█
+█▄▀▀█▄ ▄  ▄▀▄█▄█  ▄ ▀▀▄▀▀  ▄▄▄   ▀  █▄█ ▄▀▀▄ ▀ ▀█ ▄ ▄ ▄█ ▀█
+█▀▀▀ █ ▄█ ▄▀ ▄█▀█▄ ▀ █▀  ▀▄▀▄▄▀▀█▀ ▄ █▀▄▄▄ ▀▀█▄██▄ ▄███ ▀▀█
+██▀█ ▀▄▄▄▄█ ▄▄  ▀  ▀   █▄ █▀▀▀ ██▀▀  ▀▄▄▄█████▀ █▀▄▄█▀▀▄▀▄█
+█▄▀█▄▀▄▄▄██▀▄█ ███▄▄▀█▀▀ ▄█▀██ ▄ ▀▄██▄  ▀█▄█ █▀██▀█▄▀█ ▄▄██
+█ ██▀█ ▄ █▄▄█▀▀▄ ▄▄█  ▄▀▄▀▄▄ ▄▄█ █ █▄█ █▀█▀▄▀▀██ ▄ ▀▄ ▀ █▄█
+█▀ ██ ▄▄█ ▀▀█▀▄▄▀ ▀▀ █▄█▀█▀  ▀  █▄▄▀██▀█ █ ▄▀  ▀▄█▀▀▄ ▀▄█ █
+█▀ ██▀█▄▀█▄▄▀▄  ███▄▀▀█ █▄██▄█▄▄██ ▀█▀▄▄▀ ▄▄   █▄  ███▄█▄██
+██ ▀  █▄ ▄▄ █ ▄ █▄▀▀█▄ █▀ ▄▀▄█▀ ▀▀▄█ ▀▀██▄ ▀▀██▄██▀▄ █▀ ▀ █
+█ ▀ ▀▀▄▄▀██▀ ▄█▄▄█▄███ ▄▄█ ▀▀ ▀▀▀▄ █▄█ ▀█▀▄▀▀█ █ ▀  ▄█▀█▄▄█
+███████▄▄ ▀ ▄█▄█ █▄▄▀ █▀▄▄█ ▄▄▄ ▄▀▄█  ▀ ▀▀██ █▀▄▀ ▄▄▄  █ ██
+█ ▄▄▄▄▄ ██ ▄▄▄▄█▀ █ █▀▀██▀█ █▄█ ▄▀ █ █▄▀ ▄▀▄ ▀▀▀▄ █▄█ ▀  ▀█
+█ █   █ █▀█▄ ▄██▀█▀▀ ▄ █ ▀█  ▄  ▄▄ ▀ ▀▄█▄████   █     █▄ ▄█
+█ █▄▄▄█ █    ▀█    ▄▄▀ ▄█▀ ▄▄▀█▀█ ▀ ▄▄▄▀█▄ █▄█ ▀▀ ▀▀▀▀███▀█
+█▄▄▄▄▄▄▄█▄▄█▄█▄▄█▄▄██▄█▄█████▄███▄██▄███▄▄▄▄███▄██▄▄█▄█▄███
+
+[whatsapp-webjs-bridge] QR recebido. Escaneie no celular.
+[2026-04-25T00:48:53.717Z] [whatsapp-webjs-bridge] loading_screen 100%: WhatsApp
+[2026-04-25T00:48:55.636Z] [whatsapp-webjs-bridge] loading_screen 0%: WhatsApp
+[2026-04-25T00:48:56.014Z] [whatsapp-webjs-bridge] loading_screen 99%: WhatsApp
+[2026-04-25T00:49:03.993Z] [whatsapp-webjs-bridge] Sessao autenticada. Aguardando WhatsApp Web carregar (Store)...
+[2026-04-25T00:49:03.994Z] [whatsapp-webjs-bridge] Sessao autenticada. Aguardando WhatsApp Web carregar (Store)...
+[2026-04-25T00:49:05.539Z] [whatsapp-webjs-bridge] Cliente pronto.
+[2026-04-25T00:50:35.567Z] [ERR] [whatsapp-webjs-bridge] Falha ao atualizar contatos: Timeout while refreshing contacts (contacts-endpoint)
+[2026-04-25T00:52:05.552Z] [ERR] [whatsapp-webjs-bridge] Falha ao carregar contatos: Runtime.callFunctionOn timed out. Increase the 'protocolTimeout' setting in launch/connect calls for a higher timeout if needed.
+[2026-04-25T00:52:08.394Z] [ERR] [whatsapp-webjs-bridge] Falha ao atualizar contatos: Timeout while refreshing contacts (contacts-endpoint)
+[2026-04-25T00:52:15.497Z] [whatsapp-webjs-bridge] history 554498958521-1558370263@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:15.991Z] [whatsapp-webjs-bridge] history 554499553570-1589986802@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:15.999Z] [whatsapp-webjs-bridge] history 554399528824@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:16.891Z] [whatsapp-webjs-bridge] history 554499775733-1504748394@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:17.001Z] [whatsapp-webjs-bridge] history 554491112589@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:17.554Z] [whatsapp-webjs-bridge] history 554499104514@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:17.563Z] [whatsapp-webjs-bridge] evento message_create: {
+  from: '209697701380337@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.564Z] [whatsapp-webjs-bridge] evento message: {
+  from: '209697701380337@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.565Z] [whatsapp-webjs-bridge] evento message_create: {
+  from: '37662618570838@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[whatsapp-webjs-bridge] evento message: {
+  from: '37662618570838@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.566Z] [whatsapp-webjs-bridge] evento message_create: {
+  from: '200854263046284@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.566Z] [whatsapp-webjs-bridge] evento message: {
+  from: '200854263046284@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.568Z] [whatsapp-webjs-bridge] evento message_create: {
+  from: '199587264487559@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[whatsapp-webjs-bridge] evento message: {
+  from: '199587264487559@lid',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'notification_template'
+}
+[2026-04-25T00:52:17.864Z] [whatsapp-webjs-bridge] history 554498143537@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:18.181Z] [whatsapp-webjs-bridge] history 554498118747@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:19.198Z] [whatsapp-webjs-bridge] history 120363267295559998@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:19.253Z] [whatsapp-webjs-bridge] history 555185151715-1623784941@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:19.352Z] [whatsapp-webjs-bridge] history 554498369679@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:20.167Z] [whatsapp-webjs-bridge] history 555198391203@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:21.080Z] [whatsapp-webjs-bridge] history 120363423559055718@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:21.407Z] [whatsapp-webjs-bridge] history 554291086154-1520900544@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:21.561Z] [whatsapp-webjs-bridge] history 120363425103534374@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:22.000Z] [whatsapp-webjs-bridge] history 120363195705553719@g.us source= fetchMessages count= 4 limit= 10
+[2026-04-25T00:52:22.765Z] [whatsapp-webjs-bridge] history 554499875159-1604496229@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:22.792Z] [whatsapp-webjs-bridge] history 5531936180931@c.us source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:52:22.803Z] [whatsapp-webjs-bridge] history 554499085332@c.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:23.626Z] [whatsapp-webjs-bridge] history 554497034501@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:24.367Z] [whatsapp-webjs-bridge] history 5511974627106@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:24.837Z] [whatsapp-webjs-bridge] history 554499285332@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:24.860Z] [whatsapp-webjs-bridge] history 144873692885172@lid source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:52:24.864Z] [whatsapp-webjs-bridge] history 554484069883@c.us source= fetchMessages count= 7 limit= 10
+[2026-04-25T00:52:25.606Z] [whatsapp-webjs-bridge] history 554396148403@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:25.636Z] [whatsapp-webjs-bridge] history 554391263638@c.us source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:52:26.405Z] [whatsapp-webjs-bridge] history 554396962059@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:27.149Z] [whatsapp-webjs-bridge] history 554884477375@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:27.603Z] [whatsapp-webjs-bridge] history 120363424803970874@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:27.990Z] [whatsapp-webjs-bridge] history 5511978506319@c.us source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:52:28.053Z] [whatsapp-webjs-bridge] history 554498077143@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:28.408Z] [whatsapp-webjs-bridge] history 554187092284@c.us source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:52:28.785Z] [whatsapp-webjs-bridge] history 5511994813325@c.us source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:52:29.388Z] [whatsapp-webjs-bridge] history 554499724841@c.us source= fetchMessages count= 8 limit= 10
+[2026-04-25T00:52:29.389Z] [whatsapp-webjs-bridge] history 554491597272@c.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:30.639Z] [whatsapp-webjs-bridge] history 130786200146109@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:30.696Z] [whatsapp-webjs-bridge] history 30223886229551@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:30.958Z] [whatsapp-webjs-bridge] history 30021955678302@lid source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:52:31.084Z] [whatsapp-webjs-bridge] history 86075624185901@lid source= fetchMessages count= 7 limit= 10
+[2026-04-25T00:52:33.132Z] [whatsapp-webjs-bridge] history 135962071957533@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:52:33.678Z] [whatsapp-webjs-bridge] history 25331834556548@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:52:33.679Z] [whatsapp-webjs-bridge] history 80118991052981@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:33.680Z] [whatsapp-webjs-bridge] history 225340257521847@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:34.590Z] [whatsapp-webjs-bridge] history 13245729505401@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:37.002Z] [whatsapp-webjs-bridge] history 47756110508210@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:37.003Z] [whatsapp-webjs-bridge] history 58995855351877@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:37.010Z] [whatsapp-webjs-bridge] history 79195103330486@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:37.014Z] [whatsapp-webjs-bridge] history 56397265932504@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:38.293Z] [whatsapp-webjs-bridge] history 18056210284712@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:38.326Z] [whatsapp-webjs-bridge] history 257213142724704@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:40.439Z] [whatsapp-webjs-bridge] history 120363403452356582@g.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:40.440Z] [whatsapp-webjs-bridge] history 275260226158754@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:40.442Z] [whatsapp-webjs-bridge] history 81290980278414@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:40.443Z] [whatsapp-webjs-bridge] history 89713394319474@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:40.931Z] [whatsapp-webjs-bridge] foto obtida para 554499553570-1589986802@g.us via 554499553570-1589986802@g.us — baixando...
+[2026-04-25T00:52:40.964Z] [whatsapp-webjs-bridge] foto obtida para 554498958521-1558370263@g.us via 554498958521-1558370263@g.us — baixando...
+[2026-04-25T00:52:41.434Z] [whatsapp-webjs-bridge] foto obtida para 554399528824@c.us via 554399528824@c.us — baixando...
+[2026-04-25T00:52:41.436Z] [whatsapp-webjs-bridge] foto obtida para 554491112589@c.us via 554491112589@c.us — baixando...
+[2026-04-25T00:52:41.968Z] [whatsapp-webjs-bridge] foto obtida para 554499775733-1504748394@g.us via 554499775733-1504748394@g.us — baixando...
+[2026-04-25T00:52:41.969Z] [whatsapp-webjs-bridge] foto obtida para 554499104514@c.us via 554499104514@c.us — baixando...
+[2026-04-25T00:52:41.986Z] [whatsapp-webjs-bridge] history 100227742728238@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:42.609Z] [whatsapp-webjs-bridge] history 554491647518-1635794952@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:42.632Z] [whatsapp-webjs-bridge] foto obtida para 554498143537@c.us via 554498143537@c.us — baixando...
+[2026-04-25T00:52:42.633Z] [whatsapp-webjs-bridge] foto obtida para 554498118747@c.us via 554498118747@c.us — baixando...
+[2026-04-25T00:52:42.633Z] [whatsapp-webjs-bridge] foto obtida para 120363267295559998@g.us via 120363267295559998@g.us — baixando...
+[2026-04-25T00:52:42.844Z] [whatsapp-webjs-bridge] history 120363334829568013@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:52:42.856Z] [whatsapp-webjs-bridge] foto obtida para 555185151715-1623784941@g.us via 555185151715-1623784941@g.us — baixando...
+[2026-04-25T00:52:42.895Z] [whatsapp-webjs-bridge] history 94644553699429@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:42.905Z] [whatsapp-webjs-bridge] foto obtida para 120363423559055718@g.us via 120363423559055718@g.us — baixando...
+[2026-04-25T00:52:43.028Z] [whatsapp-webjs-bridge] foto obtida para 554498369679@c.us via 554498369679@c.us — baixando...
+[2026-04-25T00:52:44.103Z] [whatsapp-webjs-bridge] foto obtida para 120363334829568013@g.us via 120363334829568013@g.us — baixando...
+[2026-04-25T00:52:44.104Z] [whatsapp-webjs-bridge] foto obtida para 554491647518-1635794952@g.us via 554491647518-1635794952@g.us — baixando...
+[2026-04-25T00:52:45.233Z] [whatsapp-webjs-bridge] history 170166738510077@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:45.268Z] [whatsapp-webjs-bridge] history 42249660444820@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:45.269Z] [whatsapp-webjs-bridge] history 207219404628136@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:45.273Z] [whatsapp-webjs-bridge] history 253072810999987@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:47.184Z] [whatsapp-webjs-bridge] history 210316461871201@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:47.184Z] [whatsapp-webjs-bridge] history 26551588503799@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:47.198Z] [whatsapp-webjs-bridge] history 272253749047513@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:47.236Z] [whatsapp-webjs-bridge] history 62535294300219@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:48.935Z] [whatsapp-webjs-bridge] history 107903151255771@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:48.950Z] [whatsapp-webjs-bridge] history 33565588893945@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:48.951Z] [whatsapp-webjs-bridge] history 554499082993-1538521979@g.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:49.766Z] [whatsapp-webjs-bridge] history 62208457338943@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:50.603Z] [whatsapp-webjs-bridge] history 104505697939484@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:50.608Z] [whatsapp-webjs-bridge] history 156186787733722@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:51.048Z] [whatsapp-webjs-bridge] history 102761605677175@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:51.891Z] [whatsapp-webjs-bridge] history 136249381769431@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:51.892Z] [whatsapp-webjs-bridge] history 101550324236368@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:52.767Z] [whatsapp-webjs-bridge] history 62930112487513@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:52.768Z] [whatsapp-webjs-bridge] history 278181374365827@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:52.939Z] [whatsapp-webjs-bridge] history 138307157622861@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:54.198Z] [whatsapp-webjs-bridge] history 123128122458117@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:54.348Z] [whatsapp-webjs-bridge] history 19842782519511@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:54.362Z] [whatsapp-webjs-bridge] history 59356464820459@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:54.363Z] [whatsapp-webjs-bridge] history 121432147276016@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:56.036Z] [whatsapp-webjs-bridge] history 64463868825603@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:56.040Z] [whatsapp-webjs-bridge] history 198822709997695@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:56.042Z] [whatsapp-webjs-bridge] history 258234908725476@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:56.046Z] [whatsapp-webjs-bridge] history 40497330528449@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:57.962Z] [whatsapp-webjs-bridge] history 185298159956074@lid source= none count= 0 limit= 10
+[2026-04-25T00:52:57.971Z] [whatsapp-webjs-bridge] history 97788201324766@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:59.716Z] [whatsapp-webjs-bridge] history 135399464767608@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:52:59.721Z] [whatsapp-webjs-bridge] history 218493794394295@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:00.760Z] [whatsapp-webjs-bridge] history 107391462981787@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:01.132Z] [whatsapp-webjs-bridge] history 229819455393903@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:02.051Z] [whatsapp-webjs-bridge] history 54941255245932@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:02.051Z] [whatsapp-webjs-bridge] history 225683469033472@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:02.459Z] [whatsapp-webjs-bridge] history 103698059518027@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:03.151Z] [whatsapp-webjs-bridge] history 259008405442755@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:03.556Z] [whatsapp-webjs-bridge] history 13135550002@c.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:04.423Z] [whatsapp-webjs-bridge] history 215337094086676@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:04.425Z] [whatsapp-webjs-bridge] history 173340719354014@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:05.038Z] [whatsapp-webjs-bridge] history 120264000016450@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:05.046Z] [whatsapp-webjs-bridge] history 2465730699296@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:05.212Z] [whatsapp-webjs-bridge] history 39604061257861@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:53:27.486Z] [electron] whatsapp-webjs bridge finalizada (code=null)
+[2026-04-25T00:57:59.036Z] [electron] usando navegador: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
+[2026-04-25T00:57:59.946Z] [whatsapp-webjs-bridge] listening on http://localhost:3344
+[2026-04-25T00:57:59.947Z] [whatsapp-webjs-bridge] WebSocket server attached.
+[2026-04-25T00:58:03.132Z] [whatsapp-webjs-bridge] loading_screen 95%: WhatsApp
+[2026-04-25T00:58:05.058Z] [whatsapp-webjs-bridge] Sessao autenticada. Aguardando WhatsApp Web carregar (Store)...
+[2026-04-25T00:58:05.090Z] [whatsapp-webjs-bridge] loading_screen 99%: WhatsApp
+[2026-04-25T00:58:05.148Z] [whatsapp-webjs-bridge] Cliente pronto.
+[2026-04-25T00:58:31.044Z] [whatsapp-webjs-bridge] history 554399528824@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:31.148Z] [whatsapp-webjs-bridge] history 554498958521-1558370263@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:31.469Z] [whatsapp-webjs-bridge] foto obtida para 554498958521-1558370263@g.us via 554498958521-1558370263@g.us — baixando...
+[2026-04-25T00:58:31.504Z] [whatsapp-webjs-bridge] foto obtida para 554499553570-1589986802@g.us via 554499553570-1589986802@g.us — baixando...
+[2026-04-25T00:58:31.877Z] [whatsapp-webjs-bridge] history 554499553570-1589986802@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:32.018Z] [whatsapp-webjs-bridge] history 554491112589@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:32.049Z] [whatsapp-webjs-bridge] foto obtida para 554499775733-1504748394@g.us via 554499775733-1504748394@g.us — baixando...
+[2026-04-25T00:58:32.050Z] [whatsapp-webjs-bridge] foto obtida para 120363267295559998@g.us via 120363267295559998@g.us — baixando...
+[2026-04-25T00:58:32.140Z] [whatsapp-webjs-bridge] history 554499775733-1504748394@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:32.161Z] [whatsapp-webjs-bridge] foto obtida para 555185151715-1623784941@g.us via 555185151715-1623784941@g.us — baixando...
+[2026-04-25T00:58:32.254Z] [whatsapp-webjs-bridge] history 554499104514@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:32.270Z] [whatsapp-webjs-bridge] foto obtida para 120363423559055718@g.us via 120363423559055718@g.us — baixando...
+[2026-04-25T00:58:32.301Z] [whatsapp-webjs-bridge] evento message_create: {
+  from: 'status@broadcast',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'chat'
+}
+[2026-04-25T00:58:32.302Z] [whatsapp-webjs-bridge] evento message: {
+  from: 'status@broadcast',
+  to: '554498958521@c.us',
+  fromMe: false,
+  type: 'chat'
+}
+[2026-04-25T00:58:32.310Z] [whatsapp-webjs-bridge] foto obtida para 120363334829568013@g.us via 120363334829568013@g.us — baixando...
+[2026-04-25T00:58:32.319Z] [whatsapp-webjs-bridge] foto obtida para 554491647518-1635794952@g.us via 554491647518-1635794952@g.us — baixando...
+[2026-04-25T00:58:32.319Z] [whatsapp-webjs-bridge] foto obtida para 120363195705553719@g.us via 120363195705553719@g.us — baixando...
+[2026-04-25T00:58:32.430Z] [whatsapp-webjs-bridge] foto obtida para 120363425103534374@g.us via 120363425103534374@g.us — baixando...
+[2026-04-25T00:58:32.450Z] [whatsapp-webjs-bridge] foto obtida para 554291086154-1520900544@g.us via 554291086154-1520900544@g.us — baixando...
+[2026-04-25T00:58:32.499Z] [whatsapp-webjs-bridge] foto obtida para 554499875159-1604496229@g.us via 554499875159-1604496229@g.us — baixando...
+[2026-04-25T00:58:32.532Z] [whatsapp-webjs-bridge] foto obtida para 120363424803970874@g.us via 120363424803970874@g.us — baixando...
+[2026-04-25T00:58:32.648Z] [whatsapp-webjs-bridge] foto obtida para 554499082993-1538521979@g.us via 554499082993-1538521979@g.us — baixando...
+[2026-04-25T00:58:32.661Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363405792764528@g.us (candidatos: 120363405792764528@g.us)
+[2026-04-25T00:58:32.764Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363403452356582@g.us (candidatos: 120363403452356582@g.us)
+[2026-04-25T00:58:32.775Z] [whatsapp-webjs-bridge] foto obtida para 13135550002@c.us via 13135550002@c.us — baixando...
+[2026-04-25T00:58:32.848Z] [whatsapp-webjs-bridge] foto obtida para 120363152911970934@g.us via 120363152911970934@g.us — baixando...
+[2026-04-25T00:58:33.059Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 555185151715-1632343181@g.us (candidatos: 555185151715-1632343181@g.us)
+[2026-04-25T00:58:33.077Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363046876119930@g.us (candidatos: 120363046876119930@g.us)
+[2026-04-25T00:58:33.095Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363293653838727@g.us (candidatos: 120363293653838727@g.us)
+[2026-04-25T00:58:33.134Z] [whatsapp-webjs-bridge] foto obtida para 120363072069539059@g.us via 120363072069539059@g.us — baixando...
+[2026-04-25T00:58:33.238Z] [whatsapp-webjs-bridge] foto obtida para 554499202968-1633539091@g.us via 554499202968-1633539091@g.us — baixando...
+[2026-04-25T00:58:33.307Z] [whatsapp-webjs-bridge] foto obtida para 120363165083103895@g.us via 120363165083103895@g.us — baixando...
+[2026-04-25T00:58:33.391Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363153684152130@g.us (candidatos: 120363153684152130@g.us)
+[2026-04-25T00:58:33.400Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363163454262933@g.us (candidatos: 120363163454262933@g.us)
+[2026-04-25T00:58:33.708Z] [whatsapp-webjs-bridge] foto obtida para 120363025944250138@g.us via 120363025944250138@g.us — baixando...
+[2026-04-25T00:58:33.709Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363145100862293@g.us (candidatos: 120363145100862293@g.us)
+[2026-04-25T00:58:33.872Z] [whatsapp-webjs-bridge] history 554498143537@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:33.886Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363023410964549@g.us (candidatos: 120363023410964549@g.us)
+[2026-04-25T00:58:33.887Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363143069841427@g.us (candidatos: 120363143069841427@g.us)
+[2026-04-25T00:58:33.899Z] [whatsapp-webjs-bridge] foto obtida para 554499317507-1611870702@g.us via 554499317507-1611870702@g.us — baixando...
+[2026-04-25T00:58:34.209Z] [whatsapp-webjs-bridge] foto obtida para 120363044985963133@g.us via 120363044985963133@g.us — baixando...
+[2026-04-25T00:58:34.209Z] [whatsapp-webjs-bridge] foto obtida para 120363039466699265@g.us via 120363039466699265@g.us — baixando...
+[2026-04-25T00:58:34.308Z] [whatsapp-webjs-bridge] history 120363267295559998@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:34.382Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363026598499176@g.us (candidatos: 120363026598499176@g.us)
+[2026-04-25T00:58:34.526Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363038879910793@g.us (candidatos: 120363038879910793@g.us)
+[2026-04-25T00:58:34.526Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499903151-1580474356@g.us (candidatos: 554499903151-1580474356@g.us)
+[2026-04-25T00:58:34.537Z] [whatsapp-webjs-bridge] foto obtida para 554499082993-1617801713@g.us via 554499082993-1617801713@g.us — baixando...
+[2026-04-25T00:58:34.644Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363041013930150@g.us (candidatos: 120363041013930150@g.us)
+[2026-04-25T00:58:34.707Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498785901-1621979562@g.us (candidatos: 554498785901-1621979562@g.us)
+[2026-04-25T00:58:34.785Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499688000-1606566389@g.us (candidatos: 554499688000-1606566389@g.us)
+[2026-04-25T00:58:34.857Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554399528824-1616068350@g.us (candidatos: 554399528824-1616068350@g.us)
+[2026-04-25T00:58:34.869Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 120363022699815080@g.us (candidatos: 120363022699815080@g.us)
+[2026-04-25T00:58:34.877Z] [whatsapp-webjs-bridge] foto obtida para 554499903151-1615418392@g.us via 554499903151-1615418392@g.us — baixando...
+[2026-04-25T00:58:35.004Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554399528824-1620507390@g.us (candidatos: 554399528824-1620507390@g.us)
+[2026-04-25T00:58:35.109Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554497357326-1554244539@g.us (candidatos: 554497357326-1554244539@g.us)
+[2026-04-25T00:58:35.119Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498060772-1611775168@g.us (candidatos: 554498060772-1611775168@g.us)
+[2026-04-25T00:58:35.183Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499082993-1617801546@g.us (candidatos: 554499082993-1617801546@g.us)
+[2026-04-25T00:58:35.186Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554488292294-1605015057@g.us (candidatos: 554488292294-1605015057@g.us)
+[2026-04-25T00:58:35.289Z] [whatsapp-webjs-bridge] foto obtida para 554398214296-1512065760@g.us via 554398214296-1512065760@g.us — baixando...
+[2026-04-25T00:58:35.350Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498958521-1601856755@g.us (candidatos: 554498958521-1601856755@g.us)
+[2026-04-25T00:58:35.458Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499875159-1426363821@g.us (candidatos: 554499875159-1426363821@g.us)
+[2026-04-25T00:58:35.461Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554391258887-1562613403@g.us (candidatos: 554391258887-1562613403@g.us)
+[2026-04-25T00:58:35.519Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554399528824-1599680330@g.us (candidatos: 554399528824-1599680330@g.us)
+[2026-04-25T00:58:35.528Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499317507-1526561341@g.us (candidatos: 554499317507-1526561341@g.us)
+[2026-04-25T00:58:35.636Z] [whatsapp-webjs-bridge] foto obtida para 554498498490-1585152506@g.us via 554498498490-1585152506@g.us — baixando...
+[2026-04-25T00:58:35.695Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 5521965320647-1591130630@g.us (candidatos: 5521965320647-1591130630@g.us)
+[2026-04-25T00:58:36.008Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498143537-1588015294@g.us (candidatos: 554498143537-1588015294@g.us)
+[2026-04-25T00:58:36.008Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498369679-1586805243@g.us (candidatos: 554498369679-1586805243@g.us)
+[2026-04-25T00:58:36.009Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 5516981285850-1580179534@g.us (candidatos: 5516981285850-1580179534@g.us)
+[2026-04-25T00:58:36.010Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 5518996181281-1572471322@g.us (candidatos: 5518996181281-1572471322@g.us)
+[2026-04-25T00:58:36.094Z] [whatsapp-webjs-bridge] history 554498118747@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:36.353Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554396465422-1574459573@g.us (candidatos: 554396465422-1574459573@g.us)
+[2026-04-25T00:58:36.354Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499745835-1535027797@g.us (candidatos: 554499745835-1535027797@g.us)
+[2026-04-25T00:58:36.354Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499344933-1573489100@g.us (candidatos: 554499344933-1573489100@g.us)
+[2026-04-25T00:58:36.355Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499331714-1559222879@g.us (candidatos: 554499331714-1559222879@g.us)
+[2026-04-25T00:58:36.687Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499082993-1570488811@g.us (candidatos: 554499082993-1570488811@g.us)
+[2026-04-25T00:58:36.688Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554497562247-1480170570@g.us (candidatos: 554497562247-1480170570@g.us)
+[2026-04-25T00:58:36.793Z] [whatsapp-webjs-bridge] history 555185151715-1623784941@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:36.847Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498029629-1444302243@g.us (candidatos: 554498029629-1444302243@g.us)
+[2026-04-25T00:58:36.849Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499845944-1534276017@g.us (candidatos: 554499845944-1534276017@g.us)
+[2026-04-25T00:58:36.858Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554497227130-1488976008@g.us (candidatos: 554497227130-1488976008@g.us)
+[2026-04-25T00:58:37.197Z] [whatsapp-webjs-bridge] foto obtida para 554498350704-1513171091@g.us via 554498350704-1513171091@g.us — baixando...
+[2026-04-25T00:58:37.200Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499749268-1552314341@g.us (candidatos: 554499749268-1552314341@g.us)
+[2026-04-25T00:58:37.520Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499816591-1488325775@g.us (candidatos: 554499816591-1488325775@g.us)
+[2026-04-25T00:58:37.520Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498369679-1552413308@g.us (candidatos: 554498369679-1552413308@g.us)
+[2026-04-25T00:58:37.584Z] [whatsapp-webjs-bridge] history 120363423559055718@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:37.662Z] [whatsapp-webjs-bridge] history 554498369679@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:37.684Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499542650-1546083879@g.us (candidatos: 554499542650-1546083879@g.us)
+[2026-04-25T00:58:37.843Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499542650-1544364783@g.us (candidatos: 554499542650-1544364783@g.us)
+[2026-04-25T00:58:37.846Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554498369679-1542762397@g.us (candidatos: 554498369679-1542762397@g.us)
+[2026-04-25T00:58:37.851Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499816591-1543166329@g.us (candidatos: 554499816591-1543166329@g.us)
+[2026-04-25T00:58:38.182Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499880858-1533048479@g.us (candidatos: 554499880858-1533048479@g.us)
+[2026-04-25T00:58:38.183Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499495450-1532533815@g.us (candidatos: 554499495450-1532533815@g.us)
+[2026-04-25T00:58:38.183Z] [whatsapp-webjs-bridge] fallback de navegador sem foto para 554499995327-1526517128@g.us (candidatos: 554499995327-1526517128@g.us)
+[2026-04-25T00:58:38.898Z] [whatsapp-webjs-bridge] history 555198391203@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:39.577Z] [whatsapp-webjs-bridge] history 554291086154-1520900544@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:39.719Z] [whatsapp-webjs-bridge] history 5531936180931@c.us source= fetchMessages count= 7 limit= 10
+[2026-04-25T00:58:39.753Z] [whatsapp-webjs-bridge] history 120363195705553719@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:40.570Z] [whatsapp-webjs-bridge] history 120363425103534374@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:41.334Z] [whatsapp-webjs-bridge] history 554499085332@c.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:58:41.837Z] [whatsapp-webjs-bridge] history 554499875159-1604496229@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:41.845Z] [whatsapp-webjs-bridge] history 144873692885172@lid source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:58:42.332Z] [whatsapp-webjs-bridge] history 554497034501@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:42.773Z] [whatsapp-webjs-bridge] history 554484069883@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:43.286Z] [whatsapp-webjs-bridge] history 5511974627106@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:43.824Z] [whatsapp-webjs-bridge] history 554499285332@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:43.880Z] [whatsapp-webjs-bridge] history 554396148403@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:44.640Z] [whatsapp-webjs-bridge] history 554391263638@c.us source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:58:45.425Z] [whatsapp-webjs-bridge] history 5511978506319@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:45.508Z] [whatsapp-webjs-bridge] history 554396962059@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:45.910Z] [whatsapp-webjs-bridge] history 554884477375@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:46.702Z] [whatsapp-webjs-bridge] history 5511994813325@c.us source= fetchMessages count= 6 limit= 10
+[2026-04-25T00:58:46.746Z] [whatsapp-webjs-bridge] history 554187092284@c.us source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:58:46.783Z] [whatsapp-webjs-bridge] history 120363424803970874@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:46.849Z] [whatsapp-webjs-bridge] history 554498077143@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:47.753Z] [whatsapp-webjs-bridge] history 554491597272@c.us source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:58:47.843Z] [whatsapp-webjs-bridge] history 554499724841@c.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:48.784Z] [whatsapp-webjs-bridge] history 130786200146109@lid source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:58:50.140Z] [whatsapp-webjs-bridge] history 30021955678302@lid source= fetchMessages count= 6 limit= 10
+[2026-04-25T00:58:50.197Z] [whatsapp-webjs-bridge] history 30223886229551@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:50.199Z] [whatsapp-webjs-bridge] history 135962071957533@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:58:50.321Z] [whatsapp-webjs-bridge] history 86075624185901@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:51.581Z] [whatsapp-webjs-bridge] history 25331834556548@lid source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:58:52.010Z] [whatsapp-webjs-bridge] history 169780711543036@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:58:52.013Z] [whatsapp-webjs-bridge] history 80118991052981@lid source= fetchMessages count= 6 limit= 10
+[2026-04-25T00:58:52.065Z] [whatsapp-webjs-bridge] history 225340257521847@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:53.922Z] [whatsapp-webjs-bridge] history 47756110508210@lid source= none count= 0 limit= 10
+[2026-04-25T00:58:54.103Z] [whatsapp-webjs-bridge] history 13245729505401@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:54.126Z] [whatsapp-webjs-bridge] history 58995855351877@lid source= none count= 0 limit= 10
+[2026-04-25T00:58:54.221Z] [whatsapp-webjs-bridge] history 79195103330486@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:55.161Z] [whatsapp-webjs-bridge] history 56397265932504@lid source= fetchMessages count= 7 limit= 10
+[2026-04-25T00:58:55.313Z] [whatsapp-webjs-bridge] history 246565616754867@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:58:57.590Z] [whatsapp-webjs-bridge] history 257213142724704@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:58:57.701Z] [whatsapp-webjs-bridge] history 18056210284712@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:57.749Z] [whatsapp-webjs-bridge] history 120363405792764528@g.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:58:57.749Z] [whatsapp-webjs-bridge] history 120363403452356582@g.us source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:58:58.273Z] [whatsapp-webjs-bridge] foto obtida para 554399528824@c.us via 554399528824@c.us — baixando...
+[2026-04-25T00:58:58.276Z] [whatsapp-webjs-bridge] foto obtida para 554491112589@c.us via 554491112589@c.us — baixando...
+[2026-04-25T00:58:58.277Z] [whatsapp-webjs-bridge] foto obtida para 554499104514@c.us via 554499104514@c.us — baixando...
+[2026-04-25T00:58:58.277Z] [whatsapp-webjs-bridge] foto obtida para 554498143537@c.us via 554498143537@c.us — baixando...
+[2026-04-25T00:58:59.332Z] [whatsapp-webjs-bridge] history 275260226158754@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:58:59.383Z] [whatsapp-webjs-bridge] foto obtida para 554498118747@c.us via 554498118747@c.us — baixando...
+[2026-04-25T00:58:59.384Z] [whatsapp-webjs-bridge] foto obtida para 554498369679@c.us via 554498369679@c.us — baixando...
+[2026-04-25T00:58:59.974Z] [whatsapp-webjs-bridge] history 554491647518-1635794952@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:00.588Z] [whatsapp-webjs-bridge] history 156204152127588@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:01.651Z] [whatsapp-webjs-bridge] history 120363334829568013@g.us source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:01.803Z] [whatsapp-webjs-bridge] history 81290980278414@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:02.807Z] [whatsapp-webjs-bridge] history 100227742728238@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:02.903Z] [whatsapp-webjs-bridge] history 89713394319474@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:02.992Z] [whatsapp-webjs-bridge] history 94644553699429@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:03.493Z] [whatsapp-webjs-bridge] history 188180284313837@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:04.861Z] [whatsapp-webjs-bridge] history 42249660444820@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:59:04.930Z] [whatsapp-webjs-bridge] history 170166738510077@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:04.956Z] [whatsapp-webjs-bridge] history 253072810999987@lid source= fetchMessages count= 3 limit= 10
+[2026-04-25T00:59:04.977Z] [whatsapp-webjs-bridge] history 207219404628136@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:06.957Z] [whatsapp-webjs-bridge] history 210316461871201@lid source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:59:06.962Z] [whatsapp-webjs-bridge] history 26551588503799@lid source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:59:06.978Z] [whatsapp-webjs-bridge] history 93982625378503@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:07.042Z] [whatsapp-webjs-bridge] history 272253749047513@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:08.085Z] [whatsapp-webjs-bridge] history 62535294300219@lid source= fetchMessages count= 2 limit= 10
+[2026-04-25T00:59:08.593Z] [whatsapp-webjs-bridge] history 33565588893945@lid source= fetchMessages count= 5 limit= 10
+[2026-04-25T00:59:09.084Z] [whatsapp-webjs-bridge] history 107903151255771@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:10.136Z] [whatsapp-webjs-bridge] history 554499082993-1538521979@g.us source= fetchMessages count= 6 limit= 10
+[2026-04-25T00:59:10.720Z] [whatsapp-webjs-bridge] history 62208457338943@lid source= fetchMessages count= 8 limit= 10
+[2026-04-25T00:59:10.833Z] [whatsapp-webjs-bridge] history 87132186087615@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:11.361Z] [whatsapp-webjs-bridge] history 104505697939484@lid source= none count= 0 limit= 10
+[2026-04-25T00:59:11.849Z] [whatsapp-webjs-bridge] history 200854263046284@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:13.421Z] [whatsapp-webjs-bridge] history 156186787733722@lid source= fetchMessages count= 10 limit= 10
+[2026-04-25T00:59:13.447Z] [whatsapp-webjs-bridge] history 102761605677175@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:13.482Z] [whatsapp-webjs-bridge] history 101550324236368@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:13.508Z] [whatsapp-webjs-bridge] history 136249381769431@lid source= fetchMessages count= 8 limit= 10
+[2026-04-25T00:59:14.578Z] [whatsapp-webjs-bridge] history 278181374365827@lid source= none count= 0 limit= 10
+[2026-04-25T00:59:15.073Z] [whatsapp-webjs-bridge] history 62930112487513@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:16.004Z] [whatsapp-webjs-bridge] history 123128122458117@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:16.004Z] [whatsapp-webjs-bridge] history 138307157622861@lid source= none count= 0 limit= 10
+[2026-04-25T00:59:16.497Z] [whatsapp-webjs-bridge] history 19842782519511@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:16.971Z] [whatsapp-webjs-bridge] history 59356464820459@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:18.426Z] [whatsapp-webjs-bridge] history 198822709997695@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:18.447Z] [whatsapp-webjs-bridge] history 258234908725476@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:18.465Z] [whatsapp-webjs-bridge] history 121432147276016@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:18.466Z] [whatsapp-webjs-bridge] history 36618958323743@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:19.528Z] [whatsapp-webjs-bridge] history 40497330528449@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:19.546Z] [whatsapp-webjs-bridge] history 64463868825603@lid source= none count= 0 limit= 10
+[2026-04-25T00:59:20.470Z] [whatsapp-webjs-bridge] history 185298159956074@lid source= none count= 0 limit= 10
+[2026-04-25T00:59:20.945Z] [whatsapp-webjs-bridge] history 135399464767608@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:22.365Z] [whatsapp-webjs-bridge] history 97788201324766@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:22.366Z] [whatsapp-webjs-bridge] history 107391462981787@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:22.381Z] [whatsapp-webjs-bridge] history 218493794394295@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:22.398Z] [whatsapp-webjs-bridge] history 229819455393903@lid source= fetchMessages count= 1 limit= 10
+[2026-04-25T00:59:23.184Z] [whatsapp-webjs-bridge] history 37662618570838@lid source= fetchMessages count= 1 limit= 10

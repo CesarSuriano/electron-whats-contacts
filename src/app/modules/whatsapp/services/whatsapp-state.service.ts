@@ -1372,7 +1372,7 @@ export class WhatsappStateService implements OnDestroy {
       return;
     }
 
-    const phone = (event.phone || jid.split('@')[0] || '').trim();
+    const phone = this.resolveSyntheticPhoneFromEvent(event);
     const synthesized: WhatsappContact = {
       jid,
       phone,
@@ -1395,6 +1395,24 @@ export class WhatsappStateService implements OnDestroy {
 
     this.contactsSubject.next([synthesized, ...current]);
     this.requestPhoto(jid);
+  }
+
+  private resolveSyntheticPhoneFromEvent(event: WhatsappEvent): string {
+    const jid = typeof event.chatJid === 'string' ? event.chatJid.trim() : '';
+    const eventPhone = typeof event.phone === 'string' ? event.phone.trim() : '';
+    const jidDigits = jid.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
+    const eventPhoneDigits = eventPhone.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
+
+    if (jid.endsWith('@c.us')) {
+      return jidDigits || eventPhoneDigits;
+    }
+
+    if (jid.endsWith('@lid')) {
+      // Never show internal linked-id as if it were a real phone number.
+      return '';
+    }
+
+    return eventPhoneDigits || jidDigits;
   }
 
   private incrementUnreadCounts(newInbound: WhatsappMessage[]): void {

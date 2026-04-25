@@ -1,8 +1,9 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { BehaviorSubject, EMPTY, of, throwError } from 'rxjs';
+import { BehaviorSubject, EMPTY, Subject, of, throwError } from 'rxjs';
 
+import { WhatsappLabel } from '../../../../models/whatsapp.model';
 import { AgentService } from '../../../../services/agent.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
@@ -35,9 +36,10 @@ describe('WhatsappPageComponent', () => {
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     gatewaySpy = jasmine.createSpyObj('WhatsappWebjsGatewayService', [
-      'loadSessionStatus', 'connectSession', 'disconnectSession'
+      'loadSessionStatus', 'connectSession', 'disconnectSession', 'loadLabels'
     ]);
     gatewaySpy.loadSessionStatus.and.returnValue(of(makeStatus('initializing')));
+    gatewaySpy.loadLabels.and.returnValue(of([]));
 
     wsSpy = jasmine.createSpyObj('WhatsappWsService', ['on', 'connect', 'disconnect'], {
       connected$: of(false)
@@ -254,6 +256,27 @@ describe('WhatsappPageComponent', () => {
       expect(component.sessionErrorMessage).toContain('desconectar');
       expect(component.isSessionActionLoading).toBeFalse();
     });
+  });
+
+  it('clears loaded WhatsApp labels and ignores stale responses after disconnect', () => {
+    const labelsSubject = new Subject<WhatsappLabel[]>();
+    gatewaySpy.loadLabels.and.returnValue(labelsSubject.asObservable());
+
+    component.whatsappInitLabels = [{ id: 'lab-old', name: 'Cliente antigo', hexColor: '#16a34a' }];
+    component.currentSessionStatus = 'ready';
+
+    (component as any).loadWhatsappLabels();
+    expect(component.isLoadingWhatsappLabels).toBeTrue();
+
+    (component as any).syncLabelsLoadWithSessionState('disconnected');
+
+    expect(component.whatsappInitLabels).toEqual([]);
+    expect(component.isLoadingWhatsappLabels).toBeFalse();
+
+    labelsSubject.next([{ id: 'lab-new', name: 'Novo', hexColor: '#25D366' }]);
+    labelsSubject.complete();
+
+    expect(component.whatsappInitLabels).toEqual([]);
   });
 
   describe('onToggleSessionConnection', () => {

@@ -1,10 +1,10 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { Subject, combineLatest } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
 
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../../../models/message-template.model';
 import { ScheduledContact, ScheduledMessage, ScheduleRecurrence } from '../../../../models/scheduled-message.model';
-import { WhatsappContact, WhatsappInstance } from '../../../../models/whatsapp.model';
+import { WhatsappContact, WhatsappInstance, WhatsappLabel } from '../../../../models/whatsapp.model';
 import { PendingBulkSend, PendingBulkSendService } from '../../../../services/pending-bulk-send.service';
 import { MessageTemplateService } from '../../../../services/message-template.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
@@ -21,6 +21,8 @@ import { WhatsappStateService } from '../../services/whatsapp-state.service';
   providers: []
 })
 export class WhatsappConsoleComponent implements OnInit, OnDestroy {
+  @Input() whatsappLabels: WhatsappLabel[] = [];
+
   instances: WhatsappInstance[] = [];
   selectedInstanceName = '';
   errorMessage = '';

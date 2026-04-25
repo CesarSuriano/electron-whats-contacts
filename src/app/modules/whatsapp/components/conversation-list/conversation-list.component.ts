@@ -3,7 +3,7 @@ import { Subject, combineLatest } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
 import { AppLabel, AppLabelAssignments } from '../../../../models/app-label.model';
-import { MessageAck, WhatsappContact } from '../../../../models/whatsapp.model';
+import { MessageAck, WhatsappContact, WhatsappLabel } from '../../../../models/whatsapp.model';
 import { LabelService } from '../../../../services/label.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { formatBrazilianPhone } from '../../helpers/phone-format.helper';
@@ -17,6 +17,14 @@ interface ConversationFilterChip {
   color?: string;
 }
 
+interface ConversationWhatsappLabel {
+  key: string;
+  id: string;
+  name: string;
+  color: string;
+  chatJids: string[];
+}
+
 const PHOTO_VISIBLE_OVERSCAN = 6;
 const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
 
@@ -28,6 +36,13 @@ const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
 })
 export class ConversationListComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() disabled = false;
+  @Input()
+  set whatsappLabels(value: WhatsappLabel[] | null | undefined) {
+    this.sourceWhatsappLabels = Array.isArray(value) ? value : [];
+    this.refreshLabelFilters();
+    this.applyFilter();
+    this.cdr.markForCheck();
+  }
   @Output() scheduleMessage = new EventEmitter<WhatsappContact>();
   @Output() filteredContactsChange = new EventEmitter<WhatsappContact[]>();
   @ViewChild('scrollContainer')
@@ -41,7 +56,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   selectedJid = '';
   searchTerm = '';
   activeFilter: ConversationFilterId = 'all';
-  labelFilters: string[] = [];
+  whatsappLabelFilters: ConversationWhatsappLabel[] = [];
   filterChipsCached: ConversationFilterChip[] = [];
   appLabels: AppLabel[] = [];
   appLabelAssignments: AppLabelAssignments = {};
@@ -55,9 +70,14 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuContact: WhatsappContact | null = null;
+  private sourceWhatsappLabels: WhatsappLabel[] = [];
+  private whatsappLabelsById = new Map<string, ConversationWhatsappLabel>();
+  private whatsappLabelsByName = new Map<string, ConversationWhatsappLabel>();
+  private whatsappLabelsByContact = new Map<string, ConversationWhatsappLabel[]>();
   private appLabelsById = new Map<string, AppLabel>();
   private appLabelsByContact = new Map<string, AppLabel[]>();
   private static readonly EMPTY_LABELS: AppLabel[] = [];
+  private static readonly EMPTY_WHATSAPP_LABELS: ConversationWhatsappLabel[] = [];
 
   private readonly destroy$ = new Subject<void>();
   private prevOrderMap = new Map<string, number>();
@@ -228,6 +248,21 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     return this.activeFilter === this.toAppLabelFilterId(labelId);
   }
 
+  onWhatsappLabelChipClick(label: ConversationWhatsappLabel, event: Event): void {
+    event.stopPropagation();
+    if (this.disabled || this.isSelectionMode) {
+      return;
+    }
+
+    const filterId = this.toWhatsappLabelFilterId(label.key);
+    this.activeFilter = this.activeFilter === filterId ? 'all' : filterId;
+    this.applyFilter();
+  }
+
+  isWhatsappLabelFilterActive(label: ConversationWhatsappLabel): boolean {
+    return this.activeFilter === this.toWhatsappLabelFilterId(label.key);
+  }
+
   onContactClick(contact: WhatsappContact): void {
     if (this.disabled) {
       return;
@@ -389,6 +424,10 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     return this.appLabelsByContact.get(contact.jid) || ConversationListComponent.EMPTY_LABELS;
   }
 
+  getWhatsappLabelsForContact(contact: WhatsappContact): ConversationWhatsappLabel[] {
+    return this.whatsappLabelsByContact.get(this.normalizeWhatsappChatJid(contact.jid)) || ConversationListComponent.EMPTY_WHATSAPP_LABELS;
+  }
+
   private resolveAppLabelsForContact(jid: string): AppLabel[] {
     const ids = this.appLabelAssignments[jid] || [];
     if (!ids.length || !this.appLabelsById.size) {
@@ -432,7 +471,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     this.rebuildAppLabelCache();
 
     const term = this.searchTerm.trim().toLowerCase();
-    const activeLabel = this.getActiveLabelName();
+    const activeWhatsappLabelKey = this.getActiveWhatsappLabelKey();
     const activeAppLabelId = this.getActiveAppLabelId();
 
     this.filteredContacts = this.contacts.filter(contact => {
@@ -448,9 +487,9 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
         }
       }
 
-      if (activeLabel) {
-        const labels = Array.isArray(contact.labels) ? contact.labels : [];
-        if (!labels.includes(activeLabel)) {
+      if (activeWhatsappLabelKey) {
+        const whatsappLabels = this.getWhatsappLabelsForContact(contact);
+        if (!whatsappLabels.some(label => label.key === activeWhatsappLabelKey)) {
           return false;
         }
       }
@@ -470,10 +509,11 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       const name = (contact.name || '').toLowerCase();
       const phone = contact.phone || '';
       const preview = this.formatLastMessagePreview(contact).toLowerCase();
-      const labelsJoined = (Array.isArray(contact.labels) ? contact.labels : []).join(' ').toLowerCase();
+      const labelsJoined = this.getWhatsappLabelsForContact(contact).map(label => label.name).join(' ').toLowerCase();
       const appLabelsJoined = this.getAppLabelsForContact(contact).map(label => label.name).join(' ').toLowerCase();
+      const rawLabelsJoined = (Array.isArray(contact.labels) ? contact.labels : []).join(' ').toLowerCase();
 
-      if (name.includes(term) || preview.includes(term) || labelsJoined.includes(term) || appLabelsJoined.includes(term)) {
+      if (name.includes(term) || preview.includes(term) || labelsJoined.includes(term) || rawLabelsJoined.includes(term) || appLabelsJoined.includes(term)) {
         return true;
       }
 
@@ -525,21 +565,76 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private refreshLabelFilters(): void {
-    const labels = new Set<string>();
-    this.contacts.forEach(contact => {
-      (contact.labels || []).forEach(label => {
-        const normalized = String(label || '').trim();
-        if (normalized) {
-          labels.add(normalized);
-        }
+    this.whatsappLabelsById.clear();
+    this.whatsappLabelsByName.clear();
+    const labelsByContact = new Map<string, Map<string, ConversationWhatsappLabel>>();
+    const addLabelToContact = (chatJidRaw: unknown, label: ConversationWhatsappLabel): void => {
+      const chatJid = this.normalizeWhatsappChatJid(chatJidRaw);
+      if (!chatJid) {
+        return;
+      }
+
+      const currentLabels = labelsByContact.get(chatJid) || new Map<string, ConversationWhatsappLabel>();
+      currentLabels.set(label.key, label);
+      labelsByContact.set(chatJid, currentLabels);
+    };
+
+    this.sourceWhatsappLabels.forEach(label => {
+      const parsed = this.createWhatsappLabel(label.id, label.name, label.hexColor);
+      if (!parsed) {
+        return;
+      }
+
+      if (parsed.id) {
+        this.whatsappLabelsById.set(this.normalizeWhatsappLabelToken(parsed.id), parsed);
+      }
+      this.whatsappLabelsByName.set(this.normalizeWhatsappLabelToken(parsed.name), parsed);
+      (label.chatJids || []).forEach(chatJid => {
+        addLabelToContact(chatJid, parsed);
       });
     });
 
-    this.labelFilters = Array.from(labels).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const menuLabels = new Map<string, ConversationWhatsappLabel>();
 
-    const activeLabel = this.getActiveLabelName();
-    if (activeLabel && !this.labelFilters.includes(activeLabel)) {
-      this.activeFilter = 'all';
+    this.whatsappLabelsByName.forEach(label => {
+      menuLabels.set(label.key, label);
+    });
+
+    this.contacts.forEach(contact => {
+      const labels = this.resolveContactWhatsappLabels(contact);
+      const chatJid = this.normalizeWhatsappChatJid(contact.jid);
+      const currentLabels = labelsByContact.get(chatJid) || new Map<string, ConversationWhatsappLabel>();
+
+      labels.forEach(label => {
+        currentLabels.set(label.key, label);
+      });
+
+      if (!currentLabels.size) {
+        return;
+      }
+
+      labelsByContact.set(chatJid, currentLabels);
+      currentLabels.forEach(label => {
+        menuLabels.set(label.key, label);
+      });
+    });
+
+    this.whatsappLabelsByContact = new Map(
+      Array.from(labelsByContact.entries()).map(([chatJid, contactLabels]) => [
+        chatJid,
+        Array.from(contactLabels.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      ])
+    );
+    this.whatsappLabelFilters = Array.from(menuLabels.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    const activeLabelKey = this.getActiveWhatsappLabelKey();
+    if (activeLabelKey) {
+      const compatibleLabelKey = this.resolveCompatibleWhatsappLabelKey(activeLabelKey, menuLabels);
+      if (!compatibleLabelKey) {
+        this.activeFilter = 'all';
+      } else if (compatibleLabelKey !== activeLabelKey) {
+        this.activeFilter = this.toWhatsappLabelFilterId(compatibleLabelKey);
+      }
     }
 
     this.rebuildFilterChips();
@@ -561,15 +656,16 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
         color: label.color
       }));
 
-    const labelChips: ConversationFilterChip[] = this.labelFilters.map(label => ({
-      id: `label:${encodeURIComponent(label)}` as ConversationFilterId,
-      label
+    const labelChips: ConversationFilterChip[] = this.whatsappLabelFilters.map(label => ({
+      id: this.toWhatsappLabelFilterId(label.key),
+      label: label.name,
+      color: label.color
     }));
 
     this.filterChipsCached = [...base, ...appLabelChips, ...labelChips];
   }
 
-  private getActiveLabelName(): string {
+  private getActiveWhatsappLabelKey(): string {
     if (!this.activeFilter.startsWith('label:')) {
       return '';
     }
@@ -588,8 +684,116 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     return `app-label:${labelId}`;
   }
 
+  private toWhatsappLabelFilterId(labelKey: string): ConversationFilterId {
+    return `label:${encodeURIComponent(labelKey)}`;
+  }
+
   private isLabelFilterChip(chip: ConversationFilterChip): boolean {
     return chip.id.startsWith('app-label:') || chip.id.startsWith('label:');
+  }
+
+  private resolveContactWhatsappLabels(contact: WhatsappContact): ConversationWhatsappLabel[] {
+    const rawLabels = Array.isArray(contact.labels) ? contact.labels : [];
+    if (!rawLabels.length) {
+      return ConversationListComponent.EMPTY_WHATSAPP_LABELS;
+    }
+
+    const resolved = new Map<string, ConversationWhatsappLabel>();
+
+    rawLabels.forEach(rawLabel => {
+      const token = this.normalizeWhatsappLabelToken(rawLabel);
+      if (!token) {
+        return;
+      }
+
+      const fromCatalog = this.whatsappLabelsById.get(token) || this.whatsappLabelsByName.get(token);
+      if (fromCatalog) {
+        resolved.set(fromCatalog.key, fromCatalog);
+        return;
+      }
+
+      const fallback = this.createWhatsappLabel('', rawLabel, undefined);
+      if (fallback) {
+        resolved.set(fallback.key, fallback);
+      }
+    });
+
+    if (!resolved.size) {
+      return ConversationListComponent.EMPTY_WHATSAPP_LABELS;
+    }
+
+    return Array.from(resolved.values()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  private createWhatsappLabel(idRaw: unknown, nameRaw: unknown, colorRaw: unknown): ConversationWhatsappLabel | null {
+    const id = String(idRaw || '').trim();
+    const name = String(nameRaw || '').trim() || id;
+    if (!name) {
+      return null;
+    }
+
+    const normalizedId = this.normalizeWhatsappLabelToken(id);
+    const normalizedName = this.normalizeWhatsappLabelToken(name);
+    const key = normalizedId ? `id:${normalizedId}` : `name:${normalizedName}`;
+
+    return {
+      key,
+      id,
+      name,
+      color: this.normalizeWhatsappLabelColor(colorRaw),
+      chatJids: []
+    };
+  }
+
+  private normalizeWhatsappChatJid(value: unknown): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private normalizeWhatsappLabelToken(value: unknown): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private resolveCompatibleWhatsappLabelKey(
+    activeLabelKey: string,
+    menuLabels: Map<string, ConversationWhatsappLabel>
+  ): string {
+    if (!activeLabelKey) {
+      return '';
+    }
+
+    if (menuLabels.has(activeLabelKey)) {
+      return activeLabelKey;
+    }
+
+    const [, rawToken = ''] = activeLabelKey.split(':', 2);
+    const normalizedToken = this.normalizeWhatsappLabelToken(rawToken);
+    if (!normalizedToken) {
+      return '';
+    }
+
+    const fromCatalog = this.whatsappLabelsById.get(normalizedToken) || this.whatsappLabelsByName.get(normalizedToken);
+    if (fromCatalog && menuLabels.has(fromCatalog.key)) {
+      return fromCatalog.key;
+    }
+
+    for (const label of menuLabels.values()) {
+      if (
+        this.normalizeWhatsappLabelToken(label.id) === normalizedToken
+        || this.normalizeWhatsappLabelToken(label.name) === normalizedToken
+      ) {
+        return label.key;
+      }
+    }
+
+    return '';
+  }
+
+  private normalizeWhatsappLabelColor(value: unknown): string {
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return '#128c7e';
+    }
+    return raw.startsWith('#') ? raw : `#${raw}`;
   }
 
   private isDataUrlPreview(value: string): boolean {

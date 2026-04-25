@@ -40,7 +40,7 @@
 
     <main class="whatsapp-page__main">
       <section class="whatsapp-page__console-shell" *ngIf="isSessionReady; else sessionGate">
-        <app-whatsapp-console></app-whatsapp-console>
+        <app-whatsapp-console [whatsappLabels]="whatsappInitLabels"></app-whatsapp-console>
       </section>
     </main>
   </div>

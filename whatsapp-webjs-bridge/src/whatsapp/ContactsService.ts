@@ -30,6 +30,7 @@ const PHOTO_TTL_MS = 30 * 60 * 1000;
 const LINKED_CHAT_CANONICAL_RESOLVE_LIMIT = 25;
 const LINKED_CHAT_CANONICAL_RESOLVE_TIMEOUT_MS = 2500;
 const LINKED_CHAT_CANONICAL_RESOLVE_CONCURRENCY = 4;
+const LABEL_CHATS_TIMEOUT_MS = 12000;
 const CONTACTS_REFRESH_COOLDOWN_MS = 25 * 1000;
 const CONTACTS_REFRESH_TIMEOUT_MS = 90 * 1000;
 const CONTACTS_FETCH_TIMEOUT_MS = 45 * 1000;
@@ -138,6 +139,7 @@ export class ContactsService {
     const labels: WhatsappLabel[] = [];
     const clientWithLabels = this.client as WebJsClient & {
       getLabels?: () => Promise<unknown[]>;
+      getChatsByLabelId?: (labelId: string) => Promise<RawChat[]>;
     };
 
     if (typeof clientWithLabels.getLabels !== 'function') {
@@ -146,18 +148,33 @@ export class ContactsService {
 
     try {
       const rawLabels = await clientWithLabels.getLabels();
-      (rawLabels || []).forEach(raw => {
+      const resolvedLabels = await Promise.all((rawLabels || []).map(async raw => {
         const label = raw as {
           id?: unknown;
           name?: unknown;
           hexColor?: unknown;
+          getChats?: () => Promise<RawChat[]>;
           _data?: { id?: unknown; name?: unknown; hexColor?: unknown };
         } | null;
         const id = String(label?.id ?? label?._data?.id ?? '').trim();
         const name = String(label?.name ?? label?._data?.name ?? '').trim();
         const hexColor = String(label?.hexColor ?? label?._data?.hexColor ?? '').trim();
-        if (id && name) {
-          labels.push({ id, name, hexColor: hexColor || null });
+        if (!id || !name) {
+          return null;
+        }
+
+        const chatJids = await this.loadLabelChatJids(raw, id);
+        return {
+          id,
+          name,
+          hexColor: hexColor || null,
+          ...(chatJids.length ? { chatJids } : {})
+        } satisfies WhatsappLabel;
+      }));
+
+      resolvedLabels.forEach(label => {
+        if (label) {
+          labels.push(label);
         }
       });
     } catch {
@@ -168,6 +185,57 @@ export class ContactsService {
     }
 
     return labels;
+  }
+
+  private async loadLabelChatJids(rawLabel: unknown, labelId: string): Promise<string[]> {
+    const labelWithChats = rawLabel as { getChats?: () => Promise<RawChat[]> } | null;
+    const clientWithLabels = this.client as WebJsClient & {
+      getChatsByLabelId?: (id: string) => Promise<RawChat[]>;
+    };
+
+    const loadChats = typeof labelWithChats?.getChats === 'function'
+      ? () => labelWithChats.getChats!()
+      : (typeof clientWithLabels.getChatsByLabelId === 'function'
+        ? () => clientWithLabels.getChatsByLabelId!(labelId)
+        : null);
+
+    if (!loadChats) {
+      return [];
+    }
+
+    try {
+      const chats = await withTimeout(loadChats(), LABEL_CHATS_TIMEOUT_MS, `labelChats(${labelId})`);
+      if (!Array.isArray(chats) || !chats.length) {
+        return [];
+      }
+
+      const resolvedCanonicalByLid = await this.resolveRecentLinkedChatCanonicals(chats);
+      return Array.from(new Set(chats.map(chat => {
+        const rawJid = String(chat?.id?._serialized || '').trim();
+        if (!rawJid) {
+          return '';
+        }
+
+        if (isLinkedId(rawJid)) {
+          return resolvedCanonicalByLid.get(rawJid) || this.lidMap.findCanonical(rawJid) || rawJid;
+        }
+
+        if (isValidPersonalJid(rawJid)) {
+          if (this.contactStore.has(rawJid)) {
+            return rawJid;
+          }
+
+          const alternativeJid = brazilianAlternativeJid(rawJid);
+          if (alternativeJid && this.contactStore.has(alternativeJid)) {
+            return alternativeJid;
+          }
+        }
+
+        return rawJid;
+      }).filter(Boolean)));
+    } catch {
+      return [];
+    }
   }
 
   resolveChatLabelNames(chat: RawChat | null | undefined, labelsMap: Map<string, string>): string[] {

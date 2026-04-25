@@ -108,5 +108,32 @@ describe('ChatHeaderComponent', () => {
       const formatted = component.phoneFormatted;
       expect(formatted).toBeTruthy();
     });
+
+    it('does not show linked-id as phone when contact jid is @lid', () => {
+      component.contact = makeContact({
+        jid: '120363999999999999@lid',
+        phone: '120363999999999999'
+      });
+
+      expect(component.phoneFormatted).toBe('');
+    });
+
+    it('prefers jid number when phone field looks like internal linked-id', () => {
+      component.contact = makeContact({
+        jid: '5511987654321@c.us',
+        phone: '120363999999999999'
+      });
+
+      expect(component.phoneFormatted).toBe('+55 (11) 98765-4321');
+    });
+
+    it('prefers canonical Brazilian mobile variant when phone and jid differ only by ninth digit', () => {
+      component.contact = makeContact({
+        jid: '551187654321@c.us',
+        phone: '5511987654321'
+      });
+
+      expect(component.phoneFormatted).toBe('+55 (11) 98765-4321');
+    });
   });
 });

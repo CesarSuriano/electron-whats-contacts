@@ -14,6 +14,7 @@ function isRetryableInitError(error: unknown): boolean {
 
 export class SessionManager {
   private initializePromise: Promise<void> | null = null;
+  private manualDisconnectInProgress = false;
 
   constructor(
     private readonly client: WebJsClient,
@@ -35,6 +36,10 @@ export class SessionManager {
 
   getSessionSnapshot(): SessionSnapshot {
     return this.sessionState.snapshot();
+  }
+
+  isManualDisconnectInProgress(): boolean {
+    return this.manualDisconnectInProgress;
   }
 
   private async initializeWithRetry(maxAttempts = 2): Promise<void> {
@@ -77,21 +82,26 @@ export class SessionManager {
 
   async disconnect(): Promise<void> {
     this.initializePromise = null;
+    this.manualDisconnectInProgress = true;
 
     try {
-      await this.client.logout();
-    } catch (error) {
-      console.warn('[whatsapp-webjs-bridge] logout falhou:', (error as { message?: string } | null)?.message || String(error));
-    }
+      try {
+        await this.client.logout();
+      } catch (error) {
+        console.warn('[whatsapp-webjs-bridge] logout falhou:', (error as { message?: string } | null)?.message || String(error));
+      }
 
-    try {
-      await this.client.destroy();
-    } catch (error) {
-      console.warn('[whatsapp-webjs-bridge] destroy falhou:', (error as { message?: string } | null)?.message || String(error));
-    }
+      try {
+        await this.client.destroy();
+      } catch (error) {
+        console.warn('[whatsapp-webjs-bridge] destroy falhou:', (error as { message?: string } | null)?.message || String(error));
+      }
 
-    this.sessionState.status = 'disconnected';
-    this.sessionState.qr = null;
-    this.sessionState.lastError = '';
+      this.sessionState.status = 'disconnected';
+      this.sessionState.qr = null;
+      this.sessionState.lastError = '';
+    } finally {
+      this.manualDisconnectInProgress = false;
+    }
   }
 }

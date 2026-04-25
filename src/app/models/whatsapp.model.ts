@@ -67,4 +67,5 @@ export interface WhatsappLabel {
   id: string;
   name: string;
   hexColor?: string;
+  chatJids?: string[];
 }

@@ -36,7 +36,13 @@
   <p class="whatsapp-console__error" *ngIf="errorMessage">{{ errorMessage }}</p>
 
   <div class="whatsapp-console__body" *ngIf="!isInitialLoading; else loading">
-    <app-conversation-list class="console-sidebar" [disabled]="isUiBlocked" (scheduleMessage)="onScheduleFromContact($event)" (filteredContactsChange)="onFilteredContactsChange($event)"></app-conversation-list>
+    <app-conversation-list
+      class="console-sidebar"
+      [disabled]="isUiBlocked"
+      [whatsappLabels]="whatsappLabels"
+      (scheduleMessage)="onScheduleFromContact($event)"
+      (filteredContactsChange)="onFilteredContactsChange($event)"
+    ></app-conversation-list>
     <app-chat-view class="console-chat" [disabled]="isUiBlocked"></app-chat-view>
   </div>
 
