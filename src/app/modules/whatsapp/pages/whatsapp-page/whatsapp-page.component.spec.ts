@@ -94,6 +94,10 @@ describe('WhatsappPageComponent', () => {
     expect(wsSpy.connect).toHaveBeenCalled();
   });
 
+  it('does not eagerly load labels before the session is ready', () => {
+    expect(gatewaySpy.loadLabels).not.toHaveBeenCalled();
+  });
+
   it('goToHome navigates to root', () => {
     component.goToHome();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
@@ -277,6 +281,16 @@ describe('WhatsappPageComponent', () => {
     labelsSubject.complete();
 
     expect(component.whatsappInitLabels).toEqual([]);
+  });
+
+  it('does not trigger an extra HTTP label load on ready when labels already exist', () => {
+    component.whatsappInitLabels = [{ id: 'lab-1', name: 'VIP', hexColor: '#25D366' }];
+    const requestSpy = spyOn<any>(component, 'requestWhatsappLabelsLoad');
+
+    (component as any).syncLabelsLoadWithSessionState('ready');
+
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(component.whatsappLabelsStatusText).toContain('1 etiqueta');
   });
 
   describe('onToggleSessionConnection', () => {

@@ -22,6 +22,7 @@ import { HistoryController } from './controllers/HistoryController.js';
 import { MessagesController } from './controllers/MessagesController.js';
 
 const { Client, LocalAuth } = pkg;
+const CLIENT_AUTH_TIMEOUT_MS = 60000;
 
 export interface Container {
   config: BridgeConfig;
@@ -71,6 +72,7 @@ export function buildContainer(config: BridgeConfig): Container {
   const client = new Client({
     authStrategy: new LocalAuth(localAuthOptions),
     puppeteer: puppeteerOptions,
+    authTimeoutMs: CLIENT_AUTH_TIMEOUT_MS,
     // Pin a known WhatsApp Web HTML to avoid the "stuck after authenticated"
     // bug that happens when WhatsApp updates its frontend and breaks Store injection.
     // Source: https://github.com/wppconnect-team/wa-version
@@ -156,6 +158,7 @@ export function bindClientEvents(container: Container): void {
   } = container;
 
   client.on('qr', qr => {
+    stopDisconnectRecovery();
     sessionState.status = 'qr_required';
     sessionState.qr = qr;
     sessionState.lastError = '';
@@ -165,6 +168,7 @@ export function bindClientEvents(container: Container): void {
   });
 
   client.on('authenticated', () => {
+    stopDisconnectRecovery();
     sessionState.status = 'authenticated';
     sessionState.qr = null;
     sessionState.lastError = '';
@@ -180,12 +184,113 @@ export function bindClientEvents(container: Container): void {
     console.log(`[whatsapp-webjs-bridge] change_state: ${state}`);
   });
 
+  const LABELS_POLL_INTERVAL_MS = 30000;
+  const LABELS_READY_LINK_RESOLUTION_LIMIT = 60;
+  const DISCONNECTED_RECOVERY_DELAY_MS = 1200;
+  let lastLabelsJson = '';
+  let labelsPollTimer: ReturnType<typeof setInterval> | null = null;
+  let labelsWarmupRunId = 0;
+  let disconnectRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const refreshLabelsAndBroadcast = async (
+    reason: string,
+    options: { linkedChatResolutionLimit?: number } = {}
+  ): Promise<void> => {
+    try {
+      const labels = await contactsService.loadLabels({
+        linkedChatResolutionLimit: options.linkedChatResolutionLimit
+      });
+      const serialized = JSON.stringify(labels);
+      if (serialized === lastLabelsJson) {
+        return;
+      }
+      lastLabelsJson = serialized;
+      broadcaster.broadcast('labels_updated', { labels });
+      console.log(`[whatsapp-webjs-bridge] labels_updated (${labels.length}, reason=${reason})`);
+    } catch (error) {
+      console.warn(
+        '[whatsapp-webjs-bridge] Falha ao atualizar etiquetas:',
+        (error as { message?: string } | null)?.message || String(error)
+      );
+    }
+  };
+
+  const stopLabelsPoll = (): void => {
+    if (labelsPollTimer) {
+      clearInterval(labelsPollTimer);
+      labelsPollTimer = null;
+    }
+  };
+
+  const stopDisconnectRecovery = (): void => {
+    if (disconnectRecoveryTimer) {
+      clearTimeout(disconnectRecoveryTimer);
+      disconnectRecoveryTimer = null;
+    }
+  };
+
+  const clearLabelsSnapshot = (reason: string): void => {
+    stopLabelsPoll();
+    stopDisconnectRecovery();
+    labelsWarmupRunId += 1;
+    if (lastLabelsJson === '[]') {
+      return;
+    }
+
+    lastLabelsJson = '[]';
+    broadcaster.broadcast('labels_updated', { labels: [] });
+    console.log(`[whatsapp-webjs-bridge] labels_updated (0, reason=${reason})`);
+  };
+
+  const startLabelsPoll = (): void => {
+    stopLabelsPoll();
+    labelsPollTimer = setInterval(() => {
+      if (sessionState.status !== 'ready') {
+        return;
+      }
+      void refreshLabelsAndBroadcast('poll');
+    }, LABELS_POLL_INTERVAL_MS);
+  };
+
+  const startLabelsWarmup = (): void => {
+    labelsWarmupRunId += 1;
+    const runId = labelsWarmupRunId;
+    stopLabelsPoll();
+
+    void (async () => {
+      const attemptDelaysMs = [0, 1500, 3000, 5000, 8000, 12000];
+      for (const delay of attemptDelaysMs) {
+        if (delay) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        if (runId !== labelsWarmupRunId || sessionState.status !== 'ready') {
+          return;
+        }
+
+        await refreshLabelsAndBroadcast('ready', {
+          linkedChatResolutionLimit: LABELS_READY_LINK_RESOLUTION_LIMIT
+        });
+
+        if (lastLabelsJson && lastLabelsJson !== '[]') {
+          break;
+        }
+      }
+
+      if (runId === labelsWarmupRunId && sessionState.status === 'ready') {
+        startLabelsPoll();
+      }
+    })();
+  };
+
   client.on('ready', async () => {
+    stopDisconnectRecovery();
     sessionState.status = 'ready';
     sessionState.qr = null;
     sessionState.lastError = '';
     console.log('[whatsapp-webjs-bridge] Cliente pronto.');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+    startLabelsWarmup();
 
     try {
       const clientWithChats = client as unknown as { getChats: () => Promise<Parameters<typeof contactsService.refreshContactsFromChats>[0] extends infer R ? NonNullable<R> : never> };
@@ -198,9 +303,11 @@ export function bindClientEvents(container: Container): void {
   });
 
   client.on('auth_failure', (message: string) => {
+    stopDisconnectRecovery();
     sessionState.status = 'auth_failure';
     sessionState.lastError = String(message || 'Authentication failure');
     console.error('[whatsapp-webjs-bridge] Falha de autenticacao:', message);
+    clearLabelsSnapshot('auth_failure');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
   });
 
@@ -210,7 +317,25 @@ export function bindClientEvents(container: Container): void {
     const reasonText = String(reason || 'Disconnected');
     sessionState.lastError = reasonText;
     console.warn('[whatsapp-webjs-bridge] Cliente desconectado:', reasonText);
+    clearLabelsSnapshot('disconnected');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+
+    if (sessionManager.isManualDisconnectInProgress() || disconnectRecoveryTimer) {
+      return;
+    }
+
+    disconnectRecoveryTimer = setTimeout(() => {
+      disconnectRecoveryTimer = null;
+      void sessionManager.ensureInitialized().catch(initError => {
+        sessionState.status = 'init_error';
+        sessionState.lastError = (initError as { message?: string } | null)?.message || String(initError);
+        console.error(
+          '[whatsapp-webjs-bridge] Falha ao recuperar sessao apos desconexao:',
+          (initError as { message?: string } | null)?.message || String(initError)
+        );
+        broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+      });
+    }, DISCONNECTED_RECOVERY_DELAY_MS);
   });
 
   client.on('message', message => {

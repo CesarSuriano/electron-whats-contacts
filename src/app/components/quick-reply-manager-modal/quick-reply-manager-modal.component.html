@@ -66,11 +66,39 @@
 
           <div class="quick-reply-manager-modal__field">
             <label>Mensagem</label>
-            <textarea [(ngModel)]="draftContent" rows="6" placeholder="Olá {nome}, segue nossa tabela..."></textarea>
-            <button type="button" class="btn btn-outline btn-sm quick-reply-manager-modal__token" (click)="insertNameToken()">
-              <span class="material-symbols-outlined">badge</span>
-              Inserir {{ '{nome}' }}
-            </button>
+
+            <div class="quick-reply-manager-modal__toolbar">
+              <button type="button" class="quick-reply-manager-modal__tool" title="Negrito (*texto*)" (click)="applyBold()">
+                <strong>B</strong>
+              </button>
+              <button type="button" class="quick-reply-manager-modal__tool" title="Itálico (_texto_)" (click)="applyItalic()">
+                <em>I</em>
+              </button>
+              <button type="button" class="quick-reply-manager-modal__tool" title="Riscado (~texto~)" (click)="applyStrike()">
+                <s>S</s>
+              </button>
+              <button type="button" class="quick-reply-manager-modal__tool" title="Monoespaçado (```texto```)" (click)="applyMono()">
+                <span class="material-symbols-outlined">code</span>
+              </button>
+              <span class="quick-reply-manager-modal__tool-sep"></span>
+              <button type="button" class="quick-reply-manager-modal__tool" title="Inserir emoji" (click)="toggleEmojiPicker()" [class.quick-reply-manager-modal__tool--active]="isEmojiPickerOpen">
+                <span class="material-symbols-outlined">mood</span>
+              </button>
+              <button type="button" class="quick-reply-manager-modal__tool" title="Inserir {{ '{nome}' }}" (click)="insertNameToken()">
+                <span class="material-symbols-outlined">badge</span>
+              </button>
+            </div>
+
+            <div class="quick-reply-manager-modal__emoji-grid" *ngIf="isEmojiPickerOpen">
+              <button
+                type="button"
+                class="quick-reply-manager-modal__emoji-item"
+                *ngFor="let emoji of emojis"
+                (click)="insertEmoji(emoji)"
+              >{{ emoji }}</button>
+            </div>
+
+            <textarea #contentTextarea [(ngModel)]="draftContent" rows="6" placeholder="Olá {nome}, segue nossa tabela..."></textarea>
           </div>
 
           <div class="quick-reply-manager-modal__field">

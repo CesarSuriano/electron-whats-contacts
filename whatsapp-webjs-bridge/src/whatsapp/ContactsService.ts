@@ -26,6 +26,10 @@ export interface ContactsServiceOptions {
   enableProfilePhotoFetch?: boolean;
 }
 
+export interface LoadLabelsOptions {
+  linkedChatResolutionLimit?: number;
+}
+
 const PHOTO_TTL_MS = 30 * 60 * 1000;
 const LINKED_CHAT_CANONICAL_RESOLVE_LIMIT = 25;
 const LINKED_CHAT_CANONICAL_RESOLVE_TIMEOUT_MS = 2500;
@@ -135,12 +139,13 @@ export class ContactsService {
     return map;
   }
 
-  async loadLabels(): Promise<WhatsappLabel[]> {
+  async loadLabels(options: LoadLabelsOptions = {}): Promise<WhatsappLabel[]> {
     const labels: WhatsappLabel[] = [];
     const clientWithLabels = this.client as WebJsClient & {
       getLabels?: () => Promise<unknown[]>;
       getChatsByLabelId?: (labelId: string) => Promise<RawChat[]>;
     };
+    const linkedChatResolutionLimit = Math.max(1, Math.trunc(options.linkedChatResolutionLimit || LINKED_CHAT_CANONICAL_RESOLVE_LIMIT));
 
     if (typeof clientWithLabels.getLabels !== 'function') {
       return labels;
@@ -163,7 +168,7 @@ export class ContactsService {
           return null;
         }
 
-        const chatJids = await this.loadLabelChatJids(raw, id);
+        const chatJids = await this.loadLabelChatJids(raw, id, linkedChatResolutionLimit);
         return {
           id,
           name,
@@ -187,7 +192,7 @@ export class ContactsService {
     return labels;
   }
 
-  private async loadLabelChatJids(rawLabel: unknown, labelId: string): Promise<string[]> {
+  private async loadLabelChatJids(rawLabel: unknown, labelId: string, linkedChatResolutionLimit: number): Promise<string[]> {
     const labelWithChats = rawLabel as { getChats?: () => Promise<RawChat[]> } | null;
     const clientWithLabels = this.client as WebJsClient & {
       getChatsByLabelId?: (id: string) => Promise<RawChat[]>;
@@ -209,7 +214,7 @@ export class ContactsService {
         return [];
       }
 
-      const resolvedCanonicalByLid = await this.resolveRecentLinkedChatCanonicals(chats);
+      const resolvedCanonicalByLid = await this.resolveRecentLinkedChatCanonicals(chats, linkedChatResolutionLimit);
       return Array.from(new Set(chats.map(chat => {
         const rawJid = String(chat?.id?._serialized || '').trim();
         if (!rawJid) {
@@ -343,11 +348,14 @@ export class ContactsService {
     return '';
   }
 
-  private async resolveRecentLinkedChatCanonicals(chats: RawChat[]): Promise<Map<string, string>> {
+  private async resolveRecentLinkedChatCanonicals(
+    chats: RawChat[],
+    maxCandidates = LINKED_CHAT_CANONICAL_RESOLVE_LIMIT
+  ): Promise<Map<string, string>> {
     const candidates = (chats || [])
       .filter(chat => !chat?.isGroup && isLinkedId(chat?.id?._serialized || ''))
       .sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0))
-      .slice(0, LINKED_CHAT_CANONICAL_RESOLVE_LIMIT);
+      .slice(0, Math.max(1, Math.trunc(maxCandidates)));
 
     const resolved = new Map<string, string>();
     if (!candidates.length) {

@@ -55,11 +55,15 @@
         [attr.aria-expanded]="isLabelMenuOpen"
         [attr.title]="labelMenuButtonText"
       >
-        <span
-          *ngIf="activeLabelFilterChip?.color"
-          class="conversation-list__label-menu-dot"
-        ></span>
-        <span class="conversation-list__label-menu-text">{{ labelMenuButtonText }}</span>
+        <span class="conversation-list__label-menu-content">
+          <span
+            *ngIf="activeLabelFilterChip?.color"
+            class="conversation-list__label-menu-dot"
+          ></span>
+          <span class="conversation-list__label-menu-label-slot">
+            <span class="conversation-list__label-menu-text">{{ labelMenuButtonText }}</span>
+          </span>
+        </span>
         <span class="material-symbols-outlined conversation-list__label-menu-icon">expand_more</span>
       </button>
 

@@ -1187,7 +1187,7 @@ select {
 	}
 
 .conversation-list__filters {
-	@apply relative flex flex-nowrap items-center gap-1.5 bg-wa-surface px-3 pb-3;
+	@apply relative flex flex-nowrap items-center gap-1.5 bg-wa-surface px-4 pb-3;
 }
 
 .conversation-list__filter-chip {
@@ -1204,11 +1204,20 @@ select {
 }
 
 .conversation-list__label-menu {
-	@apply relative shrink-0;
+	@apply relative min-w-0 flex-1;
 }
 
 .conversation-list__label-menu-toggle {
-	@apply inline-flex min-w-0 max-w-[10rem] items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-[0.82rem] font-medium text-txt-muted transition disabled:cursor-not-allowed disabled:opacity-60;
+	@apply relative inline-flex w-full min-w-0 items-center overflow-hidden rounded-full border border-border bg-surface px-3 py-1.5 text-[0.82rem] font-medium text-txt-muted transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.conversation-list__label-menu-content {
+	@apply flex min-w-0 flex-1 items-center justify-center gap-1.5;
+	padding-inline: 1.75rem;
+}
+
+.conversation-list__label-menu-label-slot {
+	@apply min-w-0 max-w-full;
 }
 
 .conversation-list__label-menu-toggle:hover:not(:disabled) {
@@ -1234,11 +1243,11 @@ select {
 }
 
 .conversation-list__label-menu-text {
-	@apply min-w-0 truncate;
+	@apply block min-w-0 truncate text-center;
 }
 
 .conversation-list__label-menu-icon {
-	@apply shrink-0 text-[1rem];
+	@apply absolute right-3 top-1/2 shrink-0 -translate-y-1/2 text-[1rem];
 }
 
 .conversation-list__label-menu-toggle--open .conversation-list__label-menu-icon {
