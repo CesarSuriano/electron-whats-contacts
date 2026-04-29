@@ -11,8 +11,11 @@ import { ScheduleListLauncherService } from '../../../../services/schedule-list-
 import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
 import { ScheduleResult } from '../../../../components/schedule-modal/schedule-modal.component';
 import { ScheduleCreateRequest, ScheduleEditRequest } from '../../../../components/schedule-list-modal/schedule-list-modal.component';
+import { extractDigits } from '../../helpers/phone-format.helper';
 import { BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
+
+const ERROR_AUTO_DISMISS_MS = 4000;
 
 @Component({
   selector: 'app-whatsapp-console',
@@ -72,6 +75,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   bulkLabelJids: string[] = [];
   private selectedJidSet = new Set<string>();
   private destroy$ = new Subject<void>();
+  private errorDismissTimerId: number | null = null;
 
   constructor(
     private state: WhatsappStateService,
@@ -93,6 +97,13 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
     this.state.errorMessage$.pipe(takeUntil(this.destroy$)).subscribe(msg => {
       this.errorMessage = msg;
+
+      if (!msg) {
+        this.clearErrorDismissTimer();
+        return;
+      }
+
+      this.scheduleErrorDismiss();
     });
 
     this.state.loadingState$.pipe(takeUntil(this.destroy$)).subscribe(state => {
@@ -130,13 +141,31 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
     const pending = this.pendingBulkSendService.consume();
     if (pending) {
-      this.state.contacts$
+      const requiresBootstrapCompletion = !this.state.selectedInstance;
+      let observedContactsLoading = false;
+
+      combineLatest([this.state.contacts$, this.state.loadingState$, this.state.selectedInstance$])
         .pipe(
-          filter(contacts => contacts.length > 0),
+          filter(([_, loading, selectedInstance]) => {
+            if (!selectedInstance || loading.instances) {
+              return false;
+            }
+
+            if (loading.contacts) {
+              observedContactsLoading = true;
+              return false;
+            }
+
+            if (!requiresBootstrapCompletion) {
+              return true;
+            }
+
+            return observedContactsLoading;
+          }),
           take(1),
           takeUntil(this.destroy$)
         )
-        .subscribe(contacts => {
+        .subscribe(([contacts]) => {
           this.processPendingBulk(pending, contacts);
         });
     }
@@ -176,8 +205,15 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearErrorDismissTimer();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  dismissError(): void {
+    this.errorMessage = '';
+    this.clearErrorDismissTimer();
+    this.state.clearErrorMessage();
   }
 
   onInstanceChange(name: string): void {
@@ -242,6 +278,23 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   get isUiBlocked(): boolean {
     return this.isLoadingInstances;
+  }
+
+  private scheduleErrorDismiss(): void {
+    this.clearErrorDismissTimer();
+    this.errorDismissTimerId = window.setTimeout(() => {
+      this.errorDismissTimerId = null;
+      this.dismissError();
+    }, ERROR_AUTO_DISMISS_MS);
+  }
+
+  private clearErrorDismissTimer(): void {
+    if (this.errorDismissTimerId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.errorDismissTimerId);
+    this.errorDismissTimerId = null;
   }
 
   onCloseTemplateModal(): void {
@@ -338,9 +391,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.editingScheduleId = null;
     this.pendingScheduleDate = request.scheduledAt;
     this.pendingScheduleRecurrence = request.recurrence;
-    this.scheduleContacts = request.contacts.map(sc =>
-      this.allContacts.find(c => c.jid === sc.jid) || { jid: sc.jid, name: sc.name, phone: sc.phone } as WhatsappContact
-    );
+    this.scheduleContacts = request.contacts
+      .map(sc => this.resolveScheduledContact(sc))
+      .filter((contact): contact is WhatsappContact => contact !== null);
     this.scheduleEditInitialTemplate = '';
     this.scheduleEditInitialImage = undefined;
     this.scheduleTemplateModalOpen = true;
@@ -352,9 +405,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.pendingScheduleDate = sch.scheduledAt;
     this.pendingScheduleRecurrence = sch.recurrence;
 
-    const matchedContacts = sch.contacts.map(sc =>
-      this.allContacts.find(c => c.jid === sc.jid) || { jid: sc.jid, name: sc.name, phone: sc.phone, found: false } as WhatsappContact
-    );
+    const matchedContacts = sch.contacts
+      .map(sc => this.resolveScheduledContact(sc))
+      .filter((contact): contact is WhatsappContact => contact !== null);
     this.scheduleContacts = matchedContacts;
 
     if (request.mode === 'edit-message') {
@@ -380,7 +433,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     if (!schedule) return;
 
     const matchedContacts = schedule.contacts
-      .map(sc => this.allContacts.find(c => c.jid === sc.jid))
+      .map(sc => this.resolveScheduledContact(sc))
       .filter((c): c is WhatsappContact => c !== null);
 
     if (matchedContacts.length) {
@@ -392,7 +445,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   onNotificationAction(schedule: ScheduledMessage): void {
     const matchedContacts = schedule.contacts
-      .map(sc => this.allContacts.find(c => c.jid === sc.jid))
+      .map(sc => this.resolveScheduledContact(sc))
       .filter((c): c is WhatsappContact => c !== null);
 
     if (matchedContacts.length) {
@@ -411,38 +464,182 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   private processPendingBulk(pending: PendingBulkSend, contacts: WhatsappContact[]): void {
     const matchedContacts = pending.clientes
-      .map(cliente => this.findContactByPhone(cliente.telefone, contacts))
+      .map(cliente => (
+        this.findContactByPhone(cliente.telefone, contacts)
+        ?? this.createSyntheticContactFromCliente(cliente.nome, cliente.telefone)
+      ))
       .filter((c): c is WhatsappContact => c !== null);
 
-    if (!matchedContacts.length) {
+    const uniqueContacts = Array.from(new Map(matchedContacts.map(contact => [contact.jid, contact])).values());
+
+    if (!uniqueContacts.length) {
       return;
     }
 
     const template = this.messageTemplateService.getTemplates()[pending.templateType];
     const imageDataUrl = this.messageTemplateService.getTemplateImage(pending.templateType);
-    this.bulkSend.start(matchedContacts, template, imageDataUrl);
+    this.bulkSend.start(uniqueContacts, template, imageDataUrl);
+  }
+
+  private resolveScheduledContact(contact: ScheduledContact): WhatsappContact | null {
+    const exact = this.allContacts.find(candidate => candidate.jid === contact.jid) || null;
+    if (exact) {
+      return exact;
+    }
+
+    const resolvedJid = this.state.resolveConversationJid(contact.jid);
+    const equivalent = this.allContacts.find(candidate =>
+      candidate.jid === resolvedJid || this.state.resolveConversationJid(candidate.jid) === resolvedJid
+    ) || null;
+    if (equivalent) {
+      return equivalent;
+    }
+
+    const fallbackJid = resolvedJid || contact.jid;
+    if (!fallbackJid) {
+      return null;
+    }
+
+    return {
+      jid: fallbackJid,
+      name: contact.name || contact.phone || fallbackJid,
+      phone: contact.phone || '',
+      found: false,
+      isGroup: fallbackJid.endsWith('@g.us')
+    };
+  }
+
+  private createSyntheticContactFromCliente(nome: string, telefone: string): WhatsappContact | null {
+    const outboundDigits = this.resolveOutboundDigits(telefone);
+    if (!outboundDigits) {
+      return null;
+    }
+
+    const normalizedName = (nome || '').trim();
+
+    return {
+      jid: `${outboundDigits}@c.us`,
+      phone: outboundDigits,
+      name: normalizedName || outboundDigits,
+      found: false
+    };
   }
 
   private findContactByPhone(telefone: string, contacts: WhatsappContact[]): WhatsappContact | null {
-    const phone = telefone.replace(/\D/g, '');
-    if (!phone) return null;
+    const targetCandidates = this.expandPhoneCandidates(telefone);
+    if (!targetCandidates.length) {
+      return null;
+    }
 
-    const match = contacts.find(c => c.phone.endsWith(phone) || phone.endsWith(c.phone));
-    if (match) return match;
+    const candidates = contacts
+      .filter(contact => !contact.isGroup)
+      .map(contact => ({
+        contact,
+        phoneCandidates: this.expandPhoneCandidates(contact.phone || contact.jid)
+      }))
+      .filter(entry => entry.phoneCandidates.length > 0);
 
-    // Brazilian mobile: try toggling the 9th digit
-    const alt = this.brazilianPhoneAlternative(phone);
-    if (!alt) return null;
+    const exactMatches = candidates
+      .filter(entry => entry.phoneCandidates.some(candidate => targetCandidates.includes(candidate)))
+      .map(entry => entry.contact);
 
-    return contacts.find(c => c.phone.endsWith(alt) || alt.endsWith(c.phone)) ?? null;
+    if (exactMatches.length > 0) {
+      return this.pickPreferredContact(exactMatches);
+    }
+
+    const suffixMatches = candidates
+      .filter(entry => entry.phoneCandidates.some(candidate =>
+        targetCandidates.some(target => this.hasStrongSuffixMatch(target, candidate))
+      ))
+      .map(entry => entry.contact);
+
+    if (suffixMatches.length > 0) {
+      return this.pickPreferredContact(suffixMatches);
+    }
+
+    return null;
+  }
+
+  private pickPreferredContact(contacts: WhatsappContact[]): WhatsappContact | null {
+    const unique = Array.from(new Map(contacts.map(contact => [contact.jid, contact])).values());
+    if (unique.length === 1) {
+      return unique[0];
+    }
+
+    const canonical = unique.filter(contact => contact.jid.endsWith('@c.us'));
+    if (canonical.length === 1) {
+      return canonical[0];
+    }
+
+    const found = unique.filter(contact => contact.found);
+    if (found.length === 1) {
+      return found[0];
+    }
+
+    return null;
+  }
+
+  private hasStrongSuffixMatch(a: string, b: string): boolean {
+    const overlap = Math.min(a.length, b.length);
+    return overlap >= 10 && (a.endsWith(b) || b.endsWith(a));
+  }
+
+  private expandPhoneCandidates(raw: string): string[] {
+    const digits = extractDigits(raw);
+    if (!digits) {
+      return [];
+    }
+
+    const values = new Set<string>();
+    const hasCountryCode = digits.startsWith('55') && digits.length > 11;
+
+    const addCandidate = (value: string): void => {
+      if (value.length >= 10 && value.length <= 15) {
+        values.add(value);
+      }
+    };
+
+    addCandidate(digits);
+
+    const localDigits = hasCountryCode ? digits.slice(2) : digits;
+    addCandidate(localDigits);
+
+    const localAlternative = this.brazilianPhoneAlternative(localDigits);
+    if (localAlternative) {
+      addCandidate(localAlternative);
+      if (hasCountryCode) {
+        addCandidate(`55${localAlternative}`);
+      }
+    }
+
+    return Array.from(values);
+  }
+
+  private resolveOutboundDigits(raw: string): string | null {
+    const candidates = this.expandPhoneCandidates(raw);
+    if (!candidates.length) {
+      return null;
+    }
+
+    const withCountryCode = candidates.find(candidate => candidate.startsWith('55') && (candidate.length === 12 || candidate.length === 13));
+    if (withCountryCode) {
+      return withCountryCode;
+    }
+
+    const local = candidates.find(candidate => candidate.length === 10 || candidate.length === 11);
+    if (local) {
+      return `55${local}`;
+    }
+
+    return [...candidates].sort((a, b) => b.length - a.length)[0] || null;
   }
 
   private brazilianPhoneAlternative(phone: string): string | null {
-    // 11 digits: DDD(2) + 9 + number(8) → remove the 9
+    // 11 digits: DDD(2) + 9 + number(8) -> remove the 9
     if (phone.length === 11 && phone[2] === '9') {
       return phone.slice(0, 2) + phone.slice(3);
     }
-    // 10 digits: DDD(2) + number(8) → add 9
+    // 10 digits: DDD(2) + number(8) -> add 9
     if (phone.length === 10) {
       return phone.slice(0, 2) + '9' + phone.slice(2);
     }

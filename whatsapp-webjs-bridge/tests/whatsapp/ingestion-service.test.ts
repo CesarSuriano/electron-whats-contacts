@@ -8,14 +8,17 @@ import { EventStore } from '../../src/state/EventStore.js';
 import { ContactStore } from '../../src/state/ContactStore.js';
 import { LidMap } from '../../src/state/LidMap.js';
 
-function makeService(): {
+function makeService(clientOverride?: Partial<WebJsClient>): {
   service: IngestionService;
   eventStore: EventStore;
   contactStore: ContactStore;
   lidMap: LidMap;
   selfJidResolver: SelfJidResolver;
 } {
-  const client = { info: { wid: { _serialized: '5511000000000@c.us' } } } as unknown as WebJsClient;
+  const client = {
+    info: { wid: { _serialized: '5511000000000@c.us' } },
+    ...clientOverride
+  } as unknown as WebJsClient;
   const selfJidResolver = new SelfJidResolver(client);
   const sessionState = new SessionState('test', () => selfJidResolver.getOwnJid());
   sessionState.status = 'ready';
@@ -138,6 +141,163 @@ describe('IngestionService.ingestInboundMessage', () => {
     assert.equal(eventStore.events[0]?.chatJid, '5522999998888@c.us');
     assert.equal(contactStore.has('5522999998888@c.us'), true);
     assert.equal(lidMap.getLid('5522999998888@c.us'), '12345678901234@lid');
+  });
+
+  it('keeps the raw @lid conversation when getContact only echoes the linked-id digits', async () => {
+    const { service, eventStore, contactStore, lidMap } = makeService();
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-lid-raw', fromMe: false },
+        from: '278649089585374@lid',
+        to: '5511000000000@c.us',
+        body: '?',
+        timestamp: 1700000101,
+        getContact: async () => ({
+          number: '278649089585374',
+          id: { _serialized: '278649089585374@lid', user: '278649089585374' }
+        })
+      },
+      'webjs-inbound'
+    );
+
+    assert.equal(eventStore.events.length, 1);
+    assert.equal(eventStore.events[0]?.chatJid, '278649089585374@lid');
+    assert.equal(contactStore.has('278649089585374@lid'), true);
+    assert.equal(contactStore.get('278649089585374@lid')?.phone, '');
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+    assert.equal(lidMap.findCanonical('278649089585374@lid'), '');
+  });
+
+  it('keeps the raw @lid conversation when getContact returns a mirrored @c.us alias for the same linked-id digits', async () => {
+    const { service, eventStore, contactStore, lidMap } = makeService();
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-lid-mirrored-personal', fromMe: false },
+        from: '152896658239610@lid',
+        to: '5511000000000@c.us',
+        body: 'Foi',
+        timestamp: 1700000103,
+        getContact: async () => ({
+          number: '152896658239610',
+          id: { _serialized: '152896658239610@c.us', user: '152896658239610' }
+        })
+      },
+      'webjs-inbound'
+    );
+
+    assert.equal(eventStore.events.length, 1);
+    assert.equal(eventStore.events[0]?.chatJid, '152896658239610@lid');
+    assert.equal(contactStore.has('152896658239610@c.us'), false);
+    assert.equal(contactStore.has('152896658239610@lid'), true);
+    assert.equal(lidMap.findCanonical('152896658239610@lid'), '');
+  });
+
+  it('does not promote a synthetic canonical jid when the linked-id lookup only mirrors the lid digits', async () => {
+    let evaluateCalls = 0;
+    const { service, eventStore, contactStore, lidMap } = makeService({
+      pupPage: {
+        evaluate: async () => {
+          evaluateCalls += 1;
+          return { lid: '278649089585374@lid', phone: '278649089585374@c.us' };
+        }
+      }
+    } as unknown as Partial<WebJsClient>);
+
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-lid-no-history-promote', fromMe: false },
+        from: '278649089585374@lid',
+        to: '5511000000000@c.us',
+        body: '?',
+        timestamp: 1700000104,
+        getContact: async () => ({
+          number: '278649089585374',
+          id: { _serialized: '278649089585374@lid', user: '278649089585374' }
+        })
+      },
+      'webjs-inbound'
+    );
+
+    assert.equal(evaluateCalls, 1);
+    assert.equal(eventStore.events[0]?.chatJid, '278649089585374@lid');
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+    assert.equal(contactStore.has('278649089585374@lid'), true);
+    assert.equal(lidMap.findCanonical('278649089585374@lid'), '');
+  });
+
+  it('reuses a known canonical jid when the linked-id lookup only returns a synthetic canonical alias', async () => {
+    const { service, eventStore, contactStore, lidMap } = makeService({
+      pupPage: {
+        evaluate: async () => ({ lid: '278649089585374@lid', phone: '278649089585374@c.us' })
+      }
+    } as unknown as Partial<WebJsClient>);
+    lidMap.set('5511987654321@c.us', '278649089585374@lid');
+    contactStore.set('5511987654321@c.us', contactStore.createDefault('5511987654321@c.us', {
+      phone: '5511987654321',
+      name: 'Noiva do Miro',
+      found: true
+    }));
+
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-lid-known', fromMe: false },
+        from: '278649089585374@lid',
+        to: '5511000000000@c.us',
+        body: 'Oi',
+        timestamp: 1700000102,
+        getContact: async () => ({
+          number: '278649089585374',
+          id: { _serialized: '278649089585374@lid', user: '278649089585374' }
+        })
+      },
+      'webjs-inbound'
+    );
+
+    assert.equal(eventStore.events.length, 1);
+    assert.equal(eventStore.events[0]?.chatJid, '5511987654321@c.us');
+    assert.equal(contactStore.has('5511987654321@c.us'), true);
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+  });
+
+  it('replaces a stale fake canonical when the same linked-id resolves to the real number later', async () => {
+    const { service, eventStore, contactStore, lidMap } = makeService();
+    lidMap.set('278649089585374@c.us', '278649089585374@lid');
+    contactStore.set('278649089585374@c.us', contactStore.createDefault('278649089585374@c.us', {
+      phone: '278649089585374',
+      name: 'Noiva Do Miro',
+      found: true,
+      unreadCount: 1,
+      lastMessagePreview: '?'
+    }));
+    eventStore.pushEvent({
+      id: 'evt-stale-canonical',
+      source: 'webjs-inbound',
+      isFromMe: false,
+      chatJid: '278649089585374@c.us',
+      text: '?',
+      receivedAt: '2024-01-01T00:00:00.000Z',
+      payload: { id: 'evt-stale-canonical', timestamp: 1704067200 }
+    });
+
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-lid-remap', fromMe: false },
+        from: '278649089585374@lid',
+        to: '5511000000000@c.us',
+        body: 'Oi',
+        timestamp: 1700000103,
+        getContact: async () => ({
+          number: '554499104514',
+          id: { _serialized: '278649089585374@lid', user: '278649089585374' }
+        })
+      },
+      'webjs-inbound'
+    );
+
+    assert.equal(lidMap.findCanonical('278649089585374@lid'), '554499104514@c.us');
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+    assert.equal(contactStore.has('554499104514@c.us'), true);
+    assert.equal(eventStore.events.find(event => event.id === 'evt-stale-canonical')?.chatJid, '554499104514@c.us');
   });
 
   it('discards messages from self', async () => {

@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, Subject, combineLatest, distinctUntilChang
 import { takeUntil } from 'rxjs/operators';
 
 import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } from '../../../models/whatsapp.model';
+import { extractDigits } from '../helpers/phone-format.helper';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
 
@@ -37,6 +38,18 @@ const INITIAL_SYNC_CONVERSATIONS_STEP = 2;
 const INITIAL_SYNC_CONTACTS_START_PERCENT = 8;
 const INITIAL_SYNC_CONTACTS_MAX_PERCENT = 42;
 
+const CONTACT_SCORE_CANONICAL_JID = 40;
+const CONTACT_SCORE_LINKED_ID = 5;
+const CONTACT_SCORE_FOUND = 20;
+const CONTACT_SCORE_FROM_GET_CHATS = 10;
+const CONTACT_SCORE_PHONE_MATCH = 6;
+const CONTACT_SCORE_JID_EXACT = 8;
+const CONTACT_SCORE_SYNTHETIC_ALIAS_PENALTY = -50;
+const CONTACT_SCORE_BR_PHONE_BONUS = 30;
+const CONTACT_SCORE_BR_PHONE_9TH_DIGIT_BONUS = 10;
+const CONTACT_SCORE_VALID_PHONE_BONUS = 20;
+const CONTACT_SCORE_EXTENDED_PHONE_BONUS = 10;
+
 export interface WhatsappSyncStatus {
   active: boolean;
   mode: 'idle' | 'initial';
@@ -66,6 +79,8 @@ const IDLE_SYNC_STATUS: WhatsappSyncStatus = {
 export class WhatsappStateService implements OnDestroy {
   private readonly instancesSubject = new BehaviorSubject<WhatsappInstance[]>([]);
   private readonly contactsSubject = new BehaviorSubject<WhatsappContact[]>([]);
+  private contactIndexByKey = new Map<string, WhatsappContact[]>();
+  private contactIndexDirty = true;
   private readonly messagesSubject = new BehaviorSubject<WhatsappMessage[]>([]);
   private readonly selectedInstanceSubject = new BehaviorSubject<string>('');
   private readonly selectedContactJidSubject = new BehaviorSubject<string>('');
@@ -147,9 +162,16 @@ export class WhatsappStateService implements OnDestroy {
     this.selectedContactJidSubject,
     this.contactsSubject
   ]).pipe(
-    map(([jid, contacts]) => contacts.find(contact => contact.jid === jid) || null),
+    map(([jid, contacts]) => {
+      const existing = this.findEquivalentContact(jid, contacts);
+      if (existing || !jid) {
+        return existing;
+      }
+
+      return this.buildSyntheticSelectedContact(jid);
+    }),
     distinctUntilChanged((a, b) =>
-      a?.jid === b?.jid && a?.name === b?.name && a?.photoUrl === b?.photoUrl
+      a?.jid === b?.jid && a?.name === b?.name && a?.photoUrl === b?.photoUrl && a?.phone === b?.phone
     )
   );
 
@@ -232,7 +254,11 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   getContact(jid: string): WhatsappContact | null {
-    return this.contactsSubject.value.find(contact => contact.jid === jid) || null;
+    return this.findEquivalentContact(jid);
+  }
+
+  resolveConversationJid(jid: string): string {
+    return this.findEquivalentContact(jid)?.jid || jid;
   }
 
   getDraftTextForJid(jid: string): string {
@@ -251,6 +277,10 @@ export class WhatsappStateService implements OnDestroy {
     return this.messagesSubject.value
       .filter(message => message.contactJid === jid)
       .sort((a, b) => a.sentAt.localeCompare(b.sentAt));
+  }
+
+  clearErrorMessage(): void {
+    this.setError('');
   }
 
   loadInstances(): void {
@@ -302,31 +332,31 @@ export class WhatsappStateService implements OnDestroy {
   selectContact(jid: string, options: SelectContactOptions = {}): Promise<void> {
     const shouldMarkAsRead = options.markAsRead ?? true;
     const shouldLoadHistory = options.loadHistory ?? true;
+    const resolvedJid = this.resolveConversationJid(jid);
 
-    this.selectedContactJidSubject.next(jid);
+    this.selectedContactJidSubject.next(resolvedJid);
     if (shouldMarkAsRead) {
-      this.markContactAsRead(jid);
+      this.markContactAsRead(resolvedJid);
     }
 
-    if (shouldLoadHistory && this.shouldForceHistoryLoad(jid)) {
-      return this.loadHistorySilentlyForContact(jid);
+    if (shouldLoadHistory && this.shouldForceHistoryLoad(resolvedJid)) {
+      return this.loadHistorySilentlyForContact(resolvedJid);
     }
 
     return Promise.resolve();
   }
 
   private markContactAsRead(jid: string): void {
-    if (!jid) return;
+    const resolvedJid = this.resolveConversationJid(jid);
+    if (!resolvedJid) return;
 
     const contacts = this.contactsSubject.value;
-    const contact = contacts.find(c => c.jid === jid);
+    const contact = contacts.find(c => c.jid === resolvedJid);
     if (contact && (contact.unreadCount || 0) > 0) {
-      this.contactsSubject.next(
-        contacts.map(c => c.jid === jid ? { ...c, unreadCount: 0 } : c)
-      );
+      this.setContacts(contacts.map(c => c.jid === resolvedJid ? { ...c, unreadCount: 0 } : c));
     }
 
-    this.gateway.markChatSeen(jid).subscribe({
+    this.gateway.markChatSeen(resolvedJid).subscribe({
       error: () => { /* silent - best effort */ }
     });
   }
@@ -595,13 +625,14 @@ export class WhatsappStateService implements OnDestroy {
     this.setError('');
 
     const instance = this.selectedInstance;
+    const resolvedJid = this.resolveConversationJid(jid);
     return new Observable(observer => {
-      this.gateway.sendMessage(instance, jid, text).subscribe({
+      this.gateway.sendMessage(instance, resolvedJid, text).subscribe({
         next: result => {
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
-          this.appendOutgoingMessage(jid, text, 'send-api', serverId);
+          this.appendOutgoingMessage(resolvedJid, text, 'send-api', serverId);
           this.setLoading({ sending: false });
-          this.notifyMessageSent(jid);
+          this.notifyMessageSent(resolvedJid);
           observer.next(result);
           observer.complete();
         },
@@ -619,17 +650,18 @@ export class WhatsappStateService implements OnDestroy {
     this.setError('');
 
     const instance = this.selectedInstance;
+    const resolvedJid = this.resolveConversationJid(jid);
     return new Observable(observer => {
-      this.gateway.sendMedia(instance, jid, file, caption).subscribe({
+      this.gateway.sendMedia(instance, resolvedJid, file, caption).subscribe({
         next: result => {
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
-          this.appendOutgoingMessage(jid, caption, 'send-media-api', serverId, {
+          this.appendOutgoingMessage(resolvedJid, caption, 'send-media-api', serverId, {
             hasMedia: true,
             mediaFilename: file.name,
             mediaMimetype: file.type || 'application/octet-stream'
           });
           this.setLoading({ sending: false });
-          this.notifyMessageSent(jid);
+          this.notifyMessageSent(resolvedJid);
           observer.next(result);
           observer.complete();
         },
@@ -643,6 +675,8 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   private appendOutgoingMessage(jid: string, text: string, source: string, serverId?: string, payload?: Record<string, unknown>): void {
+    const contactJid = this.resolveConversationJid(jid);
+
     // If we have a server ID, check if the WS broadcast already delivered it
     if (serverId && this.messagesSubject.value.some(m => m.id === serverId)) {
       return;
@@ -650,7 +684,7 @@ export class WhatsappStateService implements OnDestroy {
 
     const message: WhatsappMessage = {
       id: serverId || `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      contactJid: jid,
+      contactJid,
       text,
       sentAt: new Date().toISOString(),
       isFromMe: true,
@@ -826,27 +860,28 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   requestConversationContext(jid: string): void {
+    const resolvedJid = this.resolveConversationJid(jid);
     if (
-      !jid
+      !resolvedJid
       || !this.selectedInstance
-      || this.pendingConversationContextJids.has(jid)
-      || this.contactHistoryInFlight.has(jid)
-      || this.loadedHistoryJids.has(jid)
+      || this.pendingConversationContextJids.has(resolvedJid)
+      || this.contactHistoryInFlight.has(resolvedJid)
+      || this.loadedHistoryJids.has(resolvedJid)
     ) {
       return;
     }
 
-    const targetLimit = this.resolveConversationContextLimit(jid);
+    const targetLimit = this.resolveConversationContextLimit(resolvedJid);
     const existingServerMessages = this.messagesSubject.value.filter(
-      message => message.contactJid === jid && !message.id.startsWith('local-')
+      message => message.contactJid === resolvedJid && !message.id.startsWith('local-')
     );
-    const warmedLimit = this.warmedConversationContextLimitByJid.get(jid) || 0;
+    const warmedLimit = this.warmedConversationContextLimitByJid.get(resolvedJid) || 0;
 
     if (existingServerMessages.length >= targetLimit || warmedLimit >= targetLimit) {
       return;
     }
 
-    this.pendingConversationContextJids.add(jid);
+    this.pendingConversationContextJids.add(resolvedJid);
     this.scheduleConversationContextBatch();
   }
 
@@ -952,7 +987,7 @@ export class WhatsappStateService implements OnDestroy {
     const contacts = this.contactsSubject.value.map(contact =>
       contact.jid === jid ? { ...contact, photoUrl: url } : contact
     );
-    this.contactsSubject.next(contacts);
+    this.setContacts(contacts);
   }
 
   private loadContacts(options: { bootstrap?: boolean } = {}): Promise<void> {
@@ -981,7 +1016,8 @@ export class WhatsappStateService implements OnDestroy {
                 : (contact.phone && preservedByPhone.has(contact.phone)
                   ? preservedByPhone.get(contact.phone)
                   : contact.photoUrl)
-            }))
+            }));
+          const collapsed = this.collapseEquivalentContacts(enriched)
             .sort((a, b) => {
               const aTs = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
               const bTs = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
@@ -990,19 +1026,20 @@ export class WhatsappStateService implements OnDestroy {
               }
               return (a.name || '').localeCompare(b.name || '', 'pt-BR');
             });
-          this.contactsSubject.next(enriched);
+          this.setContacts(collapsed);
           if (this.messagesSubject.value.length > 0) {
             this.resortContactsByLatestMessage(this.messagesSubject.value);
           }
 
           const currentSelection = this.selectedContactJid;
+          const preservedSelection = currentSelection
+            ? (this.findEquivalentContact(currentSelection, collapsed)?.jid || '')
+            : '';
           const bootstrapPrioritySelection = bootstrap
             ? (this.buildBootstrapConversationQueues().priorityRequests[0]?.jid || '')
             : '';
-          const fallbackSelection = bootstrapPrioritySelection || enriched[0]?.jid || '';
-          const selectedJid = currentSelection && enriched.some(contact => contact.jid === currentSelection)
-            ? currentSelection
-            : fallbackSelection;
+          const fallbackSelection = bootstrapPrioritySelection || collapsed[0]?.jid || '';
+          const selectedJid = preservedSelection || fallbackSelection;
 
           if (selectedJid && selectedJid !== currentSelection) {
             this.selectedContactJidSubject.next(selectedJid);
@@ -1014,7 +1051,7 @@ export class WhatsappStateService implements OnDestroy {
           this.setLoading({ contacts: false });
 
           if (bootstrap) {
-            if (enriched.length === 0 && this.bootstrapRetryCount < BOOTSTRAP_CONTACTS_MAX_RETRIES) {
+            if (collapsed.length === 0 && this.bootstrapRetryCount < BOOTSTRAP_CONTACTS_MAX_RETRIES) {
               this.bootstrapRetryCount++;
               const retryRunId = this.conversationContextRunId;
               window.setTimeout(() => {
@@ -1040,7 +1077,7 @@ export class WhatsappStateService implements OnDestroy {
 
           if (
             selectedJid
-            && selectedJid === currentSelection
+            && (!currentSelection || selectedJid === currentSelection || selectedJid === preservedSelection)
             && this.shouldForceHistoryLoad(selectedJid)
           ) {
             void this.loadHistorySilentlyForContact(selectedJid);
@@ -1192,42 +1229,43 @@ export class WhatsappStateService implements OnDestroy {
       force?: boolean;
     } = {}
   ): Promise<number> {
+    const resolvedJid = this.resolveConversationJid(jid);
     const limit = Math.max(1, Math.min(CHAT_HISTORY_LIMIT, Number(options.limit || CHAT_HISTORY_LIMIT)));
     const markAsLoaded = options.markAsLoaded ?? true;
     const force = options.force ?? false;
     const deep = options.deep ?? markAsLoaded;
 
-    if (!jid || !this.selectedInstance || this.contactHistoryInFlight.has(jid)) {
+    if (!resolvedJid || !this.selectedInstance || this.contactHistoryInFlight.has(resolvedJid)) {
       return Promise.resolve(0);
     }
 
-    if (markAsLoaded && !force && this.loadedHistoryJids.has(jid)) {
+    if (markAsLoaded && !force && this.loadedHistoryJids.has(resolvedJid)) {
       return Promise.resolve(0);
     }
 
-    this.contactHistoryInFlight.add(jid);
+    this.contactHistoryInFlight.add(resolvedJid);
 
     return new Promise(resolve => {
-      this.gateway.loadChatMessages(this.selectedInstance, jid, limit, deep).subscribe({
+      this.gateway.loadChatMessages(this.selectedInstance, resolvedJid, limit, deep).subscribe({
         next: events => {
-          const history = this.mapEventsToMessages(events).filter(message => message.contactJid === jid);
+          const history = this.mapEventsToMessages(events).filter(message => message.contactJid === resolvedJid);
 
           if (markAsLoaded) {
             if (history.length > 1) {
-              this.loadedHistoryJids.add(jid);
+              this.loadedHistoryJids.add(resolvedJid);
             } else {
-              this.loadedHistoryJids.delete(jid);
+              this.loadedHistoryJids.delete(resolvedJid);
             }
           }
 
-          this.applyHistoryForContact(jid, history);
+          this.applyHistoryForContact(resolvedJid, history);
 
-          this.contactHistoryInFlight.delete(jid);
+          this.contactHistoryInFlight.delete(resolvedJid);
 
           resolve(history.length);
         },
         error: () => {
-          this.contactHistoryInFlight.delete(jid);
+          this.contactHistoryInFlight.delete(resolvedJid);
 
           resolve(0);
         }
@@ -1368,7 +1406,7 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     const current = this.contactsSubject.value;
-    if (current.some(contact => contact.jid === jid)) {
+    if (this.findEquivalentContact(jid, current)) {
       return;
     }
 
@@ -1393,14 +1431,14 @@ export class WhatsappStateService implements OnDestroy {
       getChatsTimestampMs: 0
     };
 
-    this.contactsSubject.next([synthesized, ...current]);
+    this.setContacts([synthesized, ...current]);
     this.requestPhoto(jid);
   }
 
   private resolveSyntheticPhoneFromEvent(event: WhatsappEvent): string {
     const jid = typeof event.chatJid === 'string' ? event.chatJid.trim() : '';
     const eventPhone = typeof event.phone === 'string' ? event.phone.trim() : '';
-    const jidDigits = jid.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
+    const jidDigits = this.resolveSyntheticPhoneFromJid(jid);
     const eventPhoneDigits = eventPhone.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
 
     if (jid.endsWith('@c.us')) {
@@ -1413,6 +1451,341 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     return eventPhoneDigits || jidDigits;
+  }
+
+  private buildSyntheticSelectedContact(jid: string): WhatsappContact | null {
+    if (!jid.endsWith('@c.us')) {
+      return null;
+    }
+
+    const phone = this.resolveSyntheticPhoneFromJid(jid);
+
+    return {
+      jid,
+      phone,
+      name: phone || jid,
+      found: false,
+      photoUrl: null,
+      lastMessageAt: null,
+      lastMessagePreview: '',
+      lastMessageFromMe: false,
+      lastMessageAck: null,
+      lastMessageType: '',
+      lastMessageHasMedia: false,
+      lastMessageMediaMimetype: '',
+      unreadCount: 0,
+      labels: [],
+      isGroup: false,
+      fromGetChats: false,
+      getChatsTimestampMs: 0
+    };
+  }
+
+  private resolveSyntheticPhoneFromJid(jid: string): string {
+    return jid.split('@')[0]?.split(':')[0]?.replace(/\D/g, '') || '';
+  }
+
+  private collapseEquivalentContacts(contacts: WhatsappContact[]): WhatsappContact[] {
+    const collapsed: WhatsappContact[] = [];
+
+    for (const contact of contacts) {
+      const reference = contact.jid || contact.phone;
+      const existing = this.findEquivalentContact(reference, collapsed);
+      if (!existing) {
+        collapsed.push(contact);
+        continue;
+      }
+
+      const merged = this.mergeEquivalentContacts(existing, contact);
+      const existingIndex = collapsed.indexOf(existing);
+      if (existingIndex >= 0) {
+        collapsed.splice(existingIndex, 1, merged);
+      }
+    }
+
+    return collapsed;
+  }
+
+  private mergeEquivalentContacts(left: WhatsappContact, right: WhatsappContact): WhatsappContact {
+    const preferred = this.pickPreferredEquivalentContact(left, right);
+    const duplicate = preferred === left ? right : left;
+    const preferredTs = this.parseContactTimestampMs(preferred.lastMessageAt);
+    const duplicateTs = this.parseContactTimestampMs(duplicate.lastMessageAt);
+    const newest = duplicateTs > preferredTs ? duplicate : preferred;
+
+    return {
+      ...duplicate,
+      ...preferred,
+      phone: preferred.phone || duplicate.phone,
+      name: preferred.name || duplicate.name,
+      found: preferred.found || duplicate.found,
+      photoUrl: preferred.photoUrl ?? duplicate.photoUrl ?? null,
+      lastMessageAt: newest.lastMessageAt ?? preferred.lastMessageAt ?? duplicate.lastMessageAt ?? null,
+      lastMessagePreview: newest.lastMessagePreview || preferred.lastMessagePreview || duplicate.lastMessagePreview || '',
+      lastMessageFromMe: newest.lastMessageFromMe ?? preferred.lastMessageFromMe ?? duplicate.lastMessageFromMe ?? false,
+      lastMessageAck: newest.lastMessageAck ?? preferred.lastMessageAck ?? duplicate.lastMessageAck ?? null,
+      lastMessageType: newest.lastMessageType || preferred.lastMessageType || duplicate.lastMessageType || '',
+      lastMessageHasMedia: newest.lastMessageHasMedia ?? preferred.lastMessageHasMedia ?? duplicate.lastMessageHasMedia ?? false,
+      lastMessageMediaMimetype: newest.lastMessageMediaMimetype || preferred.lastMessageMediaMimetype || duplicate.lastMessageMediaMimetype || '',
+      unreadCount: Math.max(preferred.unreadCount || 0, duplicate.unreadCount || 0),
+      labels: Array.from(new Set([...(preferred.labels || []), ...(duplicate.labels || [])])),
+      isGroup: preferred.isGroup || duplicate.isGroup || false,
+      fromGetChats: preferred.fromGetChats || duplicate.fromGetChats || false,
+      getChatsTimestampMs: Math.max(preferred.getChatsTimestampMs || 0, duplicate.getChatsTimestampMs || 0)
+    };
+  }
+
+  private pickPreferredEquivalentContact(left: WhatsappContact, right: WhatsappContact): WhatsappContact {
+    const references = Array.from(new Set([
+      left.jid,
+      left.phone,
+      right.jid,
+      right.phone
+    ].filter(Boolean)));
+    const leftScore = Math.max(...references.map(reference => this.scoreEquivalentContact(reference, left)));
+    const rightScore = Math.max(...references.map(reference => this.scoreEquivalentContact(reference, right)));
+
+    if (leftScore !== rightScore) {
+      return leftScore > rightScore ? left : right;
+    }
+
+    const leftTs = this.parseContactTimestampMs(left.lastMessageAt);
+    const rightTs = this.parseContactTimestampMs(right.lastMessageAt);
+    if (leftTs !== rightTs) {
+      return leftTs > rightTs ? left : right;
+    }
+
+    return (left.name || '').length >= (right.name || '').length ? left : right;
+  }
+
+  private parseContactTimestampMs(value: string | null | undefined): number {
+    if (!value) {
+      return 0;
+    }
+
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private setContacts(contacts: WhatsappContact[]): void {
+    this.contactIndexDirty = true;
+    this.contactsSubject.next(contacts);
+  }
+
+  private ensureContactIndex(): void {
+    if (!this.contactIndexDirty) {
+      return;
+    }
+
+    this.contactIndexByKey.clear();
+    for (const contact of this.contactsSubject.value) {
+      const indexKeys = new Set<string>();
+      for (const source of [contact.jid, contact.phone]) {
+        if (source) {
+          for (const key of this.buildConversationKeys(source)) {
+            indexKeys.add(key);
+          }
+        }
+      }
+      for (const key of indexKeys) {
+        const bucket = this.contactIndexByKey.get(key);
+        if (bucket) {
+          bucket.push(contact);
+        } else {
+          this.contactIndexByKey.set(key, [contact]);
+        }
+      }
+    }
+
+    this.contactIndexDirty = false;
+  }
+
+  private findEquivalentContactInIndex(reference: string): WhatsappContact | null {
+    this.ensureContactIndex();
+
+    const referenceKeys = this.buildConversationKeys(reference);
+    if (!referenceKeys.size) {
+      return null;
+    }
+
+    const candidateSet = new Set<WhatsappContact>();
+    for (const key of referenceKeys) {
+      const bucket = this.contactIndexByKey.get(key);
+      if (bucket) {
+        for (const contact of bucket) {
+          candidateSet.add(contact);
+        }
+      }
+    }
+
+    if (!candidateSet.size) {
+      return null;
+    }
+
+    const candidates = Array.from(candidateSet);
+    if (candidates.length === 1) {
+      return candidates[0];
+    }
+
+    return candidates.sort((a, b) =>
+      this.scoreEquivalentContact(reference, b) - this.scoreEquivalentContact(reference, a)
+    )[0] || null;
+  }
+
+  private findEquivalentContact(reference: string, contacts?: WhatsappContact[]): WhatsappContact | null {
+    if (!reference) {
+      return null;
+    }
+
+    if (!contacts) {
+      return this.findEquivalentContactInIndex(reference);
+    }
+
+    const matches = contacts.filter(contact =>
+      contact.jid === reference
+      || this.isSameConversationTarget(reference, contact.jid)
+      || this.isSameConversationTarget(reference, contact.phone)
+    );
+
+    if (!matches.length) {
+      return null;
+    }
+
+    return [...matches].sort((a, b) => this.scoreEquivalentContact(reference, b) - this.scoreEquivalentContact(reference, a))[0] || null;
+  }
+
+  private scoreEquivalentContact(reference: string, contact: WhatsappContact): number {
+    const jid = typeof contact.jid === 'string' ? contact.jid.trim() : '';
+    const phone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
+    const jidDigits = extractDigits(jid);
+    const phoneDigits = extractDigits(phone);
+    const identityDigits = phoneDigits || jidDigits;
+
+    let score = 0;
+
+    if (jid.endsWith('@c.us')) {
+      score += CONTACT_SCORE_CANONICAL_JID;
+    } else if (jid.endsWith('@lid')) {
+      score += CONTACT_SCORE_LINKED_ID;
+    }
+
+    if (contact.found) {
+      score += CONTACT_SCORE_FOUND;
+    }
+
+    if (contact.fromGetChats) {
+      score += CONTACT_SCORE_FROM_GET_CHATS;
+    }
+
+    if (this.isSameConversationTarget(reference, phone)) {
+      score += CONTACT_SCORE_PHONE_MATCH;
+    }
+
+    if (jid === reference) {
+      score += CONTACT_SCORE_JID_EXACT;
+    }
+
+    score += this.scoreConversationIdentity(identityDigits);
+
+    if (this.isSyntheticCanonicalAlias(jid, identityDigits)) {
+      score += CONTACT_SCORE_SYNTHETIC_ALIAS_PENALTY;
+    }
+
+    return score;
+  }
+
+  private scoreConversationIdentity(digits: string): number {
+    if (!digits) {
+      return 0;
+    }
+
+    let score = Math.min(digits.length, 20);
+
+    if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+      score += CONTACT_SCORE_BR_PHONE_BONUS;
+      if (digits.length === 13) {
+        score += CONTACT_SCORE_BR_PHONE_9TH_DIGIT_BONUS;
+      }
+      return score;
+    }
+
+    if (digits.length >= 10 && digits.length <= 13) {
+      score += CONTACT_SCORE_VALID_PHONE_BONUS;
+      return score;
+    }
+
+    if (digits.length >= 10 && digits.length <= 15) {
+      score += CONTACT_SCORE_EXTENDED_PHONE_BONUS;
+    }
+
+    return score;
+  }
+
+  private isSyntheticCanonicalAlias(jid: string, digits: string): boolean {
+    return jid.endsWith('@c.us') && digits.length > 13 && !digits.startsWith('55');
+  }
+
+  private isSameConversationTarget(a: string | null | undefined, b: string | null | undefined): boolean {
+    if (!a || !b) {
+      return false;
+    }
+
+    if (a === b) {
+      return true;
+    }
+
+    const keysA = this.buildConversationKeys(a);
+    const keysB = this.buildConversationKeys(b);
+
+    for (const key of keysA) {
+      if (keysB.has(key)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private buildConversationKeys(raw: string): Set<string> {
+    const digits = extractDigits(raw);
+    const keys = new Set<string>();
+
+    if (!digits) {
+      return keys;
+    }
+
+    keys.add(`exact:${digits}`);
+
+    if (digits.startsWith('55') && digits.length > 11) {
+      keys.add(`exact:${digits.slice(2)}`);
+    }
+
+    this.addBrazilianConversationKeys(digits, keys);
+
+    return keys;
+  }
+
+  private addBrazilianConversationKeys(digits: string, keys: Set<string>): void {
+    const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+    if (localDigits.length !== 10 && localDigits.length !== 11) {
+      return;
+    }
+
+    const ddd = localDigits.slice(0, 2);
+    const local = localDigits.slice(2);
+    const withoutNinth = local.length === 9 && local.startsWith('9') ? local.slice(1) : local;
+    if (withoutNinth.length !== 8) {
+      return;
+    }
+
+    const withNinth = `${ddd}9${withoutNinth}`;
+    const withoutNinthFull = `${ddd}${withoutNinth}`;
+
+    keys.add(`br:${ddd}:${withoutNinth}`);
+    keys.add(`exact:${withNinth}`);
+    keys.add(`exact:${withoutNinthFull}`);
+    keys.add(`exact:55${withNinth}`);
+    keys.add(`exact:55${withoutNinthFull}`);
   }
 
   private incrementUnreadCounts(newInbound: WhatsappMessage[]): void {
@@ -1435,7 +1808,7 @@ export class WhatsappStateService implements OnDestroy {
       return c;
     });
     if (changed) {
-      this.contactsSubject.next(updated);
+      this.setContacts(updated);
     }
   }
 
@@ -1523,7 +1896,7 @@ export class WhatsappStateService implements OnDestroy {
 
     const orderChanged = sorted.some((contact, index) => contact.jid !== current[index]?.jid);
     if (changed || orderChanged) {
-      this.contactsSubject.next(sorted);
+      this.setContacts(sorted);
     }
   }
 
@@ -1531,11 +1904,12 @@ export class WhatsappStateService implements OnDestroy {
     return events
       .filter(event => Boolean(event.chatJid))
       .map(event => {
+        const contactJid = this.resolveConversationJid(event.chatJid);
         const payload = this.normalizeEventPayload(event.payload, event.text);
 
         return {
           id: event.id,
-          contactJid: event.chatJid,
+          contactJid,
           text: this.normalizeEventText(event.text),
           sentAt: event.receivedAt,
           isFromMe: this.normalizeIsFromMe((event as unknown as { isFromMe?: unknown }).isFromMe, event.id),

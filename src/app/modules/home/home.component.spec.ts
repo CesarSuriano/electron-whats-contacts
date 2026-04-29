@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { HomeComponent } from './home.component';
 import { ClientesDataService } from '../../services/clientes-data.service';
@@ -77,16 +77,53 @@ describe('HomeComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('starts loading on ngOnInit', () => {
-    expect(component.isLoading).toBeTrue();
+  it('defaults the clients tab to Uniq WhatsApp mode', () => {
+    expect(component.useInternalWhatsapp).toBeTrue();
   });
 
-  it('sortedClientes returns sorted copy', () => {
+  it('keeps loading true until the clientes request completes', () => {
+    const pendingLoad$ = new Subject<{ clientes: Cliente[]; loadedAt: Date; fileName: string | null }>();
+    mockClientesData.loadClientes.and.returnValue(pendingLoad$.asObservable());
+    mockClientesData.loadClientes.calls.reset();
+
+    const delayedFixture = TestBed.createComponent(HomeComponent);
+    const delayedComponent = delayedFixture.componentInstance;
+
+    delayedFixture.detectChanges();
+
+    expect(mockClientesData.loadClientes).toHaveBeenCalled();
+    expect(delayedComponent.isLoading).toBeTrue();
+
+    pendingLoad$.next({ clientes: [], loadedAt: new Date(), fileName: null });
+    pendingLoad$.complete();
+
+    expect(delayedComponent.isLoading).toBeFalse();
+  });
+
+  it('sortedClientes is updated as a sorted copy without mutating clientes', () => {
     component.clientes = [makeCliente(1, 'B'), makeCliente(2, 'A')];
-    component.sortedColumn = 'nome';
-    component.sortDirection = 'asc';
-    const sorted = component.sortedClientes;
-    expect(sorted[0].nome <= sorted[1].nome).toBeTrue();
+    component.changeSort('nome');
+
+    expect(component.sortedClientes.map(cliente => cliente.nome)).toEqual(['A', 'B']);
+    expect(component.clientes.map(cliente => cliente.nome)).toEqual(['B', 'A']);
+  });
+
+  it('orders recent clients by registration date descending and marks the latest registration day', () => {
+    component.clientes = [
+      makeCliente(1, 'Ana'),
+      makeCliente(2, 'Bruno'),
+      makeCliente(3, 'Caio')
+    ];
+    component.clientes[0].dataCadastro = '2026-04-22';
+    component.clientes[1].dataCadastro = '25/04/2026';
+    component.clientes[2].dataCadastro = '2026-04-25';
+
+    component.setClientFilter('new');
+
+    expect(component.displayedSortedColumn).toBe('dataCadastro');
+    expect(component.displayedSortDirection).toBe('desc');
+    expect(component.filteredClientes.map(cliente => cliente.id)).toEqual([2, 3, 1]);
+    expect(component.recentClienteIds).toEqual(new Set([2, 3]));
   });
 
   it('changeSort toggles direction when same column', () => {
@@ -154,6 +191,55 @@ describe('HomeComponent', () => {
     expect(component.useInternalWhatsapp).toBe(true);
     component.toggleWhatsappMode('official');
     expect(component.useInternalWhatsapp).toBe(false);
+  });
+
+  it('keeps selected clients when toggling between official and Uniq WhatsApp', () => {
+    component.selectedClienteIds = new Set([1, 2]);
+
+    component.toggleWhatsappMode('official');
+    component.toggleWhatsappMode('internal');
+
+    expect(component.selectedClienteIds).toEqual(new Set([1, 2]));
+  });
+
+  it('renders upload as outline and bulk actions as filled buttons', () => {
+    component.activeSection = 'clients';
+    fixture.detectChanges();
+
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    const uploadButton = buttons.find(button => button.textContent?.includes('Enviar arquivo'));
+    const birthdayButton = buttons.find(button => button.textContent?.includes('Enviar Parabéns'));
+    const reviewButton = buttons.find(button => button.textContent?.includes('Enviar Avaliação'));
+
+    expect(uploadButton?.classList.contains('btn-outline')).toBeTrue();
+    expect(uploadButton?.classList.contains('btn-primary')).toBeFalse();
+    expect(birthdayButton?.classList.contains('btn-primary')).toBeTrue();
+    expect(reviewButton?.classList.contains('btn-primary')).toBeTrue();
+    expect(birthdayButton?.classList.contains('btn-outline')).toBeFalse();
+    expect(reviewButton?.classList.contains('btn-outline')).toBeFalse();
+  });
+
+  it('renders the send mode toggle on the top row and the search plus filters below it', () => {
+    component.activeSection = 'clients';
+    fixture.detectChanges();
+
+    const toolbarTop = fixture.nativeElement.querySelector('.home-clients-toolbar__top') as HTMLElement;
+    const toolbarBottom = fixture.nativeElement.querySelector('.home-clients-toolbar__bottom') as HTMLElement;
+    const topModeControl = toolbarTop.querySelector('.home-mode-control') as HTMLElement;
+    const topEditButton = toolbarTop.querySelector('.home-clients-toolbar__actions button:nth-of-type(1)') as HTMLButtonElement;
+    const topUploadButton = toolbarTop.querySelector('.home-clients-toolbar__actions button:nth-of-type(2)') as HTMLButtonElement;
+    const topStatus = toolbarTop.querySelector('.home-status-pill') as HTMLElement;
+    const bottomSearchField = toolbarBottom.querySelector('.home-search-field') as HTMLElement;
+    const bottomFilterGroup = toolbarBottom.querySelector('.home-filter-group') as HTMLElement;
+    const bottomModeControl = toolbarBottom.querySelector('.home-mode-control') as HTMLElement | null;
+
+    expect(topModeControl).toBeTruthy();
+    expect(topStatus?.textContent).toContain('Última sincronização');
+    expect(topEditButton?.textContent).toContain('Editar mensagens');
+    expect(topUploadButton?.textContent).toContain('Enviar arquivo');
+    expect(bottomSearchField).toBeTruthy();
+    expect(bottomFilterGroup).toBeTruthy();
+    expect(bottomModeControl).toBeNull();
   });
 
   it('goToWhatsapp navigates to /whatsapp', () => {

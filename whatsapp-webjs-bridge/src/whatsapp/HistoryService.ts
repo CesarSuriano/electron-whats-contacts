@@ -17,6 +17,7 @@ import {
   isValidPersonalJid
 } from '../utils/jid.js';
 import { isBlankMessage, isIgnoredWhatsappMessage, resolveMessagePreviewText } from '../utils/message.js';
+import { resolveLidFromPhone, resolvePhoneFromLid } from '../utils/lidResolver.js';
 import { withTimeout } from '../utils/time.js';
 
 export interface HistoryServiceOptions {
@@ -119,6 +120,28 @@ export class HistoryService {
     return true;
   }
 
+  private async discoverConfirmedLidForHistory(requestedJid: string): Promise<string> {
+    if (!isPersonalJid(requestedJid) || !isValidPersonalJid(requestedJid)) {
+      return '';
+    }
+
+    try {
+      const discoveredLid = await resolveLidFromPhone(this.client, requestedJid);
+      if (!discoveredLid) {
+        return '';
+      }
+
+      const roundTripPhone = await resolvePhoneFromLid(this.client, discoveredLid);
+      if (!roundTripPhone || !isSameConversationJid(roundTripPhone, requestedJid)) {
+        return '';
+      }
+
+      return discoveredLid;
+    } catch {
+      return '';
+    }
+  }
+
   async resolveChatsForHistory(requestedJid: string): Promise<RawChat[]> {
     if (!requestedJid) {
       return [];
@@ -136,6 +159,12 @@ export class HistoryService {
       const knownLid = this.lidMap.getLid(requestedJid);
       if (knownLid) {
         candidates.add(knownLid);
+      } else {
+        const discoveredLid = await this.discoverConfirmedLidForHistory(requestedJid);
+        if (discoveredLid) {
+          this.lidMap.set(requestedJid, discoveredLid);
+          candidates.add(discoveredLid);
+        }
       }
     }
 

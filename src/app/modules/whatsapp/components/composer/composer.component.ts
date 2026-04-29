@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 
 import { QuickReply } from '../../../../models/quick-reply.model';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
@@ -8,6 +8,13 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_MIME_PREFIXES = ['image/', 'application/pdf'];
 const ACCEPTED_DOC_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'];
 const QUICK_REPLY_TRIGGER_REGEX = /^\/([a-z0-9_-]*)$/i;
+const MAX_VISIBLE_TEXTAREA_LINES = 8;
+const DEFAULT_TEXTAREA_MIN_HEIGHT_PX = 46;
+// Minimum bottom offset for the floating bulk panel (matches default composer height ~92px).
+const DEFAULT_BULK_PANEL_CLEARANCE_PX = 92;
+// Extra space between the bulk panel's bottom edge and the composer's top edge.
+const BULK_PANEL_CLEARANCE_GAP_PX = 20;
+const BULK_PANEL_CLEARANCE_VAR = '--uniq-whatsapp-composer-clearance';
 
 const EMOJI_LIST = [
   '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊',
@@ -27,7 +34,7 @@ const EMOJI_LIST = [
   templateUrl: './composer.component.html',
   styleUrls: ['./composer.component.scss']
 })
-export class ComposerComponent {
+export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Input() draftText = '';
   @Input() isSending = false;
   @Input() disabled = false;
@@ -62,13 +69,45 @@ export class ComposerComponent {
   isQuickReplyMenuOpen = false;
   quickReplyQuery = '';
   private isQuickReplyForcedOpen = false;
+  private layoutFrameId: number | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
-  constructor(private managerLaunch: ManagerLaunchService) {}
+  constructor(
+    private hostElement: ElementRef<HTMLElement>,
+    private managerLaunch: ManagerLaunchService
+  ) {}
+
+  ngAfterViewInit(): void {
+    this.resizeObserver = new ResizeObserver(() => this.syncBulkPanelClearance());
+    this.resizeObserver.observe(this.hostElement.nativeElement);
+    this.scheduleLayoutSync();
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (Object.prototype.hasOwnProperty.call(changes, 'aiSuggestion')) {
       this.suggestionFeedback = '';
     }
+
+    if (
+      Object.prototype.hasOwnProperty.call(changes, 'draftText')
+      || Object.prototype.hasOwnProperty.call(changes, 'disabled')
+      || Object.prototype.hasOwnProperty.call(changes, 'isSending')
+      || Object.prototype.hasOwnProperty.call(changes, 'aiSuggestion')
+    ) {
+      this.scheduleLayoutSync();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.layoutFrameId !== null) {
+      window.cancelAnimationFrame(this.layoutFrameId);
+      this.layoutFrameId = null;
+    }
+
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.clearBulkPanelClearance();
+    this.clearPreview();
   }
 
   setAttachmentFromDataUrl(dataUrl: string, filename: string): void {
@@ -90,6 +129,7 @@ export class ComposerComponent {
       this.clearPreview();
       this.selectedFile = new File([blob], filename, { type: mime });
       this.filePreviewUrl = dataUrl;
+      this.scheduleLayoutSync();
       this.focus();
     } catch {
       // ignore conversion errors
@@ -113,6 +153,12 @@ export class ComposerComponent {
     this.draftText = value;
     this.draftTextChange.emit(value);
     this.updateQuickReplyMenuFromText(value);
+    this.scheduleLayoutSync();
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.scheduleLayoutSync();
   }
 
   @HostListener('document:click', ['$event'])
@@ -247,6 +293,7 @@ export class ComposerComponent {
         const ext = item.type.split('/')[1] || 'png';
         this.selectedFile = new File([file], `imagem-colada.${ext}`, { type: item.type });
         this.filePreviewUrl = URL.createObjectURL(file);
+        this.scheduleLayoutSync();
         this.focus();
         return;
       }
@@ -328,6 +375,7 @@ export class ComposerComponent {
     }
 
     this.isGuidedAiOpen = !this.isGuidedAiOpen;
+    this.scheduleLayoutSync();
     if (this.isGuidedAiOpen) {
       setTimeout(() => this.guidedAiTextarea?.nativeElement.focus(), 0);
       return;
@@ -339,6 +387,7 @@ export class ComposerComponent {
   closeGuidedAi(restoreComposerFocus = true): void {
     this.isGuidedAiOpen = false;
     this.guidedAiInstruction = '';
+    this.scheduleLayoutSync();
 
     if (restoreComposerFocus) {
       setTimeout(() => this.focus(), 0);
@@ -377,6 +426,7 @@ export class ComposerComponent {
     this.draftText = this.aiSuggestion.trim();
     this.draftTextChange.emit(this.draftText);
     this.acceptAiSuggestion.emit(this.draftText);
+    this.scheduleLayoutSync();
     setTimeout(() => this.focus(), 0);
   }
 
@@ -447,6 +497,7 @@ export class ComposerComponent {
       this.filePreviewUrl = URL.createObjectURL(file);
     }
 
+    this.scheduleLayoutSync();
     this.focus();
   }
 
@@ -483,13 +534,27 @@ export class ComposerComponent {
     const shouldOpen = !this.isEmojiPickerOpen;
     this.closeTransientPopovers(shouldOpen ? 'emoji' : undefined);
     this.isEmojiPickerOpen = shouldOpen;
+    this.scheduleLayoutSync();
   }
 
   insertEmoji(emoji: string): void {
-    this.draftText += emoji;
+    const textarea = this.textarea?.nativeElement;
+    const start = textarea?.selectionStart ?? this.draftText.length;
+    const end = textarea?.selectionEnd ?? start;
+
+    this.draftText = this.draftText.slice(0, start) + emoji + this.draftText.slice(end);
     this.draftTextChange.emit(this.draftText);
     this.isEmojiPickerOpen = false;
-    setTimeout(() => this.focus(), 0);
+    this.scheduleLayoutSync();
+
+    const cursorPos = start + emoji.length;
+    requestAnimationFrame(() => {
+      const el = this.textarea?.nativeElement;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
   }
 
   forceResetAttachment(): void {
@@ -500,6 +565,7 @@ export class ComposerComponent {
     this.draftText = '';
     this.draftTextChange.emit('');
     this.clearAttachmentInternal();
+    this.scheduleLayoutSync();
     this.focus();
   }
 
@@ -572,6 +638,7 @@ export class ComposerComponent {
     if (this.fileInput?.nativeElement) {
       this.fileInput.nativeElement.value = '';
     }
+    this.scheduleLayoutSync();
   }
 
   private clearPreview(): void {
@@ -582,6 +649,8 @@ export class ComposerComponent {
   }
 
   private closeTransientPopovers(except?: 'emoji' | 'quickReply' | 'attach'): void {
+    const emojiWasOpen = this.isEmojiPickerOpen;
+
     if (except !== 'emoji') {
       this.isEmojiPickerOpen = false;
     }
@@ -593,5 +662,63 @@ export class ComposerComponent {
     if (except !== 'quickReply') {
       this.closeQuickReplyMenu();
     }
+
+    if (emojiWasOpen !== this.isEmojiPickerOpen) {
+      this.scheduleLayoutSync();
+    }
+  }
+
+  private scheduleLayoutSync(): void {
+    if (this.layoutFrameId !== null) {
+      window.cancelAnimationFrame(this.layoutFrameId);
+    }
+
+    this.layoutFrameId = window.requestAnimationFrame(() => {
+      this.layoutFrameId = null;
+      this.syncTextareaHeight();
+    });
+  }
+
+  private syncTextareaHeight(): void {
+    const textarea = this.textarea?.nativeElement;
+    if (!textarea) {
+      return;
+    }
+
+    const styles = window.getComputedStyle(textarea);
+    const lineHeight = parseFloat(styles.lineHeight) || 20;
+    const paddingTop = parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+    const borderTopWidth = parseFloat(styles.borderTopWidth) || 0;
+    const borderBottomWidth = parseFloat(styles.borderBottomWidth) || 0;
+    const minHeight = parseFloat(styles.minHeight) || DEFAULT_TEXTAREA_MIN_HEIGHT_PX;
+    const maxHeight = Math.round(
+      lineHeight * MAX_VISIBLE_TEXTAREA_LINES
+      + paddingTop
+      + paddingBottom
+      + borderTopWidth
+      + borderBottomWidth
+    );
+
+    textarea.style.height = 'auto';
+    const nextHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight));
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }
+
+  private syncBulkPanelClearance(): void {
+    const host = this.hostElement.nativeElement;
+    const height = host.offsetHeight;
+    if (height <= 0) {
+      this.clearBulkPanelClearance();
+      return;
+    }
+
+    const clearance = Math.max(DEFAULT_BULK_PANEL_CLEARANCE_PX, height + BULK_PANEL_CLEARANCE_GAP_PX);
+    document.documentElement.style.setProperty(BULK_PANEL_CLEARANCE_VAR, `${clearance}px`);
+  }
+
+  private clearBulkPanelClearance(): void {
+    document.documentElement.style.removeProperty(BULK_PANEL_CLEARANCE_VAR);
   }
 }

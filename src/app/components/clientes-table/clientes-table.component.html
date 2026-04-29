@@ -30,9 +30,10 @@
 			*ngFor="let cliente of clientes; let i = index; trackBy: trackByCliente"
 			class="clientes-table__row"
 			[class.clientes-table__row--selected]="selectionMode && selectedClienteIds.has(cliente.id)"
-			[class.clientes-table__row--today]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus === 'today'"
-			[class.clientes-table__row--upcoming]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus === 'upcoming'"
-			[class.clientes-table__row--striped]="!(selectionMode && selectedClienteIds.has(cliente.id)) && cliente.birthdayStatus !== 'today' && cliente.birthdayStatus !== 'upcoming' && i % 2 === 1"
+			[class.clientes-table__row--today]="cliente.birthdayStatus === 'today'"
+			[class.clientes-table__row--upcoming]="cliente.birthdayStatus === 'upcoming'"
+			[class.clientes-table__row--recent]="cliente.birthdayStatus !== 'today' && cliente.birthdayStatus !== 'upcoming' && recentClienteIds.has(cliente.id)"
+			[class.clientes-table__row--striped]="cliente.birthdayStatus !== 'today' && cliente.birthdayStatus !== 'upcoming' && !recentClienteIds.has(cliente.id) && i % 2 === 1"
 			[class.clientes-table__row--selectable]="selectionMode"
 			(click)="selectionMode ? selectionToggle.emit(cliente.id) : null"
 		>
@@ -57,21 +58,21 @@
 			<td class="clientes-table__cell">
 				<div class="clientes-table__actions">
 					<button
-						class="clientes-table__action clientes-table__action--primary"
+						class="clientes-table__action clientes-table__action--birthday"
 						type="button"
 						[disabled]="actionsDisabled"
 						(click)="$event.stopPropagation(); birthdayClick.emit(cliente)"
 					>
-						<span class="clientes-table__action-icon">🎉</span>
+						<span class="material-symbols-outlined clientes-table__action-icon">card_giftcard</span>
 						<span>Parabéns</span>
 					</button>
 					<button
-						class="clientes-table__action clientes-table__action--secondary"
+						class="clientes-table__action clientes-table__action--review"
 						type="button"
 						[disabled]="actionsDisabled"
 						(click)="$event.stopPropagation(); reviewClick.emit(cliente)"
 					>
-						<span class="clientes-table__action-icon">⭐</span>
+						<span class="material-symbols-outlined clientes-table__action-icon">star</span>
 						<span>Avaliação</span>
 					</button>
 	

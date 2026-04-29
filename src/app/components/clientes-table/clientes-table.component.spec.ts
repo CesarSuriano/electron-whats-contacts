@@ -77,4 +77,37 @@ describe('ClientesTableComponent', () => {
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
     expect(rows.length).toBe(3);
   });
+
+  it('highlights recent non-birthday clients in green', () => {
+    component.clientes = [makeCliente(1, 'Ana')];
+    component.recentClienteIds = new Set([1]);
+
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
+    expect(row.classList.contains('clientes-table__row--recent')).toBeTrue();
+  });
+
+  it('keeps birthday highlight ahead of recent highlight', () => {
+    component.clientes = [{ ...makeCliente(1, 'Ana'), birthdayStatus: 'today' }];
+    component.recentClienteIds = new Set([1]);
+
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
+    expect(row.classList.contains('clientes-table__row--today')).toBeTrue();
+    expect(row.classList.contains('clientes-table__row--recent')).toBeFalse();
+  });
+
+  it('preserves the status highlight when a birthday row is selected', () => {
+    component.selectionMode = true;
+    component.selectedClienteIds = new Set([1]);
+    component.clientes = [{ ...makeCliente(1, 'Ana'), birthdayStatus: 'today' }];
+
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLElement;
+    expect(row.classList.contains('clientes-table__row--selected')).toBeTrue();
+    expect(row.classList.contains('clientes-table__row--today')).toBeTrue();
+  });
 });

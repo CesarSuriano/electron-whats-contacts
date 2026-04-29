@@ -9,6 +9,7 @@ import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { EventStore } from '../../src/state/EventStore.js';
 import { ContactStore } from '../../src/state/ContactStore.js';
+import { LidMap } from '../../src/state/LidMap.js';
 
 function buildApp(options: { ready?: boolean; capturedSend?: { chatId?: string; content?: unknown } } = {}) {
   const client = {
@@ -34,7 +35,8 @@ function buildApp(options: { ready?: boolean; capturedSend?: { chatId?: string; 
   sessionState.status = options.ready === false ? 'initializing' : 'ready';
   const eventStore = new EventStore();
   const contactStore = new ContactStore();
-  const messageService = new MessageService(client, sessionState, eventStore, contactStore, selfJidResolver);
+  const lidMap = new LidMap();
+  const messageService = new MessageService(client, sessionState, eventStore, contactStore, lidMap, selfJidResolver);
   const controller = new MessagesController(messageService, 'test-instance');
 
   const app = express();
@@ -60,13 +62,18 @@ describe('POST /api/whatsapp/messages', () => {
     assert.equal(res.body.ok, false);
   });
 
-  it('returns 400 for group destinations', async () => {
-    const { app } = buildApp();
+  it('sends text to group destinations', async () => {
+    const captured = {};
+    const { app, contactStore, eventStore } = buildApp({ capturedSend: captured });
     const res = await request(app)
       .post('/api/whatsapp/messages')
       .send({ to: '120363000000000000@g.us', text: 'Olá' });
-    assert.equal(res.status, 400);
-    assert.match(res.body.error, /Group/);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.result.to, '120363000000000000@g.us');
+    assert.equal((captured as { chatId?: string }).chatId, '120363000000000000@g.us');
+    assert.equal(contactStore.get('120363000000000000@g.us')?.isGroup, true);
+    assert.equal(eventStore.events[0]?.chatJid, '120363000000000000@g.us');
   });
 
   it('returns 400 when destination is own number', async () => {

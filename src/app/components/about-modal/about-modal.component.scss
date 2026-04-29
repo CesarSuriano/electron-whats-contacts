@@ -18,6 +18,8 @@
 
   ul {
     @apply m-0 flex flex-col gap-1 pl-4;
+    max-height: 180px;
+    overflow-y: auto;
   }
 
   li {

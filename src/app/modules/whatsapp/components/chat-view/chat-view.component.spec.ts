@@ -59,7 +59,7 @@ describe('ChatViewComponent', () => {
     selectedContactSubject = new BehaviorSubject<WhatsappContact | null>(contact);
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'getMessagesFor', 'getDraftTextForJid', 'setDraftText', 'setDraftTextForJid', 'sendText', 'sendMedia'
+      'getMessagesFor', 'getDraftTextForJid', 'setDraftText', 'setDraftTextForJid', 'sendText', 'sendMedia', 'resolveConversationJid'
     ], {
       selectedContactJid$: jidSubject.asObservable(),
       contacts$: contacts$.asObservable(),
@@ -73,6 +73,7 @@ describe('ChatViewComponent', () => {
     });
     stateSpy.getMessagesFor.and.returnValue([]);
     stateSpy.getDraftTextForJid.and.returnValue('');
+    stateSpy.resolveConversationJid.and.callFake((jid: string) => jid);
     return stateSpy;
   };
 
@@ -152,6 +153,16 @@ describe('ChatViewComponent', () => {
     expect(stateSpy.setDraftTextForJid).toHaveBeenCalledWith('a@c.us', 'new text');
   }));
 
+  it('syncs draft text using the resolved conversation jid', fakeAsync(() => {
+    component.contact = makeContact('120363999999999999@lid');
+    stateSpy.resolveConversationJid.and.returnValue('5511987654321@c.us');
+
+    component.onDraftChange('mensagem resolvida');
+    tick(40);
+
+    expect(stateSpy.setDraftTextForJid).toHaveBeenCalledWith('5511987654321@c.us', 'mensagem resolvida');
+  }));
+
   it('cancels a pending draft sync when the external state clears the draft', () => {
     component.contact = makeContact('a@c.us');
 
@@ -192,15 +203,16 @@ describe('ChatViewComponent', () => {
     expect(composerSpy.focus).toHaveBeenCalledTimes(1);
   }));
 
-  it('onSendText calls state.sendText with correct args', () => {
+  it('onSendText calls state.sendText with the resolved conversation jid', () => {
     component.contact = makeContact('a@c.us');
     component.isSyncingMessages = false;
     component.disabled = false;
+    stateSpy.resolveConversationJid.and.returnValue('resolved@c.us');
     stateSpy.sendText.and.returnValue(of(undefined));
 
     component.onSendText('hello');
 
-    expect(stateSpy.sendText).toHaveBeenCalledWith('a@c.us', 'hello');
+    expect(stateSpy.sendText).toHaveBeenCalledWith('resolved@c.us', 'hello');
   });
 
   it('keeps AI disabled even when agent settings are enabled', fakeAsync(() => {

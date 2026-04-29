@@ -14,6 +14,7 @@ export class ClientesTableComponent {
   @Input() sortDirection: SortDirection = 'asc';
   @Input() selectionMode = false;
   @Input() selectedClienteIds = new Set<number>();
+  @Input() recentClienteIds = new Set<number>();
   @Input() actionsDisabled = false;
 
   @Output() sortChange = new EventEmitter<SortColumn>();
@@ -53,7 +54,7 @@ export class ClientesTableComponent {
     }
 
     if (cliente.birthdayStatus === 'upcoming') {
-      return 'Próximos 7 dias';
+      return 'Aniversário nos próximos 7 dias';
     }
 
     return 'Cadastro ativo';

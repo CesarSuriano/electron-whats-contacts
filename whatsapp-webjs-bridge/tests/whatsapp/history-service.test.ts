@@ -6,8 +6,13 @@ import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { LidMap } from '../../src/state/LidMap.js';
 
-function makeService(): HistoryService {
-  const client = { info: { wid: { _serialized: '5511000000000@c.us' } } } as unknown as WebJsClient;
+function makeService(clientOverride: Partial<WebJsClient> = {}): HistoryService {
+  const client = {
+    info: { wid: { _serialized: '5511000000000@c.us' } },
+    getChatById: async () => null,
+    getChats: async () => [],
+    ...clientOverride
+  } as unknown as WebJsClient;
   const selfJidResolver = new SelfJidResolver(client);
   const sessionState = new SessionState('test', () => selfJidResolver.getOwnJid());
   sessionState.status = 'ready';
@@ -64,7 +69,7 @@ describe('HistoryService concurrency control', () => {
 
 describe('HistoryService history recovery', () => {
   it('tries store fallback when fetch recovery still returns fewer than 10 messages', async () => {
-    const sparseHistory = Array.from({ length: 2 }, (_, index) => ({ id: { _serialized: `sparse-${index}` }, timestamp: index + 1 }));
+    const sparseHistory = [{ id: { _serialized: 'sparse-0' }, timestamp: 1 }];
     const recoveredHistory = Array.from({ length: 10 }, (_, index) => ({ id: { _serialized: `store-${index}` }, timestamp: index + 1 }));
 
     const client = {
@@ -99,5 +104,54 @@ describe('HistoryService history recovery', () => {
 
     assert.equal(storeFallbackCalled, true);
     assert.equal(history.length, 10);
+  });
+});
+
+describe('HistoryService.resolveChatsForHistory', () => {
+  it('keeps a confirmed linked-id candidate for history lookup when the round-trip resolves back to the requested phone', async () => {
+    const lidChat = { id: { _serialized: '12345678901234@lid' }, name: 'Contato' };
+    const service = makeService({
+      getChatById: async (id: string) => (id === '12345678901234@lid' ? lidChat : null),
+      getChats: async () => [],
+      pupPage: {
+        evaluate: async (_fn: unknown, input: unknown) => {
+          if (input === '5511987654321@c.us') {
+            return { lid: '12345678901234@lid', phone: '5511987654321@c.us' };
+          }
+          if (input === '12345678901234@lid') {
+            return { lid: '12345678901234@lid', phone: '5511987654321@c.us' };
+          }
+          return null;
+        }
+      }
+    });
+
+    const historyChats = await service.resolveChatsForHistory('5511987654321@c.us');
+
+    assert.equal(historyChats.length, 1);
+    assert.equal(historyChats[0]?.id?._serialized, '12345678901234@lid');
+  });
+
+  it('rejects a speculative linked-id candidate for history lookup when the round-trip resolves to a mirrored alias', async () => {
+    const wrongLidChat = { id: { _serialized: '152896658239610@lid' }, name: 'Contato errado' };
+    const service = makeService({
+      getChatById: async (id: string) => (id === '152896658239610@lid' ? wrongLidChat : null),
+      getChats: async () => [],
+      pupPage: {
+        evaluate: async (_fn: unknown, input: unknown) => {
+          if (input === '554498143537@c.us') {
+            return { lid: '152896658239610@lid', phone: '554498143537@c.us' };
+          }
+          if (input === '152896658239610@lid') {
+            return { lid: '152896658239610@lid', phone: '152896658239610@c.us' };
+          }
+          return null;
+        }
+      }
+    });
+
+    const historyChats = await service.resolveChatsForHistory('554498143537@c.us');
+
+    assert.equal(historyChats.length, 0);
   });
 });

@@ -9,6 +9,7 @@ import type {
 } from '../domain/types.js';
 import { SessionState } from '../state/SessionState.js';
 import { ContactStore } from '../state/ContactStore.js';
+import { EventStore } from '../state/EventStore.js';
 import { LidMap } from '../state/LidMap.js';
 import { SelfJidResolver } from './SelfJidResolver.js';
 import { normalizePhone, brazilianAlternativeJid } from '../utils/phone.js';
@@ -20,6 +21,7 @@ import {
   isValidPersonalJid
 } from '../utils/jid.js';
 import { getContactName, extractLastMessagePreview } from '../utils/contact.js';
+import { resolvePhoneFromLid } from '../utils/lidResolver.js';
 import { withTimeout } from '../utils/time.js';
 
 export interface ContactsServiceOptions {
@@ -49,6 +51,15 @@ interface LastMessageMetadata {
   lastMessageType: string;
   lastMessageHasMedia: boolean;
   lastMessageMediaMimetype: string;
+}
+
+function parseIsoTimestampMs(value: string | null | undefined): number {
+  if (typeof value !== 'string' || !value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 type WebJsClientWithInternals = WebJsClient & {
@@ -95,6 +106,7 @@ export class ContactsService {
     private readonly client: WebJsClient,
     private readonly sessionState: SessionState,
     private readonly contactStore: ContactStore,
+    private readonly eventStore: EventStore,
     private readonly lidMap: LidMap,
     private readonly selfJidResolver: SelfJidResolver,
     private readonly options: ContactsServiceOptions = {}
@@ -267,6 +279,77 @@ export class ContactsService {
     return Array.from(new Set(names));
   }
 
+  private rewriteConversationReferences(fromJid: string, toJid: string): void {
+    if (!fromJid || !toJid || fromJid === toJid) {
+      return;
+    }
+
+    for (const event of this.eventStore.events) {
+      if (event.chatJid === fromJid) {
+        event.chatJid = toJid;
+        event.phone = normalizePhone(toJid);
+      }
+    }
+  }
+
+  private mergeAliasContactIntoCanonical(canonicalJid: string, aliasJid: string): void {
+    if (!canonicalJid || !aliasJid || canonicalJid === aliasJid) {
+      return;
+    }
+
+    const alias = this.contactStore.get(aliasJid);
+    if (!alias) {
+      return;
+    }
+
+    const canonical = this.contactStore.get(canonicalJid);
+    const canonicalLastMessageAtMs = parseIsoTimestampMs(canonical?.lastMessageAt);
+    const aliasLastMessageAtMs = parseIsoTimestampMs(alias.lastMessageAt);
+    const latest = aliasLastMessageAtMs > canonicalLastMessageAtMs ? alias : (canonical || alias);
+
+    const merged: ContactEntry = {
+      jid: canonicalJid,
+      phone: normalizePhone(canonicalJid),
+      name: canonical?.name || alias.name || normalizePhone(canonicalJid),
+      found: canonical?.found ?? alias.found ?? true,
+      lastMessageAt: latest.lastMessageAt || canonical?.lastMessageAt || alias.lastMessageAt || null,
+      lastMessagePreview: latest.lastMessagePreview || canonical?.lastMessagePreview || alias.lastMessagePreview || '',
+      lastMessageFromMe: latest.lastMessageFromMe ?? Boolean(canonical?.lastMessageFromMe || alias.lastMessageFromMe),
+      lastMessageType: latest.lastMessageType || canonical?.lastMessageType || alias.lastMessageType || '',
+      lastMessageHasMedia: latest.lastMessageHasMedia ?? Boolean(canonical?.lastMessageHasMedia || alias.lastMessageHasMedia),
+      lastMessageMediaMimetype: latest.lastMessageMediaMimetype
+        || canonical?.lastMessageMediaMimetype
+        || alias.lastMessageMediaMimetype
+        || '',
+      lastMessageAck: latest.lastMessageAck ?? canonical?.lastMessageAck ?? alias.lastMessageAck ?? null,
+      unreadCount: (canonical?.unreadCount ?? 0) + (alias.unreadCount ?? 0),
+      labels: Array.isArray(canonical?.labels) && canonical.labels.length
+        ? canonical.labels
+        : (Array.isArray(alias.labels) ? alias.labels : []),
+      isGroup: false,
+      fromGetChats: Boolean(canonical?.fromGetChats || alias.fromGetChats),
+      getChatsTimestampMs: Math.max(
+        Number(canonical?.getChatsTimestampMs || 0),
+        Number(alias.getChatsTimestampMs || 0)
+      )
+    };
+
+    this.contactStore.set(canonicalJid, merged);
+    this.contactStore.delete(aliasJid);
+    this.rewriteConversationReferences(aliasJid, canonicalJid);
+  }
+
+  private registerCanonicalLid(canonicalJid: string, lidJid: string): void {
+    if (!canonicalJid || !lidJid) {
+      return;
+    }
+
+    const displacedCanonicals = this.lidMap.set(canonicalJid, lidJid);
+    displacedCanonicals.forEach(displacedCanonical => {
+      this.mergeAliasContactIntoCanonical(canonicalJid, displacedCanonical);
+    });
+  }
+
   private extractCanonicalJidFromContact(contact: RawContact | null | undefined, fallbackJid = ''): string {
     if (!contact) {
       return '';
@@ -278,6 +361,10 @@ export class ContactsService {
 
     const serialized = contact.id?._serialized || '';
     if (isPersonalJid(serialized)) {
+      const fallbackDigits = normalizePhone(fallbackJid);
+      if (fallbackDigits && normalizePhone(serialized) === fallbackDigits) {
+        return '';
+      }
       return this.selfJidResolver.isSelfJid(serialized) ? '' : serialized;
     }
 
@@ -337,12 +424,22 @@ export class ContactsService {
         );
         const canonicalJid = this.extractCanonicalJidFromContact(contact, lidJid);
         if (canonicalJid) {
-          this.lidMap.set(canonicalJid, lidJid);
+          this.registerCanonicalLid(canonicalJid, lidJid);
           return canonicalJid;
         }
       } catch {
         // Fall through to the next resolution strategy.
       }
+    }
+
+    try {
+      const fromStore = await resolvePhoneFromLid(this.client, lidJid);
+      if (fromStore && !this.selfJidResolver.isSelfJid(fromStore)) {
+        this.registerCanonicalLid(fromStore, lidJid);
+        return fromStore;
+      }
+    } catch {
+      // best effort
     }
 
     return '';
@@ -507,7 +604,7 @@ export class ContactsService {
         }));
 
         if (isLinkedId(rawJid)) {
-          this.lidMap.set(canonicalJid, rawJid);
+          this.registerCanonicalLid(canonicalJid, rawJid);
         }
       });
 
@@ -626,10 +723,10 @@ export class ContactsService {
       });
 
     const canonicalByLid = new Map<string, string>();
-    for (const [canonicalJid, lidJid] of this.lidMap.entries()) {
+    for (const [lidJid, canonicalJid] of resolvedCanonicalByLid.entries()) {
       canonicalByLid.set(lidJid, canonicalJid);
     }
-    for (const [lidJid, canonicalJid] of resolvedCanonicalByLid.entries()) {
+    for (const [canonicalJid, lidJid] of this.lidMap.entries()) {
       canonicalByLid.set(lidJid, canonicalJid);
     }
 
@@ -739,6 +836,38 @@ export class ContactsService {
         unreadCount: 0,
         labels: []
       });
+    }
+
+    await this.reconcileOrphanLinkedContacts();
+  }
+
+  private async reconcileOrphanLinkedContacts(): Promise<void> {
+    const orphans: string[] = [];
+    for (const [jid] of this.contactStore.entries()) {
+      if (!isLinkedId(jid)) {
+        continue;
+      }
+      if (this.lidMap.findCanonical(jid)) {
+        continue;
+      }
+      orphans.push(jid);
+    }
+
+    if (!orphans.length) {
+      return;
+    }
+
+    for (const lidJid of orphans) {
+      try {
+        const canonical = await resolvePhoneFromLid(this.client, lidJid);
+        if (!canonical || this.selfJidResolver.isSelfJid(canonical)) {
+          continue;
+        }
+        this.registerCanonicalLid(canonical, lidJid);
+        this.mergeAliasContactIntoCanonical(canonical, lidJid);
+      } catch {
+        // best effort, move on
+      }
     }
   }
 
@@ -1004,7 +1133,7 @@ export class ContactsService {
         const num = typeof contact.number === 'string' ? contact.number.trim() : '';
         const lidUser = typeof contact.id?.user === 'string' ? contact.id.user : '';
         if (num && num === targetPhone && num !== lidUser) {
-          this.lidMap.set(phoneJid, rawJid);
+          this.registerCanonicalLid(phoneJid, rawJid);
           return rawJid;
         }
       }

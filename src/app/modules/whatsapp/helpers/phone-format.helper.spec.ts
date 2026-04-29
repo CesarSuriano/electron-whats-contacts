@@ -1,4 +1,4 @@
-import { extractDigits, formatBrazilianPhone, getInitials } from './phone-format.helper';
+import { extractDigits, formatBrazilianPhone, getInitials, resolveDisplayedPhoneSource } from './phone-format.helper';
 
 describe('extractDigits', () => {
   it('returns empty string for null', () => {
@@ -69,6 +69,36 @@ describe('formatBrazilianPhone', () => {
 
   it('returns raw digits for short numbers', () => {
     expect(formatBrazilianPhone('12345')).toBe('12345');
+  });
+});
+
+describe('resolveDisplayedPhoneSource', () => {
+  it('does not expose @lid digits as a public phone', () => {
+    expect(resolveDisplayedPhoneSource({
+      jid: '120363999999999999@lid',
+      phone: '120363999999999999'
+    })).toBe('');
+  });
+
+  it('prefers jid digits when the phone field looks like a linked-id', () => {
+    expect(resolveDisplayedPhoneSource({
+      jid: '5511987654321@c.us',
+      phone: '120363999999999999'
+    })).toBe('5511987654321');
+  });
+
+  it('keeps the richer Brazilian mobile variant when phone and jid differ only by ninth digit', () => {
+    expect(resolveDisplayedPhoneSource({
+      jid: '551187654321@c.us',
+      phone: '5511987654321'
+    })).toBe('5511987654321');
+  });
+
+  it('prefers jid digits when phone and conversation jid conflict', () => {
+    expect(resolveDisplayedPhoneSource({
+      jid: '5511987654321@c.us',
+      phone: '5511912345678'
+    })).toBe('5511987654321');
   });
 });
 

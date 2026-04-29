@@ -37,29 +37,76 @@
 }
 
 .clientes-table__row--selected {
-  @apply bg-accent-soft;
+  box-shadow: inset 0 0 0 1px rgba(62, 50, 46, 0.05);
 }
 
 .clientes-table__row--today {
+  background: #f5d9e1;
+  border-top-color: rgba(154, 54, 81, 0.16);
+  box-shadow: inset 4px 0 0 var(--accent), inset 0 0 0 1px rgba(154, 54, 81, 0.08);
+}
+
+.clientes-table__row--today:hover {
+  background: #f1cfd9;
+}
+
+.clientes-table__row--upcoming {
+  background: #fcf2cf;
+  box-shadow: inset 4px 0 0 var(--warn), inset 0 0 0 1px rgba(217, 119, 6, 0.04);
+}
+
+.clientes-table__row--upcoming:hover {
+  background: #faeab8;
+}
+
+.clientes-table__row--recent {
   @apply bg-success-soft;
   box-shadow: inset 3px 0 0 var(--success);
 }
 
-.clientes-table__row--today:hover {
+.clientes-table__row--recent:hover {
   @apply bg-success-soft brightness-[0.98];
 }
 
-.clientes-table__row--upcoming {
-  @apply bg-warn-soft;
-  box-shadow: inset 3px 0 0 var(--warn);
-}
-
-.clientes-table__row--upcoming:hover {
-  @apply bg-warn-soft brightness-[0.98];
-}
-
 .clientes-table__row--striped {
-  @apply bg-surface;
+  background: #f5f6f8;
+}
+
+.clientes-table__row--selected:not(.clientes-table__row--today):not(.clientes-table__row--upcoming):not(.clientes-table__row--recent) {
+  background: #e9edf2;
+  border-top-color: rgba(100, 116, 139, 0.18);
+  box-shadow: inset 4px 0 0 #64748b, inset 0 0 0 1px rgba(100, 116, 139, 0.08);
+}
+
+.clientes-table__row--selected:not(.clientes-table__row--today):not(.clientes-table__row--upcoming):not(.clientes-table__row--recent):hover {
+  background: #dfe6ee;
+}
+
+.clientes-table__row--selected.clientes-table__row--today {
+  background: #e9b7c7;
+  border-top-color: rgba(154, 54, 81, 0.22);
+}
+
+.clientes-table__row--selected.clientes-table__row--today:hover {
+  background: #e3a6ba;
+}
+
+.clientes-table__row--selected.clientes-table__row--upcoming {
+  background: #f6e2a6;
+  box-shadow: inset 4px 0 0 var(--warn), inset 0 0 0 1px rgba(217, 119, 6, 0.06);
+}
+
+.clientes-table__row--selected.clientes-table__row--upcoming:hover {
+  background: #f2d88e;
+}
+
+.clientes-table__row--selected.clientes-table__row--recent {
+  background: #c8ead2;
+  box-shadow: inset 4px 0 0 var(--success), inset 0 0 0 1px rgba(22, 163, 74, 0.08);
+}
+
+.clientes-table__row--selected.clientes-table__row--recent:hover {
+  background: #b7e2c3;
 }
 
 .clientes-table__row--selectable {
@@ -79,7 +126,7 @@
 }
 
 .clientes-table__checkbox-icon--selected {
-  @apply text-accent;
+  color: #64748b;
 }
 
 .clientes-table__cell--name {
@@ -94,6 +141,11 @@
   @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11.5px] font-semibold text-accent;
 }
 
+.clientes-table__row--selected .clientes-table__initials {
+  background: #cfd7e3;
+  color: #334155;
+}
+
 .clientes-table__identity-copy {
   @apply flex min-w-0 flex-col gap-0.5;
 }
@@ -102,12 +154,28 @@
   @apply overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium text-txt;
 }
 
+.clientes-table__row--selected .clientes-table__name,
+.clientes-table__row--selected .clientes-table__cell,
+.clientes-table__row--selected .clientes-table__cell--text,
+.clientes-table__row--selected .clientes-table__birthday-label {
+  color: #243244;
+  font-weight: 700;
+}
+
+.clientes-table__row--selected .clientes-table__action {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.clientes-table__row--selected .clientes-table__action:disabled {
+  opacity: 0.72;
+}
+
 .clientes-table__birthday-label {
   @apply text-[11.5px] text-txt-muted;
 }
 
 .clientes-table__birthday-label--today {
-  @apply font-medium text-success;
+  @apply font-semibold text-accent;
 }
 
 .clientes-table__birthday-label--upcoming {
@@ -130,24 +198,33 @@
   @apply cursor-not-allowed opacity-60;
 }
 
-.clientes-table__action--primary {
-  @apply bg-accent text-accent-text border-accent;
+.clientes-table__action--birthday {
+  background: var(--surface);
+  border-color: var(--campaign-birthday);
+  color: var(--campaign-birthday);
 }
 
-.clientes-table__action--primary:hover:not(:disabled) {
-  @apply bg-accent-hover border-accent-hover;
+.clientes-table__action--birthday:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--campaign-birthday-hover);
+  color: var(--campaign-birthday-hover);
 }
 
-.clientes-table__action--secondary {
-  @apply bg-surface text-txt border-border-strong;
+.clientes-table__action--review {
+  background: var(--surface);
+  border-color: var(--campaign-review);
+  color: var(--campaign-review);
 }
 
-.clientes-table__action--secondary:hover:not(:disabled) {
-  @apply bg-bg-subtle border-txt-subtle;
+.clientes-table__action--review:hover:not(:disabled) {
+  background: var(--success-soft);
+  border-color: var(--campaign-review-hover);
+  color: var(--campaign-review-hover);
 }
 
 .clientes-table__action-icon {
-  @apply mr-1 text-[15px];
+  @apply text-[1rem];
+  font-variation-settings: 'wght' 500;
 }
 
 @media (max-width: 1300px) {

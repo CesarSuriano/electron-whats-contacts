@@ -6,7 +6,7 @@ import { AppLabel, AppLabelAssignments } from '../../../../models/app-label.mode
 import { MessageAck, WhatsappContact, WhatsappLabel } from '../../../../models/whatsapp.model';
 import { LabelService } from '../../../../services/label.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
-import { formatBrazilianPhone } from '../../helpers/phone-format.helper';
+import { formatBrazilianPhone, resolveDisplayedPhoneSource } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
 type ConversationFilterId = 'all' | 'conversations' | 'unread' | `label:${string}` | `app-label:${string}`;
@@ -25,6 +25,7 @@ interface ConversationWhatsappLabel {
   chatJids: string[];
 }
 
+const MOVE_FLASH_DURATION_MS = 650;
 const PHOTO_VISIBLE_OVERSCAN = 6;
 const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
 
@@ -163,6 +164,18 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   isFlashing(jid: string): boolean {
+    if (!jid) {
+      return false;
+    }
+
+    if (!this.isSelectionMode && jid === this.selectedJid) {
+      return false;
+    }
+
+    if (this.isSelectionMode && this.selectedJids.has(jid)) {
+      return false;
+    }
+
     return this.flashingJids.has(jid);
   }
 
@@ -180,7 +193,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       window.setTimeout(() => {
         this.flashingJids = new Set([...this.flashingJids].filter(j => !movedUp.includes(j)));
         this.cdr.markForCheck();
-      }, 1500);
+      }, MOVE_FLASH_DURATION_MS);
     }
 
     this.prevOrderMap.clear();
@@ -306,12 +319,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private resolvePhoneSource(contact: WhatsappContact): string {
-    const phone = typeof contact.phone === 'string' ? contact.phone.trim() : '';
-    if (phone) {
-      return phone;
-    }
-
-    return contact.jid.endsWith('@lid') ? '' : contact.jid;
+    return resolveDisplayedPhoneSource(contact);
   }
 
   getPreviewMediaIcon(contact: WhatsappContact): string {

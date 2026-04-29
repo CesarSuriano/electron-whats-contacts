@@ -5,6 +5,7 @@ import { ContactsService } from '../../src/whatsapp/ContactsService.js';
 import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { ContactStore } from '../../src/state/ContactStore.js';
+import { EventStore } from '../../src/state/EventStore.js';
 import { LidMap } from '../../src/state/LidMap.js';
 
 type FakeClient = Partial<{
@@ -39,8 +40,9 @@ function createService(clientOverride: Partial<FakeClient>, options?: { enablePr
   const sessionState = new SessionState('test', () => selfJidResolver.getOwnJid());
   sessionState.status = 'ready';
   const contactStore = new ContactStore();
+  const eventStore = new EventStore();
   const lidMap = new LidMap();
-  const service = new ContactsService(client, sessionState, contactStore, lidMap, selfJidResolver, options);
+  const service = new ContactsService(client, sessionState, contactStore, eventStore, lidMap, selfJidResolver, options);
   return { service, client: fake, contactStore, lidMap, selfJidResolver };
 }
 
@@ -193,6 +195,103 @@ describe('ContactsService.refreshContactsFromChats', () => {
     assert.ok(entry);
     assert.equal(entry.isGroup, true);
     assert.equal(entry.name, 'Grupo de trabalho');
+  });
+
+  it('collapses a stale fake canonical contact when the real canonical is resolved for the same linked-id', async () => {
+    const { service, contactStore, lidMap } = createService({
+      getChats: async () => [
+        {
+          id: { _serialized: '278649089585374@lid' },
+          isGroup: false,
+          name: 'Noiva Do Miro',
+          timestamp: 1713000000,
+          unreadCount: 1,
+          lastMessage: { body: 'Oi', fromMe: false, type: 'chat' }
+        }
+      ],
+      getContacts: async () => [
+        {
+          id: { _serialized: '278649089585374@lid', user: '278649089585374' },
+          isMyContact: true,
+          isMe: false,
+          number: '554499104514'
+        }
+      ]
+    });
+
+    lidMap.set('278649089585374@c.us', '278649089585374@lid');
+    contactStore.set('278649089585374@c.us', contactStore.createDefault('278649089585374@c.us', {
+      phone: '278649089585374',
+      name: 'Noiva Do Miro',
+      found: true,
+      unreadCount: 2,
+      lastMessagePreview: '?'
+    }));
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+    assert.equal(lidMap.findCanonical('278649089585374@lid'), '554499104514@c.us');
+    assert.ok(contactStore.get('554499104514@c.us'));
+  });
+
+  it('keeps a linked chat as raw @lid when the linked-id lookup only mirrors the lid digits', async () => {
+    let evaluateCalls = 0;
+    const { service, contactStore, lidMap } = createService({
+      getChats: async () => [
+        {
+          id: { _serialized: '278649089585374@lid' },
+          isGroup: false,
+          name: 'Noiva Do Miro',
+          timestamp: 1713000000,
+          unreadCount: 1,
+          lastMessage: { body: '?', fromMe: false, type: 'chat' }
+        }
+      ],
+      getContacts: async () => [],
+      getContactById: async () => ({}),
+      pupPage: {
+        evaluate: async () => {
+          evaluateCalls += 1;
+          return { lid: '278649089585374@lid', phone: '278649089585374@c.us' };
+        }
+      }
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(evaluateCalls > 0, true);
+    assert.equal(contactStore.has('278649089585374@c.us'), false);
+    assert.equal(contactStore.has('278649089585374@lid'), true);
+    assert.equal(lidMap.findCanonical('278649089585374@lid'), '');
+  });
+
+  it('keeps a linked chat as raw @lid when getContactById returns a mirrored personal alias', async () => {
+    const { service, contactStore, lidMap } = createService({
+      getChats: async () => [
+        {
+          id: { _serialized: '152896658239610@lid' },
+          isGroup: false,
+          name: 'Contato Espelhado',
+          timestamp: 1713000000,
+          unreadCount: 1,
+          lastMessage: { body: 'Foi', fromMe: false, type: 'chat' }
+        }
+      ],
+      getContacts: async () => [],
+      getContactById: async () => ({
+        id: { _serialized: '152896658239610@c.us', user: '152896658239610' },
+        isMyContact: false,
+        isMe: false,
+        number: '152896658239610'
+      })
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.has('152896658239610@c.us'), false);
+    assert.equal(contactStore.has('152896658239610@lid'), true);
+    assert.equal(lidMap.findCanonical('152896658239610@lid'), '');
   });
 });
 

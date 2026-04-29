@@ -135,5 +135,14 @@ describe('ChatHeaderComponent', () => {
 
       expect(component.phoneFormatted).toBe('+55 (11) 98765-4321');
     });
+
+    it('prefers the conversation jid when the phone field conflicts with it', () => {
+      component.contact = makeContact({
+        jid: '5511987654321@c.us',
+        phone: '5511912345678'
+      });
+
+      expect(component.phoneFormatted).toBe('+55 (11) 98765-4321');
+    });
   });
 });

@@ -6,6 +6,7 @@ import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { EventStore } from '../../src/state/EventStore.js';
 import { ContactStore } from '../../src/state/ContactStore.js';
+import { LidMap } from '../../src/state/LidMap.js';
 
 interface FakeSend {
   lastArgs?: { chatId: string; content: unknown; options?: unknown };
@@ -17,10 +18,18 @@ interface FakeSend {
   };
 }
 
-function buildService(fakeSend: FakeSend, options: { ready?: boolean } = {}): {
+function buildService(
+  fakeSend: FakeSend,
+  options: {
+    ready?: boolean;
+    getChatById?: (id: string) => Promise<{ sendSeen?: () => Promise<unknown> } | null | undefined>;
+    clientOverride?: Partial<WebJsClient>;
+  } = {}
+): {
   service: MessageService;
   eventStore: EventStore;
   contactStore: ContactStore;
+  lidMap: LidMap;
 } {
   const client = {
     info: { wid: { _serialized: '5511000000000@c.us' } },
@@ -29,7 +38,8 @@ function buildService(fakeSend: FakeSend, options: { ready?: boolean } = {}): {
       return fakeSend.response;
     },
     getMessageById: async () => null,
-    getChatById: async () => ({ sendSeen: async () => true })
+    getChatById: options.getChatById || (async () => ({ sendSeen: async () => true })),
+    ...options.clientOverride
   } as unknown as WebJsClient;
 
   const selfJidResolver = new SelfJidResolver(client);
@@ -37,8 +47,9 @@ function buildService(fakeSend: FakeSend, options: { ready?: boolean } = {}): {
   sessionState.status = options.ready === false ? 'initializing' : 'ready';
   const eventStore = new EventStore();
   const contactStore = new ContactStore();
-  const service = new MessageService(client, sessionState, eventStore, contactStore, selfJidResolver);
-  return { service, eventStore, contactStore };
+  const lidMap = new LidMap();
+  const service = new MessageService(client, sessionState, eventStore, contactStore, lidMap, selfJidResolver);
+  return { service, eventStore, contactStore, lidMap };
 }
 
 describe('MessageService.validateDestination', () => {
@@ -51,12 +62,21 @@ describe('MessageService.validateDestination', () => {
     }
   });
 
-  it('rejects group JIDs with explicit error', () => {
+  it('accepts a linked-id destination', () => {
+    const { service } = buildService({ response: {} });
+    const v = service.validateDestination('120363999999999999@lid');
+    assert.equal(v.ok, true);
+    if (v.ok) {
+      assert.equal(v.chatId, '120363999999999999@lid');
+    }
+  });
+
+  it('accepts group JIDs', () => {
     const { service } = buildService({ response: {} });
     const v = service.validateDestination('120363000000000000@g.us');
-    assert.equal(v.ok, false);
-    if (!v.ok) {
-      assert.match(v.error, /Group/);
+    assert.equal(v.ok, true);
+    if (v.ok) {
+      assert.equal(v.chatId, '120363000000000000@g.us');
     }
   });
 
@@ -125,6 +145,60 @@ describe('MessageService.sendText', () => {
     assert.equal(contact.lastMessagePreview, 'Olá');
     assert.equal(contact.unreadCount, 0);
   });
+
+  it('records a linked-id mapping only when the sent metadata itself carries the linked destination', async () => {
+    const fakeSend: FakeSend = {
+      response: {
+        id: {
+          _serialized: 'true_152896658239610@lid_msg-1',
+          remote: '152896658239610@lid'
+        },
+        timestamp: 1700001001,
+        to: '152896658239610@lid',
+        ack: 0
+      }
+    };
+    const { service, lidMap } = buildService(fakeSend);
+
+    await service.sendText('554498143537@c.us', 'Olá');
+
+    assert.equal(lidMap.getLid('554498143537@c.us'), '152896658239610@lid');
+  });
+
+  it('does not run speculative linked-id discovery after send when metadata has no linked destination', async () => {
+    let evaluateCalls = 0;
+    const fakeSend: FakeSend = {
+      response: { id: { _serialized: 'sent-plain' }, timestamp: 1700001002, to: '554498143537@c.us', ack: 0 }
+    };
+    const { service, lidMap } = buildService(fakeSend, {
+      clientOverride: {
+        pupPage: {
+          evaluate: async () => {
+            evaluateCalls += 1;
+            return { lid: '152896658239610@lid', phone: '554498143537@c.us' };
+          }
+        }
+      } as Partial<WebJsClient>
+    });
+
+    await service.sendText('554498143537@c.us', 'Olá');
+
+    assert.equal(evaluateCalls, 0);
+    assert.equal(lidMap.getLid('554498143537@c.us') || '', '');
+  });
+
+  it('sends text to groups and preserves the contact as a group conversation', async () => {
+    const fakeSend: FakeSend = {
+      response: { id: { _serialized: 'sent-group' }, timestamp: 1700001003, to: '120363000000000000@g.us', ack: 0 }
+    };
+    const { service, contactStore } = buildService(fakeSend);
+
+    const result = await service.sendText('120363000000000000@g.us', 'Olá grupo');
+
+    assert.equal(result.to, '120363000000000000@g.us');
+    assert.equal(fakeSend.lastArgs?.chatId, '120363000000000000@g.us');
+    assert.equal(contactStore.get('120363000000000000@g.us')?.isGroup, true);
+  });
 });
 
 describe('MessageService.sendMedia', () => {
@@ -158,6 +232,54 @@ describe('MessageService.sendMedia', () => {
     assert.ok(contact);
     assert.equal(contact.lastMessageType, 'document');
     assert.equal(contact.lastMessageHasMedia, true);
+  });
+});
+
+describe('MessageService.markAsSeen', () => {
+  it('falls back to the known linked-id when the canonical jid sendSeen fails', async () => {
+    const attemptedJids: string[] = [];
+    const { service, contactStore, lidMap } = buildService(
+      { response: {} },
+      {
+        getChatById: async (id: string) => {
+          attemptedJids.push(id);
+          if (id === '5511987654321@c.us') {
+            throw new Error('No LID for user');
+          }
+
+          return {
+            sendSeen: async () => true
+          };
+        }
+      }
+    );
+
+    lidMap.set('5511987654321@c.us', '120363999999999999@lid');
+    contactStore.set('5511987654321@c.us', contactStore.createDefault('5511987654321@c.us', {
+      unreadCount: 3
+    }));
+
+    await service.markAsSeen('5511987654321@c.us');
+
+    assert.deepEqual(attemptedJids, ['5511987654321@c.us', '120363999999999999@lid']);
+    assert.equal(contactStore.get('5511987654321@c.us')?.unreadCount, 0);
+  });
+
+  it('keeps the previous best-effort behavior when no linked-id fallback exists', async () => {
+    const attemptedJids: string[] = [];
+    const { service } = buildService(
+      { response: {} },
+      {
+        getChatById: async (id: string) => {
+          attemptedJids.push(id);
+          throw new Error('No LID for user');
+        }
+      }
+    );
+
+    await service.markAsSeen('5511987654321@c.us');
+
+    assert.deepEqual(attemptedJids, ['5511987654321@c.us']);
   });
 });
 

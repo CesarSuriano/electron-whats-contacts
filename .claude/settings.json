@@ -12,7 +12,8 @@
       "Bash(cp \"C:\\\\Users\\\\cesar\\\\.claude\\\\projects\\\\d--uniq-uniq-system\\\\6041ce92-3c99-46a5-83cb-7fe618c6f2dc\\\\tool-results\\\\webfetch-1776532430376-rxq6rw.bin\" ./bundle.gz)",
       "Bash(gunzip -k bundle.gz)",
       "Bash(mkdir -p extracted)",
-      "Bash(tar -xf bundle -C extracted)"
+      "Bash(tar -xf bundle -C extracted)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

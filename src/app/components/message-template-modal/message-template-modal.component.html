@@ -1,6 +1,6 @@
 <ng-container *ngIf="isOpen && editorConfig as config">
 	<div class="modal-backdrop" (click)="close.emit()"></div>
-	<section class="message-template-modal" aria-modal="true" role="dialog">
+	<section class="message-template-modal" aria-modal="true" role="dialog" tabindex="-1" (keydown)="onModalKeydown($event)">
 		<div class="message-template-modal-loading" *ngIf="isSaving">
 			<div class="loading-spinner"></div>
 			<p>Salvando mensagem...</p>
@@ -11,87 +11,105 @@
 				<h2>{{ config.title }}</h2>
 				<p>{{ config.description }}</p>
 			</div>
-			<button class="modal-close" type="button" (click)="close.emit()" aria-label="Fechar modal">
+			<button class="modal-close" type="button" (click)="closeModal()" aria-label="Fechar modal" aria-keyshortcuts="Escape">
 				<span class="material-symbols-outlined">close</span>
 			</button>
 		</header>
 
 		<section class="message-template-toolbar">
-			<button class="btn btn-outline" type="button" (click)="undo()" [disabled]="!canUndo">
-				<span class="material-symbols-outlined toolbar-icon">undo</span>
-				Desfazer
-			</button>
-			<button class="btn btn-outline" type="button" (click)="redo()" [disabled]="!canRedo">
-				<span class="material-symbols-outlined toolbar-icon">redo</span>
-				Refazer
-			</button>
-			<button class="btn btn-outline" type="button" (click)="applyBold()">
-				<span class="material-symbols-outlined toolbar-icon">format_bold</span>
-				Negrito
-			</button>
-			<button class="btn btn-outline" type="button" (click)="applyItalic()">
-				<span class="material-symbols-outlined toolbar-icon">format_italic</span>
-				Itálico
-			</button>
-			<button class="btn btn-outline" type="button" (click)="insertNameToken()">
-				<span class="material-symbols-outlined toolbar-icon">badge</span>
-				Nome do cliente
-			</button>
-			<button class="btn btn-outline" type="button" (click)="insertLineBreak()">
-				<span class="material-symbols-outlined toolbar-icon">keyboard_return</span>
-				Quebra de linha
+			<nav class="message-template-mode-toggle" aria-label="Modo de edição da mensagem">
+				<button
+					class="message-template-mode-toggle__button"
+					type="button"
+					[class.active]="activeTab === 'edit'"
+					aria-keyshortcuts="Control+Shift+E Meta+Shift+E"
+					title="Editar (Ctrl+Shift+E)"
+					(click)="selectTab('edit')"
+				>
+					Editar
+				</button>
+				<button
+					class="message-template-mode-toggle__button"
+					type="button"
+					[class.active]="activeTab === 'preview'"
+					aria-keyshortcuts="Control+Shift+P Meta+Shift+P"
+					title="Prévia (Ctrl+Shift+P)"
+					(click)="selectTab('preview')"
+				>
+					Prévia
+				</button>
+			</nav>
+
+			<span class="message-template-toolbar-separator" aria-hidden="true"></span>
+
+			<div class="message-template-toolbar-actions">
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="undo()" [disabled]="!canUndo" aria-label="Desfazer" aria-keyshortcuts="Control+Z Meta+Z" title="Desfazer (Ctrl+Z)">
+					<span class="material-symbols-outlined toolbar-icon">undo</span>
+				</button>
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="redo()" [disabled]="!canRedo" aria-label="Refazer" aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" title="Refazer (Ctrl+Shift+Z)">
+					<span class="material-symbols-outlined toolbar-icon">redo</span>
+				</button>
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="applyBold()" aria-label="Negrito" aria-keyshortcuts="Control+B Meta+B" title="Negrito (Ctrl+B)">
+					<span class="material-symbols-outlined toolbar-icon">format_bold</span>
+				</button>
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="applyItalic()" aria-label="Itálico" aria-keyshortcuts="Control+I Meta+I" title="Itálico (Ctrl+I)">
+					<span class="material-symbols-outlined toolbar-icon">format_italic</span>
+				</button>
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="insertNameToken()" aria-label="Inserir nome do cliente" aria-keyshortcuts="Control+Shift+N Meta+Shift+N" title="Nome do cliente (Ctrl+Shift+N)">
+					<span class="material-symbols-outlined toolbar-icon">badge</span>
+				</button>
+				<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="insertLineBreak()" aria-label="Inserir quebra de linha" aria-keyshortcuts="Enter" title="Quebra de linha (Enter)">
+					<span class="material-symbols-outlined toolbar-icon">keyboard_return</span>
+				</button>
+			</div>
+
+			<span class="message-template-toolbar-separator" aria-hidden="true"></span>
+
+			<input type="file" accept="image/*" #imageInput style="display:none" (change)="onImageSelected($event)">
+			<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="chooseImage()" [attr.aria-label]="selectedImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem'" [attr.title]="selectedImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem'">
+				<span class="material-symbols-outlined toolbar-icon">image</span>
 			</button>
 		</section>
 
-		<div class="tabs-image-row">
-		  <nav class="message-template-tabs" aria-label="Modo de edição da mensagem">
-		    <button
-		      class="message-template-tab"
-		      type="button"
-		      [class.active]="activeTab === 'edit'"
-		      (click)="selectTab('edit')"
-		    >
-		      Edição
-		    </button>
-		    <button
-		      class="message-template-tab"
-		      type="button"
-		      [class.active]="activeTab === 'preview'"
-		      (click)="selectTab('preview')"
-		    >
-		      Pré-visualização
-		    </button>
-		  </nav>
-
-		  <div class="template-image-section">
-		    <input type="file" accept="image/*" #imageInput style="display:none" (change)="onImageSelected($event)">
-		    <div class="template-image-preview" *ngIf="selectedImageDataUrl">
-		      <img [src]="selectedImageDataUrl" alt="Imagem da mensagem" class="template-image-thumb">
-		      <button type="button" class="template-image-remove" (click)="clearImage()" aria-label="Remover imagem">
-		        <span class="material-symbols-outlined">close</span>
-		      </button>
-		    </div>
-		    <button *ngIf="!selectedImageDataUrl" type="button" class="btn btn-outline" (click)="chooseImage()">
-		      <span class="material-symbols-outlined toolbar-icon">image</span>
-		      Adicionar imagem
-		    </button>
-		  </div>
+		<div class="message-template-image-inline" *ngIf="selectedImageDataUrl">
+			<div class="template-image-preview">
+				<img [src]="selectedImageDataUrl" alt="Imagem da mensagem" class="template-image-thumb">
+				<div class="message-template-image-inline__meta">
+					<strong>Imagem anexada</strong>
+					<span>Clique no icone da imagem para trocar.</span>
+				</div>
+			</div>
+			<button type="button" class="template-image-remove" (click)="clearImage()" aria-label="Remover imagem" title="Remover imagem">
+				<span class="material-symbols-outlined">close</span>
+			</button>
 		</div>
 
 		<ng-container *ngIf="activeTab === 'edit'; else previewTab">
-			<textarea
-				#templateTextarea
-				class="message-template-textarea"
-				[(ngModel)]="editableTemplate"
-				(ngModelChange)="onTemplateInput()"
-				(keydown)="onTextareaKeydown($event)"
-				placeholder="Digite a mensagem aqui"
-				spellcheck="false"
-			></textarea>
+			<section class="message-template-editor-shell">
+				<div
+					#templateEditor
+					class="message-template-editor"
+					contenteditable="true"
+					role="textbox"
+					aria-multiline="true"
+					spellcheck="false"
+					data-placeholder="Digite a mensagem aqui"
+					(compositionstart)="onEditorCompositionStart()"
+					(compositionend)="onEditorCompositionEnd()"
+					(input)="onEditorInput()"
+					(keydown)="onEditorKeydown($event)"
+					(paste)="onEditorPaste($event)"
+					(mouseup)="syncSelectionStateFromEditor()"
+					(keyup)="syncSelectionStateFromEditor()"
+					(focus)="syncSelectionStateFromEditor()"
+				></div>
+			</section>
 		</ng-container>
 
 		<ng-template #previewTab>
-			<section class="message-template-preview" [innerHTML]="previewHtml"></section>
+			<section class="message-template-preview-shell">
+				<section class="message-template-preview" [innerHTML]="previewHtml"></section>
+			</section>
 		</ng-template>
 
 		<section class="message-template-emojis">
@@ -106,6 +124,7 @@
 					*ngFor="let emoji of quickAccessEmojis"
 					class="emoji-btn"
 					type="button"
+					(mousedown)="preserveEditorSelection($event)"
 					(click)="insertEmoji(emoji)"
 				>
 					{{ emoji }}
@@ -116,27 +135,20 @@
 					*ngFor="let emoji of additionalEmojiOptions"
 					class="emoji-btn"
 					type="button"
+					(mousedown)="preserveEditorSelection($event)"
 					(click)="insertEmoji(emoji)"
 				>
 					{{ emoji }}
 				</button>
-				<button class="emoji-btn emoji-btn-add" type="button" (click)="addCustomEmoji()" aria-label="Adicionar emoji personalizado">
+				<button class="emoji-btn emoji-btn-add" type="button" (mousedown)="preserveEditorSelection($event)" (click)="addCustomEmoji()" aria-label="Adicionar emoji personalizado">
 					+
 				</button>
 			</div>
 		</section>
 
-		<section class="message-template-help">
-			<p><strong>Ajuda</strong></p>
-			<p>Negrito: <strong>*texto*</strong></p>
-			<p>Itálico: <strong>_texto_</strong></p>
-			<p>Nome do cliente: <strong>{{ '{nome}' }}</strong></p>
-			<p>Quebra de linha: <strong>\n</strong></p>
-		</section>
-
 		<footer class="upload-modal-footer message-template-modal__footer">
-			<button class="btn btn-outline" type="button" (click)="close.emit()">Cancelar</button>
-			<button class="btn btn-primary message-template-modal__save" type="button" (click)="saveTemplate()" [disabled]="isSaving">
+			<button class="btn btn-outline" type="button" (click)="closeModal()" aria-keyshortcuts="Escape" title="Fechar (Esc)">Cancelar</button>
+			<button class="btn btn-primary message-template-modal__save" type="button" (click)="saveTemplate()" [disabled]="isSaving" aria-keyshortcuts="Control+Enter Meta+Enter" title="Salvar mensagem (Ctrl+Enter)">
 				<span class="material-symbols-outlined btn-icon-symbol">save</span>
 				<span class="btn-label">Salvar mensagem</span>
 			</button>

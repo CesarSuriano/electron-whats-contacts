@@ -60,11 +60,15 @@
 }
 
 .composer__row {
-  @apply relative flex items-center gap-2;
+  @apply relative flex items-end gap-2;
 }
 
 .composer__control-group {
   @apply relative;
+}
+
+.composer__input-shell {
+  @apply flex min-w-0 items-end;
 }
 
 .composer__control-group--quick-reply {
@@ -109,7 +113,7 @@
 }
 
 .composer__textarea {
-  @apply min-h-[46px] max-h-[140px] flex-1 resize-none rounded-full border-0 bg-wa-surface-alt px-4 py-3 text-[0.95rem] leading-[1.4] text-txt outline-none;
+  @apply min-h-[46px] flex-1 resize-none rounded-[1.55rem] border-0 bg-wa-surface-alt px-4 py-[0.72rem] text-[0.95rem] leading-[1.4] text-txt outline-none transition-[height] duration-75 ease-out;
   width: 100%;
 }
 

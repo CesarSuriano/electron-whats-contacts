@@ -3,6 +3,7 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 
 import { MessageTemplateModalComponent } from './message-template-modal.component';
 import { MessageTemplateService } from '../../services/message-template.service';
+import { renderMessageTemplateEditorHtml } from '../../helpers/message-template.helper';
 
 describe('MessageTemplateModalComponent', () => {
   let component: MessageTemplateModalComponent;
@@ -69,9 +70,9 @@ describe('MessageTemplateModalComponent', () => {
 
   it('initialises editableTemplate from initialTemplate on open', () => {
     component.isOpen = true;
-    component.initialTemplate = 'Olá {nome}!';
+    component.initialTemplate = 'Olá\\n{nome}!';
     component.ngOnChanges({ isOpen: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
-    expect(component.editableTemplate).toBe('Olá {nome}!');
+    expect(component.editableTemplate).toBe('Olá\n{nome}!');
   });
 
   it('resets editor state when isOpen becomes true', () => {
@@ -119,22 +120,65 @@ describe('MessageTemplateModalComponent', () => {
     expect(typeof component.previewHtml).toBe('string');
   });
 
+  it('insertLineBreak inserts a real new line into the template', () => {
+    component.editableTemplate = 'Oi';
+    (component as any).editorSelection = { start: 2, end: 2 };
+
+    component.insertLineBreak();
+
+    expect(component.editableTemplate).toBe('Oi\n');
+  });
+
+  it('saves on Ctrl+Enter', () => {
+    component.isOpen = true;
+    const saveSpy = spyOn(component, 'saveTemplate');
+
+    component.onModalKeydown(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+
+    expect(saveSpy).toHaveBeenCalled();
+  });
+
+  it('closes on Escape', () => {
+    component.isOpen = true;
+    const closeSpy = spyOn(component, 'closeModal');
+
+    component.onModalKeydown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('applies bold on Ctrl+B', () => {
+    const boldSpy = spyOn(component, 'applyBold');
+
+    component.onEditorKeydown(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true }));
+
+    expect(boldSpy).toHaveBeenCalled();
+  });
+
+  it('serializes the visual editor back to WhatsApp markup', () => {
+    const editor = document.createElement('div');
+    editor.innerHTML = renderMessageTemplateEditorHtml('*Olá* {nome}');
+    component.templateEditor = { nativeElement: editor } as any;
+
+    component.onEditorInput();
+
+    expect(component.editableTemplate).toBe('*Olá* {nome}');
+  });
+
   it('coalesces rapid typing into a single history snapshot', fakeAsync(() => {
-    const textarea = document.createElement('textarea');
+    const editor = document.createElement('div');
     component.isOpen = true;
     component.initialTemplate = 'Oi';
-    component.templateTextarea = { nativeElement: textarea } as any;
+    component.templateEditor = { nativeElement: editor } as any;
     component.ngOnChanges({ isOpen: { currentValue: true, previousValue: false, firstChange: false, isFirstChange: () => false } });
 
-    textarea.selectionStart = 3;
-    textarea.selectionEnd = 3;
-    component.editableTemplate = 'Oi!';
-    component.onTemplateInput();
+    editor.textContent = 'Oi!';
+    (component as any).editorSelection = { start: 3, end: 3 };
+    component.onEditorInput();
 
-    textarea.selectionStart = 4;
-    textarea.selectionEnd = 4;
-    component.editableTemplate = 'Oi!!';
-    component.onTemplateInput();
+    editor.textContent = 'Oi!!';
+    (component as any).editorSelection = { start: 4, end: 4 };
+    component.onEditorInput();
 
     tick(200);
 

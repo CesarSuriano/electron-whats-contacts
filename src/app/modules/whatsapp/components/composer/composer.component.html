@@ -71,28 +71,6 @@
       </button>
     </div>
 
-    <div class="composer__control-group composer__control-group--quick-reply" data-composer-popover-root>
-      <button
-        type="button"
-        class="composer__icon-button composer__icon-button--plain"
-        (click)="toggleQuickReplyMenu()"
-        [disabled]="disabled || isSending"
-        aria-label="Mensagens rápidas"
-        data-quick-reply-anchor
-      >
-        <span class="material-symbols-outlined composer__icon-button-symbol">bolt</span>
-      </button>
-
-      <app-quick-reply-menu
-        [isOpen]="isQuickReplyMenuOpen"
-        [query]="quickReplyQuery"
-        [contactName]="contactName"
-        (select)="onQuickReplySelected($event)"
-        (close)="closeQuickReplyMenu()"
-        (manage)="onQuickReplyManageRequested()"
-      ></app-quick-reply-menu>
-    </div>
-
     <div class="composer__control-group" data-composer-popover-root>
       <button
         type="button"
@@ -116,6 +94,28 @@
       </div>
 
       <input #fileInput type="file" hidden (change)="onFileSelected($event)" />
+    </div>
+
+    <div class="composer__control-group composer__control-group--quick-reply" data-composer-popover-root>
+      <button
+        type="button"
+        class="composer__icon-button composer__icon-button--plain"
+        (click)="toggleQuickReplyMenu()"
+        [disabled]="disabled || isSending"
+        aria-label="Mensagens rápidas"
+        data-quick-reply-anchor
+      >
+        <span class="material-symbols-outlined composer__icon-button-symbol">bolt</span>
+      </button>
+
+      <app-quick-reply-menu
+        [isOpen]="isQuickReplyMenuOpen"
+        [query]="quickReplyQuery"
+        [contactName]="contactName"
+        (select)="onQuickReplySelected($event)"
+        (close)="closeQuickReplyMenu()"
+        (manage)="onQuickReplyManageRequested()"
+      ></app-quick-reply-menu>
     </div>
 
     <div class="composer__input-shell flex-1">

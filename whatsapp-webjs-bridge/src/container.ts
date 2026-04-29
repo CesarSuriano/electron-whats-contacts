@@ -89,13 +89,13 @@ export function buildContainer(config: BridgeConfig): Container {
   const lidMap = new LidMap();
 
   const sessionManager = new SessionManager(client, sessionState, selfJidResolver, config.instanceName);
-  const contactsService = new ContactsService(client, sessionState, contactStore, lidMap, selfJidResolver, {
+  const contactsService = new ContactsService(client, sessionState, contactStore, eventStore, lidMap, selfJidResolver, {
     enableProfilePhotoFetch: config.enableProfilePhotoFetch
   });
   const historyService = new HistoryService(client, sessionState, lidMap, selfJidResolver, {
     enableHistoryEvents: config.enableHistoryEvents
   });
-  const messageService = new MessageService(client, sessionState, eventStore, contactStore, selfJidResolver);
+  const messageService = new MessageService(client, sessionState, eventStore, contactStore, lidMap, selfJidResolver);
   const ingestionService = new IngestionService(
     client,
     sessionState,
@@ -397,5 +397,12 @@ export function bindClientEvents(container: Container): void {
 
   contactsService.setOnContactsUpdated(contacts => {
     broadcaster.broadcast('contacts_updated', { contacts });
+  });
+
+  ingestionService.setOnUnresolvedLid(lidJid => {
+    if (sessionState.status !== 'ready') {
+      return;
+    }
+    void contactsService.triggerRefresh({ reason: `unresolved-lid:${lidJid}` });
   });
 }

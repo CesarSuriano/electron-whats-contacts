@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { BulkScheduleLifecycleEvent, BulkSendService } from './bulk-send.service';
 import { WhatsappStateService } from './whatsapp-state.service';
 import { WhatsappContact } from '../../../models/whatsapp.model';
@@ -12,6 +12,7 @@ function makeStateMock() {
   return {
     isSending: false,
     selectedContactJid: '',
+    resolveConversationJid: jasmine.createSpy('resolveConversationJid').and.callFake((jid: string) => jid),
     selectContact: jasmine.createSpy('selectContact'),
     setDraftText: jasmine.createSpy('setDraftText'),
     setDraftTextForJid: jasmine.createSpy('setDraftTextForJid'),
@@ -161,28 +162,39 @@ describe('BulkSendService', () => {
     expect(events[0].outcome).toBe('cancelled');
   });
 
-  it('advances to next after messageSent$ fires for current jid', () => {
+  it('waits half a second after messageSent$ before advancing to the next contact', fakeAsync(() => {
     const contacts = [makeContact('5511@c.us'), makeContact('5522@c.us')];
     service.start(contacts, 'msg');
-    // Simulate message sent for current contact
     (stateMock.messageSent$ as BehaviorSubject<{ jid: string; at: number } | null>).next({ jid: '5511@c.us', at: Date.now() });
-    const queue = (service as unknown as { queueSubject: BehaviorSubject<{ items: { jid: string; status: string }[] } | null> }).queueSubject.value;
-    expect(queue?.items[0].status).toBe('done');
-    expect(queue?.items[1].status).toBe('current');
-    expect(stateMock.clearDraftTextsForJids).toHaveBeenCalledWith(['5511@c.us']);
-  });
 
-  it('emits a completed schedule lifecycle event when a scheduled bulk finishes', () => {
+    let queue = (service as unknown as { queueSubject: BehaviorSubject<{ items: { jid: string; status: string }[] } | null> }).queueSubject.value;
+    expect(queue?.items[0].status).toBe('done');
+    expect(queue?.items[1].status).toBe('pending');
+    expect(service.isSendingCurrent).toBeTrue();
+    expect(stateMock.clearDraftTextsForJids).toHaveBeenCalledWith(['5511@c.us']);
+
+    tick(500);
+
+    queue = (service as unknown as { queueSubject: BehaviorSubject<{ items: { jid: string; status: string }[] } | null> }).queueSubject.value;
+    expect(queue?.items[1].status).toBe('current');
+    expect(service.isSendingCurrent).toBeFalse();
+
+    tick(120);
+  }));
+
+  it('emits a completed schedule lifecycle event when a scheduled bulk finishes', fakeAsync(() => {
     const events: BulkScheduleLifecycleEvent[] = [];
     service.scheduleLifecycle$.subscribe(value => events.push(value));
 
     service.start([makeContact('5511@c.us')], 'msg', undefined, { scheduleId: 'sch-1' });
     (stateMock.messageSent$ as BehaviorSubject<{ jid: string; at: number } | null>).next({ jid: '5511@c.us', at: Date.now() });
 
+    tick(500);
+
     expect(events.length).toBe(1);
     expect(events[0].scheduleId).toBe('sch-1');
     expect(events[0].outcome).toBe('completed');
-  });
+  }));
 
   it('sendCurrent delegates text sending to the state service', () => {
     stateMock.getDraftTextForJid.and.returnValue('Mensagem pronta');
@@ -205,6 +217,22 @@ describe('BulkSendService', () => {
     expect(jid).toBe('5511@c.us');
     expect(file).toEqual(jasmine.any(File));
     expect(caption).toBe('Legenda');
+  });
+
+  it('opens and sends using the resolved canonical jid when the queue item jid is synthetic', () => {
+    stateMock.resolveConversationJid.and.callFake((jid: string) =>
+      jid === '551187654321@c.us' ? '5511987654321@c.us' : jid
+    );
+    stateMock.getDraftTextForJid.and.callFake((jid: string) =>
+      jid === '5511987654321@c.us' ? 'Mensagem pronta' : ''
+    );
+
+    service.start([makeContact('551187654321@c.us', 'Ana')], 'Ola {nome}');
+    service.sendCurrent();
+
+    expect(stateMock.selectContact).toHaveBeenCalledWith('5511987654321@c.us', { loadHistory: false, markAsRead: false });
+    expect(stateMock.setDraftTextForJid).toHaveBeenCalledWith('5511987654321@c.us', 'Ola Ana');
+    expect(stateMock.sendText).toHaveBeenCalledWith('5511987654321@c.us', 'Mensagem pronta');
   });
 
   it('does not mutate the queue while the current item is still sending', () => {

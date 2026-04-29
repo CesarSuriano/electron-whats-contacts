@@ -1,4 +1,5 @@
 import type { ContactEntry } from '../domain/types.js';
+import { isGroupJid } from '../utils/jid.js';
 import { normalizePhone } from '../utils/phone.js';
 
 export interface OutboundContactUpdate {
@@ -57,7 +58,7 @@ export class ContactStore {
       lastMessageAck: null,
       unreadCount: 0,
       labels: [],
-      isGroup: false,
+      isGroup: isGroupJid(jid),
       fromGetChats: false,
       getChatsTimestampMs: 0,
       ...overrides

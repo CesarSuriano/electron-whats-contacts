@@ -96,6 +96,31 @@ describe('WhatsappStateService', () => {
     it('returns null when contacts list is empty', () => {
       expect(service.getContact('unknown')).toBeNull();
     });
+
+    it('re-emits the selected contact when only the phone changes', () => {
+      const emitted: Array<WhatsappContact | null> = [];
+      service.selectedContact$.subscribe(contact => emitted.push(contact));
+
+      (service as any).contactsSubject.next([
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511912345678',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+      (service as any).selectedContactJidSubject.next('5511987654321@c.us');
+      (service as any).contactsSubject.next([
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      expect(emitted.at(-1)?.phone).toBe('5511987654321');
+    });
   });
 
   // ─── getMessagesFor ─────────────────────────────────────────────────────────
@@ -176,6 +201,50 @@ describe('WhatsappStateService', () => {
       tick();
 
       expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 150, false);
+    }));
+
+    it('collapses equivalent contacts from bootstrap into the preferred canonical entry', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(of([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alias',
+          found: true,
+          lastMessageAt: '2024-01-01T00:00:00.000Z',
+          lastMessagePreview: 'alias',
+          unreadCount: 2,
+          labels: ['vip']
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true,
+          fromGetChats: true,
+          getChatsTimestampMs: 5_000,
+          lastMessageAt: '2024-01-01T00:01:00.000Z',
+          lastMessagePreview: 'canonico'
+        }
+      ]));
+
+      let contacts: WhatsappContact[] = [];
+      service.contacts$.subscribe(value => (contacts = value));
+
+      service.loadInstances();
+      tick();
+
+      expect(contacts.length).toBe(1);
+      expect(contacts[0]).toEqual(jasmine.objectContaining({
+        jid: '5511987654321@c.us',
+        phone: '5511987654321',
+        name: 'Alice',
+        lastMessagePreview: 'canonico',
+        unreadCount: 2,
+        labels: ['vip']
+      }));
+
+      const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
+      expect(calledJids).toEqual(['5511987654321@c.us']);
     }));
 
     it('caps bootstrap context loading to the first 100 contacts', fakeAsync(() => {
@@ -356,6 +425,28 @@ describe('WhatsappStateService', () => {
       expect(messages.some(m => m.text === 'Olá' && m.contactJid === 'jid1')).toBe(true);
     });
 
+    it('resolves the canonical conversation jid before sending', () => {
+      gateway.sendMessage.and.returnValue(of({ ok: true }));
+      (service as any).contactsSubject.next([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alias',
+          found: true
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      service.sendText('551187654321@c.us', 'Olá').subscribe();
+
+      expect(gateway.sendMessage).toHaveBeenCalledWith('', '5511987654321@c.us', 'Olá');
+    });
+
     it('sets error on failure', () => {
       gateway.sendMessage.and.returnValue(throwError(() => new Error('send failed')));
 
@@ -365,6 +456,31 @@ describe('WhatsappStateService', () => {
       service.sendText('jid1', 'Oi').subscribe({ error: () => {} });
 
       expect(errorMsg).toBeTruthy();
+    });
+  });
+
+  describe('sendMedia', () => {
+    it('resolves the canonical conversation jid before sending media', () => {
+      gateway.sendMedia.and.returnValue(of({ ok: true }));
+      (service as any).contactsSubject.next([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alias',
+          found: true
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+      const file = new File(['abc'], 'teste.txt', { type: 'text/plain' });
+
+      service.sendMedia('551187654321@c.us', file, 'Legenda').subscribe();
+
+      expect(gateway.sendMedia).toHaveBeenCalledWith('', '5511987654321@c.us', file, 'Legenda');
     });
   });
 
@@ -442,6 +558,43 @@ describe('WhatsappStateService', () => {
       service.selectContact(mockContact.jid);
 
       expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 180, true);
+    });
+
+    it('reconciles a synthetic selected jid to the equivalent loaded contact after contacts refresh', fakeAsync(() => {
+      const canonicalContact: WhatsappContact = {
+        jid: '5511987654321@c.us',
+        phone: '5511987654321',
+        name: 'Alice',
+        found: true
+      };
+
+      gateway.loadContacts.and.returnValue(of([canonicalContact]));
+
+      let selectedJid = '';
+      service.selectedContactJid$.subscribe(jid => (selectedJid = jid));
+
+      service.selectContact('551187654321@c.us', { loadHistory: false, markAsRead: false });
+      expect(selectedJid).toBe('551187654321@c.us');
+
+      (service as unknown as { selectedInstanceSubject: { next(value: string): void } }).selectedInstanceSubject.next(mockInstance.name);
+      void (service as unknown as { loadContacts(options?: { bootstrap?: boolean }): Promise<void> }).loadContacts();
+      tick();
+
+      expect(selectedJid).toBe(canonicalContact.jid);
+    }));
+
+    it('exposes a synthetic selected contact for unknown personal jid', () => {
+      let selected: WhatsappContact | null = null;
+      service.selectedContact$.subscribe(contact => (selected = contact));
+
+      service.selectContact('5511988776655@c.us', { loadHistory: false, markAsRead: false });
+
+      expect(selected).toEqual(jasmine.objectContaining({
+        jid: '5511988776655@c.us',
+        phone: '5511988776655',
+        name: '5511988776655',
+        found: false
+      }));
     });
   });
 
@@ -603,6 +756,109 @@ describe('WhatsappStateService', () => {
       const contacts = (service as any).contactsSubject.value as WhatsappContact[];
       expect(contacts[0]?.phone).toBe('');
     });
+
+    it('does not add a duplicate synthetic contact when an equivalent canonical contact already exists', () => {
+      (service as any).contactsSubject.next([
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      (service as any).ensureContactForEvent({
+        id: 'evt-phone-3',
+        source: 'ws',
+        receivedAt: '2024-01-01T00:00:00.000Z',
+        isFromMe: false,
+        chatJid: '551187654321@c.us',
+        phone: '551187654321',
+        text: 'oi',
+        payload: {}
+      });
+
+      const contacts = (service as any).contactsSubject.value as WhatsappContact[];
+      expect(contacts.length).toBe(1);
+      expect(contacts[0].jid).toBe('5511987654321@c.us');
+    });
+
+    it('maps equivalent event jids into the canonical contact conversation', () => {
+      (service as any).contactsSubject.next([
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      const mapped = (service as any).mapEventsToMessages([
+        {
+          id: 'evt-phone-4',
+          source: 'ws',
+          receivedAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          chatJid: '551187654321@c.us',
+          phone: '551187654321',
+          text: 'oi',
+          payload: {}
+        }
+      ]);
+
+      expect(mapped[0].contactJid).toBe('5511987654321@c.us');
+    });
+
+    it('prefers the richer canonical contact even when the exact shorter variant is also loaded', () => {
+      (service as any).contactsSubject.next([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alice (alias)',
+          found: true
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      expect(service.resolveConversationJid('551187654321@c.us')).toBe('5511987654321@c.us');
+    });
+
+    it('maps an exact shorter variant event into the richer canonical contact when both are loaded', () => {
+      (service as any).contactsSubject.next([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alice (alias)',
+          found: true
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      const mapped = (service as any).mapEventsToMessages([
+        {
+          id: 'evt-phone-5',
+          source: 'ws',
+          receivedAt: '2024-01-01T00:00:00.000Z',
+          isFromMe: false,
+          chatJid: '551187654321@c.us',
+          phone: '551187654321',
+          text: 'oi',
+          payload: {}
+        }
+      ]);
+
+      expect(mapped[0].contactJid).toBe('5511987654321@c.us');
+    });
   });
 
   describe('requestConversationContext', () => {
@@ -628,6 +884,28 @@ describe('WhatsappStateService', () => {
       tick(151);
 
       expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 150, false);
+    }));
+
+    it('resolves the canonical conversation jid before warming preview history', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        {
+          jid: '551187654321@c.us',
+          phone: '551187654321',
+          name: 'Alias',
+          found: true
+        },
+        {
+          jid: '5511987654321@c.us',
+          phone: '5511987654321',
+          name: 'Alice',
+          found: true
+        }
+      ]);
+
+      service.requestConversationContext('551187654321@c.us');
+      tick(151);
+
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, '5511987654321@c.us', 10, false);
     }));
 
     it('does not refetch the same warmed context twice after loading preview history', fakeAsync(() => {

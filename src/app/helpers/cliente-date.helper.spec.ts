@@ -1,5 +1,12 @@
 import { Cliente } from '../models/cliente.model';
-import { getBirthdayRowClass, compareClientes } from './cliente-date.helper';
+import {
+  buildRecentClienteIdSet,
+  calculateBirthdayStatus,
+  compareClientes,
+  daysUntilNextBirthday,
+  getBirthdayRowClass,
+  parseClienteDate
+} from './cliente-date.helper';
 
 function makeCliente(overrides: Partial<Cliente> = {}): Cliente {
   return {
@@ -15,21 +22,6 @@ function makeCliente(overrides: Partial<Cliente> = {}): Cliente {
 }
 
 describe('getBirthdayRowClass', () => {
-  const RealDate = Date;
-
-  function mockToday(isoDate: string) {
-    const fixed = new Date(isoDate + 'T12:00:00');
-    spyOn(globalThis, 'Date').and.callFake(function (...args: unknown[]) {
-      return args.length === 0 ? fixed : new RealDate(...(args as ConstructorParameters<typeof Date>));
-    } as unknown as DateConstructor);
-  }
-
-  afterEach(() => {
-    if (jasmine.isSpy(globalThis.Date)) {
-      (globalThis.Date as unknown as jasmine.Spy).and.callThrough();
-    }
-  });
-
   it('returns row-birthday-today when birthday is today', () => {
     const c = makeCliente({ birthdayStatus: 'today' });
     expect(getBirthdayRowClass(c)).toBe('row-birthday-today');
@@ -51,7 +43,36 @@ describe('getBirthdayRowClass', () => {
   });
 });
 
+describe('birthday date calculations', () => {
+  it('parses cliente dates in Brazilian and ISO formats', () => {
+    expect(parseClienteDate('25/04/2026')?.getTime()).toBe(new Date(2026, 3, 25).getTime());
+    expect(parseClienteDate('2026-04-25')?.getTime()).toBe(new Date(2026, 3, 25).getTime());
+  });
+
+  it('keeps tomorrow as 1 day away even late at night', () => {
+    const reference = new Date(2026, 3, 25, 23, 59, 59);
+
+    expect(daysUntilNextBirthday('1990-04-26', reference)).toBe(1);
+    expect(calculateBirthdayStatus('1990-04-26', reference)).toBe('upcoming');
+  });
+
+  it('recognizes today correctly regardless of hour', () => {
+    const reference = new Date(2026, 3, 25, 23, 59, 59);
+
+    expect(daysUntilNextBirthday('1990-04-25', reference)).toBe(0);
+    expect(calculateBirthdayStatus('1990-04-25', reference)).toBe('today');
+  });
+});
+
 describe('compareClientes', () => {
+  const RealDate = Date;
+
+  afterEach(() => {
+    if (jasmine.isSpy(globalThis.Date)) {
+      (globalThis.Date as unknown as jasmine.Spy).and.callThrough();
+    }
+  });
+
   it('sorts ascending by nome', () => {
     const a = makeCliente({ nome: 'Ana' });
     const b = makeCliente({ nome: 'Bia' });
@@ -76,9 +97,44 @@ describe('compareClientes', () => {
     expect(result).toBeLessThanOrEqual(0);
   });
 
+  it('keeps birthdays from tomorrow after today even near midnight', () => {
+    const fixedNow = new RealDate(2026, 3, 25, 23, 59, 59);
+    spyOn(globalThis, 'Date').and.callFake(function (...args: unknown[]) {
+      if (args.length === 0) {
+        return new RealDate(fixedNow.getTime());
+      }
+
+      return new RealDate(...(args as ConstructorParameters<typeof Date>));
+    } as unknown as DateConstructor);
+
+    const todayBirthday = makeCliente({ dataNascimento: '1990-04-25' });
+    const tomorrowBirthday = makeCliente({ dataNascimento: '1990-04-26' });
+
+    expect(compareClientes(todayBirthday, tomorrowBirthday, 'dataNascimento', 'asc')).toBeLessThan(0);
+  });
+
   it('returns 0 for equal values', () => {
     const a = makeCliente({ nome: 'Ana' });
     const b = makeCliente({ nome: 'Ana' });
     expect(compareClientes(a, b, 'nome', 'asc')).toBe(0);
+  });
+
+  it('sorts by dataCadastro placing the most recent clients first when desc', () => {
+    const recent = makeCliente({ dataCadastro: '2026-04-25' });
+    const older = makeCliente({ dataCadastro: '2026-04-20' });
+
+    expect(compareClientes(recent, older, 'dataCadastro', 'desc')).toBeLessThan(0);
+  });
+});
+
+describe('buildRecentClienteIdSet', () => {
+  it('returns all clients registered on the most recent day', () => {
+    const clientes = [
+      makeCliente({ id: 1, dataCadastro: '2026-04-24' }),
+      makeCliente({ id: 2, dataCadastro: '25/04/2026' }),
+      makeCliente({ id: 3, dataCadastro: '2026-04-25' })
+    ];
+
+    expect(buildRecentClienteIdSet(clientes)).toEqual(new Set([2, 3]));
   });
 });

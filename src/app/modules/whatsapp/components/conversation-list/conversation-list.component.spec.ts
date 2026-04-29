@@ -1,5 +1,5 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 
 import { AppLabel } from '../../../../models/app-label.model';
@@ -144,6 +144,15 @@ describe('ConversationListComponent', () => {
     expect(component.formatLastMessagePreview(contact)).toBe('Foto');
   });
 
+  it('formats the conversation jid when the phone field conflicts with it', () => {
+    const contact: WhatsappContact = {
+      ...makeContact('5511987654321@c.us', 'Ana'),
+      phone: '5511912345678'
+    };
+
+    expect(component.formatPhone(contact)).toBe('+55 (11) 98765-4321');
+  });
+
   it('returns image icon for image media preview', () => {
     const contact: WhatsappContact = {
       ...makeContact('a@c.us', 'Ana'),
@@ -167,6 +176,29 @@ describe('ConversationListComponent', () => {
 
   it('isFlashing returns false for non-flashing jid', () => {
     expect(component.isFlashing('unknown@c.us')).toBeFalse();
+  });
+
+  it('clears the flash shortly after a conversation moves up', fakeAsync(() => {
+    const first = makeContact('a@c.us', 'Ana');
+    const second = makeContact('b@c.us', 'Bia');
+
+    (component as any).detectAndFlashMoved([first, second]);
+    (component as any).detectAndFlashMoved([second, first]);
+
+    expect(component.isFlashing('b@c.us')).toBeTrue();
+
+    tick(649);
+    expect(component.isFlashing('b@c.us')).toBeTrue();
+
+    tick(1);
+    expect(component.isFlashing('b@c.us')).toBeFalse();
+  }));
+
+  it('does not flash the currently active conversation row', () => {
+    selectedJid$.next('b@c.us');
+    component.flashingJids = new Set(['b@c.us']);
+
+    expect(component.isFlashing('b@c.us')).toBeFalse();
   });
 
   describe('applyFilter / filteredContacts', () => {

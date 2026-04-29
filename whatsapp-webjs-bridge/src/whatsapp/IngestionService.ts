@@ -15,6 +15,7 @@ import {
 } from '../utils/jid.js';
 import { getContactName, extractLastMessagePreview } from '../utils/contact.js';
 import { isIgnoredWhatsappMessage, resolveMessagePreviewText } from '../utils/message.js';
+import { resolvePhoneFromLid } from '../utils/lidResolver.js';
 import { toIsoFromUnixTimestamp } from '../utils/time.js';
 
 const EVENT_SEED_CHAT_LIMIT = 80;
@@ -47,9 +48,15 @@ function parseIsoTimestampMs(value: string | null | undefined): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+type UnresolvedLidCallback = (lidJid: string) => void;
+
+const UNRESOLVED_LID_NOTIFY_COOLDOWN_MS = 4000;
+
 export class IngestionService {
   private lastSeedEventsAt = 0;
   private seedEventsPromise: Promise<void> | null = null;
+  private onUnresolvedLid: UnresolvedLidCallback | null = null;
+  private lastUnresolvedLidNotifyAt = 0;
 
   constructor(
     private readonly client: WebJsClient,
@@ -59,6 +66,26 @@ export class IngestionService {
     private readonly lidMap: LidMap,
     private readonly selfJidResolver: SelfJidResolver
   ) {}
+
+  setOnUnresolvedLid(callback: UnresolvedLidCallback | null): void {
+    this.onUnresolvedLid = callback;
+  }
+
+  private notifyUnresolvedLid(lidJid: string): void {
+    if (!this.onUnresolvedLid) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastUnresolvedLidNotifyAt < UNRESOLVED_LID_NOTIFY_COOLDOWN_MS) {
+      return;
+    }
+    this.lastUnresolvedLidNotifyAt = now;
+    try {
+      this.onUnresolvedLid(lidJid);
+    } catch {
+      // best effort
+    }
+  }
 
   resolveMessageChatJid(message: RawMessage | null | undefined): string {
     if (!message) {
@@ -117,12 +144,31 @@ export class IngestionService {
       if (typeof message.getContact !== 'function') {
         return null;
       }
+      const sourceLidDigits = normalizePhone(this.resolveMessageChatJid(message));
+      const isMirroredLidAlias = (candidate: string): boolean => {
+        return Boolean(sourceLidDigits) && normalizePhone(candidate) === sourceLidDigits;
+      };
+
       const contact = await message.getContact();
-      const num = typeof contact.number === 'string' && contact.number.length >= 8
-        ? contact.number
-        : normalizePhone(contact.id?._serialized || '');
-      if (num) {
-        return `${num}@c.us`;
+      const rawJid = typeof contact.id?._serialized === 'string' ? contact.id._serialized.trim() : '';
+      const lidUser = typeof contact.id?.user === 'string'
+        ? contact.id.user.trim()
+        : normalizePhone(rawJid);
+      const number = typeof contact.number === 'string' ? contact.number.trim() : '';
+
+      if (number.length >= 8 && number !== lidUser && !isMirroredLidAlias(number)) {
+        return `${number}@c.us`;
+      }
+
+      if (isPersonalJid(rawJid) && isValidPersonalJid(rawJid) && !isMirroredLidAlias(rawJid)) {
+        return rawJid;
+      }
+
+      if (isLinkedId(rawJid)) {
+        const fromStore = await resolvePhoneFromLid(this.client, rawJid);
+        if (fromStore && !this.selfJidResolver.isSelfJid(fromStore) && !isMirroredLidAlias(fromStore)) {
+          return fromStore;
+        }
       }
     } catch {
       // silencioso
@@ -141,6 +187,17 @@ export class IngestionService {
         event.phone = normalizePhone(toJid);
       }
     }
+  }
+
+  private registerCanonicalLid(canonicalJid: string, lidJid: string): void {
+    if (!canonicalJid || !lidJid) {
+      return;
+    }
+
+    const displacedCanonicals = this.lidMap.set(canonicalJid, lidJid);
+    displacedCanonicals.forEach(displacedCanonical => {
+      this.mergeAliasContactIntoCanonical(canonicalJid, displacedCanonical);
+    });
   }
 
   private mergeAliasContactIntoCanonical(canonicalJid: string, aliasJid: string): void {
@@ -202,20 +259,26 @@ export class IngestionService {
       const resolved = await this.resolveContactPhone(message);
       if (resolved) {
         console.log('[whatsapp-webjs-bridge] LID resolvido:', chatJid, '->', resolved);
-        this.lidMap.set(resolved, chatJid);
+        this.registerCanonicalLid(resolved, chatJid);
         chatJid = resolved;
       } else {
-        console.log('[whatsapp-webjs-bridge] LID sem resolução, descartado:', chatJid);
-        return;
+        const knownCanonical = this.lidMap.findCanonical(chatJid);
+        if (knownCanonical) {
+          console.log('[whatsapp-webjs-bridge] LID reaproveitado do mapa:', chatJid, '->', knownCanonical);
+          chatJid = knownCanonical;
+        } else {
+          console.log('[whatsapp-webjs-bridge] LID sem canônico confiável, mantendo linked-id:', chatJid);
+          this.notifyUnresolvedLid(chatJid);
+        }
       }
     }
 
-    if (originalLid) {
-      this.lidMap.set(chatJid, originalLid);
+    if (originalLid && chatJid !== originalLid) {
+      this.registerCanonicalLid(chatJid, originalLid);
       this.mergeAliasContactIntoCanonical(chatJid, originalLid);
     }
 
-    if (!isPersonalJid(chatJid) || this.selfJidResolver.isSelfJid(chatJid)) {
+    if ((!isPersonalJid(chatJid) && !isLinkedId(chatJid)) || this.selfJidResolver.isSelfJid(chatJid)) {
       console.log('[whatsapp-webjs-bridge] mensagem descartada (sem chat 1:1):', {
         source,
         from: message.from,
@@ -286,7 +349,7 @@ export class IngestionService {
         contactName = '';
       }
 
-      const phone = normalizePhone(chatJid);
+      const phone = isLinkedId(chatJid) ? '' : normalizePhone(chatJid);
       this.contactStore.set(chatJid, this.contactStore.createDefault(chatJid, {
         phone,
         name: contactName || phone,
@@ -322,13 +385,21 @@ export class IngestionService {
       return;
     }
 
-    const chatJid = this.resolveMessageChatJid(message);
-    if (!isPersonalJid(chatJid) || this.selfJidResolver.isSelfJid(chatJid)) {
+    let chatJid = this.resolveMessageChatJid(message);
+    if (isLinkedId(chatJid)) {
+      const knownCanonical = this.lidMap.findCanonical(chatJid);
+      if (knownCanonical) {
+        chatJid = knownCanonical;
+      }
+    }
+
+    if ((!isPersonalJid(chatJid) && !isLinkedId(chatJid)) || this.selfJidResolver.isSelfJid(chatJid)) {
       return;
     }
 
     const text = resolveMessagePreviewText(message);
     const receivedAt = toIsoFromUnixTimestamp(message.timestamp);
+    const messageId = typeof message.id === 'object' && message.id?._serialized ? message.id._serialized : '';
     const getChatsTimestampMs = Number(message.timestamp || 0) > 0
       ? Number(message.timestamp) * 1000
       : Date.now();
@@ -341,6 +412,24 @@ export class IngestionService {
     }
 
     console.log('[whatsapp-webjs-bridge] outbound externo captado:', { source, chatJid });
+
+    this.eventStore.pushEvent({
+      id: messageId,
+      source,
+      isFromMe: true,
+      chatJid,
+      text,
+      receivedAt,
+      payload: {
+        id: messageId,
+        timestamp: message.timestamp || 0,
+        type: message.type || '',
+        hasMedia: Boolean(message.hasMedia),
+        mediaMimetype: typeof message?._data?.mimetype === 'string' ? message._data.mimetype : '',
+        mediaFilename: typeof message?._data?.filename === 'string' ? message._data.filename : '',
+        ack: typeof message.ack === 'number' ? message.ack : 0
+      }
+    });
 
     if (!existing) {
       const phone = normalizePhone(chatJid);

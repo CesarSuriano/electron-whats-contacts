@@ -4,26 +4,44 @@ import express from 'express';
 import request from 'supertest';
 import { HistoryController } from '../../src/controllers/HistoryController.js';
 import { EventStore } from '../../src/state/EventStore.js';
+import type { RawChat, RawMessage } from '../../src/domain/types.js';
 import type { HistoryService } from '../../src/whatsapp/HistoryService.js';
 import type { MessageService } from '../../src/whatsapp/MessageService.js';
 import type { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 
-function buildApp() {
+function buildApp(overrides: {
+  historyService?: Partial<HistoryService>;
+  messageService?: Partial<MessageService>;
+  selfJidResolver?: Partial<SelfJidResolver>;
+} = {}) {
   const eventStore = new EventStore();
 
   const historyService = {
     acquireHistorySlot: async () => undefined,
     releaseHistorySlot: () => undefined,
-    resolveChatsForHistory: async () => []
+    resolveChatsForHistory: async () => [],
+    fetchChatHistoryWithRecovery: async () => []
+      
+  ,
+    ...overrides.historyService
   } as unknown as HistoryService;
 
   const messageService = {
-    requireReady: () => null
+    requireReady: () => null,
+    shouldIncludeHistoryMessage: () => true,
+    resolveHistoryImageDataUrl: async () => null,
+    ...overrides.messageService
   } as unknown as MessageService;
 
   const selfJidResolver = {
-    getSerializedMessageId: () => '',
-    resolveIsFromMe: () => false
+    getSerializedMessageId: (message: RawMessage | null | undefined) => {
+      if (message?.id && typeof message.id === 'object' && typeof message.id._serialized === 'string') {
+        return message.id._serialized;
+      }
+      return '';
+    },
+    resolveIsFromMe: () => false,
+    ...overrides.selfJidResolver
   } as unknown as SelfJidResolver;
 
   const controller = new HistoryController(
@@ -82,5 +100,32 @@ describe('GET /api/whatsapp/chats/:jid/messages', () => {
     assert.equal(res.body.events.length, 2);
     assert.equal(res.body.events[0].id, 'evt-1');
     assert.equal(res.body.events[1].id, 'evt-3');
+  });
+
+  it('returns the resolved chat jid instead of the requested alias when loading history', async () => {
+    const resolvedChat = {
+      id: { _serialized: '5511987654321@c.us' },
+      name: 'Alice'
+    } as RawChat;
+    const message = {
+      id: { _serialized: 'msg-1' },
+      chatId: { _serialized: '5511987654321@c.us' },
+      body: 'historico',
+      t: 1714212000
+    } as RawMessage;
+
+    const { app } = buildApp({
+      historyService: {
+        resolveChatsForHistory: async () => [resolvedChat],
+        fetchChatHistoryWithRecovery: async () => [message]
+      }
+    });
+
+    const res = await request(app).get('/api/whatsapp/chats/551187654321%40c.us/messages?limit=10');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.events.length, 1);
+    assert.equal(res.body.events[0].chatJid, '5511987654321@c.us');
+    assert.equal(res.body.events[0].phone, '5511987654321');
   });
 });

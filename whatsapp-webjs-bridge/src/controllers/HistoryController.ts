@@ -16,6 +16,44 @@ interface HistoryStage extends HistoryDiagnostics {
   fatalError?: string;
 }
 
+interface HistoryMessageEntry {
+  message: RawMessage;
+  chatJid: string;
+}
+
+function readSerializedJidCandidate(candidate: unknown): string {
+  if (typeof candidate === 'string') {
+    return candidate.trim();
+  }
+
+  if (candidate && typeof candidate === 'object') {
+    const record = candidate as { _serialized?: unknown };
+    if (typeof record._serialized === 'string') {
+      return record._serialized.trim();
+    }
+  }
+
+  return '';
+}
+
+function resolveHistoryEventChatJid(entry: HistoryMessageEntry, requestedJid: string): string {
+  const message = entry.message;
+
+  const messageChatJid = (
+    readSerializedJidCandidate(message.chatId)
+    || readSerializedJidCandidate(message.chat?.id)
+    || readSerializedJidCandidate(typeof message.id === 'object' ? message.id?.remote : undefined)
+    || entry.chatJid
+    || requestedJid
+  );
+
+  if (messageChatJid.endsWith('@lid') && requestedJid.endsWith('@c.us')) {
+    return requestedJid;
+  }
+
+  return messageChatJid;
+}
+
 export class HistoryController {
   constructor(
     private readonly historyService: HistoryService,
@@ -68,14 +106,15 @@ export class HistoryController {
       }
 
       const chatsToLoad = deep ? chats.slice(0, 3) : chats.slice(0, 1);
-      const history: RawMessage[] = [];
+      const history: HistoryMessageEntry[] = [];
       const seenMessageIds = new Set<string>();
       const stages: HistoryStage[] = [];
 
       for (const chat of chatsToLoad) {
+        const sourceChatJid = chat?.id?._serialized || '';
         const stage: HistoryStage | null = debug
           ? {
-            chatId: chat?.id?._serialized || '',
+            chatId: sourceChatJid,
             chatName: typeof chat?.name === 'string' ? chat.name : ''
           }
           : null;
@@ -102,18 +141,19 @@ export class HistoryController {
             }
             seenMessageIds.add(serializedId);
           }
-          history.push(message);
+          history.push({ message, chatJid: sourceChatJid });
         });
       }
 
-      history.sort((a, b) => readMessageTimestampSeconds(a) - readMessageTimestampSeconds(b));
+      history.sort((a, b) => readMessageTimestampSeconds(a.message) - readMessageTimestampSeconds(b.message));
       if (history.length > limit) {
         history.splice(0, history.length - limit);
       }
 
-      const filteredHistory = history.filter(message => this.messageService.shouldIncludeHistoryMessage(message));
+      const filteredHistory = history.filter(entry => this.messageService.shouldIncludeHistoryMessage(entry.message));
 
-      const eventsHistory: WhatsappEvent[] = (await Promise.all(filteredHistory.map(async message => {
+      const eventsHistory: WhatsappEvent[] = (await Promise.all(filteredHistory.map(async entry => {
+        const message = entry.message;
         const inlineImageDataUrl = await this.messageService.resolveHistoryImageDataUrl(message);
         const mediaMimetypeFromData = typeof message?._data?.mimetype === 'string'
           ? message._data.mimetype.trim()
@@ -130,14 +170,15 @@ export class HistoryController {
         const serializedId = this.selfJidResolver.getSerializedMessageId(message) || randomUUID();
         const hasMedia = Boolean(message.hasMedia) || Boolean(mediaMimetype) || Boolean(inlineImageDataUrl);
         const ack = typeof message.ack === 'number' ? message.ack : null;
+        const eventChatJid = resolveHistoryEventChatJid(entry, requestedJid);
 
         return {
           id: serializedId,
           source: 'webjs-chat-history',
           receivedAt,
           isFromMe: this.selfJidResolver.resolveIsFromMe(message),
-          chatJid: requestedJid,
-          phone: normalizePhone(requestedJid),
+          chatJid: eventChatJid,
+          phone: normalizePhone(eventChatJid),
           text: readMessageText(message),
           ack,
           payload: {

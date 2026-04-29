@@ -35,6 +35,7 @@ export interface BulkScheduleLifecycleEvent {
 
 const STORAGE_KEY = 'uniq-system.whatsapp.bulk-queue';
 const QUEUE_PERSIST_DEBOUNCE_MS = 120;
+const POST_SEND_DELAY_MS = 500;
 
 @Injectable({ providedIn: 'root' })
 export class BulkSendService implements OnDestroy {
@@ -45,6 +46,7 @@ export class BulkSendService implements OnDestroy {
   private persistTimerId: number | null = null;
   private pendingPersistQueue: BulkQueue | null = null;
   private readonly draftStateJids = new Set<string>();
+  private postSendDelayTimerId: number | null = null;
 
   queue$: Observable<BulkQueue | null> = this.queueSubject.asObservable();
   scheduleLifecycle$: Observable<BulkScheduleLifecycleEvent> = this.scheduleLifecycleSubject.asObservable();
@@ -55,6 +57,7 @@ export class BulkSendService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearPostSendDelay();
     this.flushPendingPersist();
     this.destroy$.next();
     this.destroy$.complete();
@@ -71,7 +74,7 @@ export class BulkSendService implements OnDestroy {
   }
 
   get isSendingCurrent(): boolean {
-    return this.state.isSending;
+    return this.state.isSending || this.postSendDelayTimerId !== null;
   }
 
   get canSendCurrent(): boolean {
@@ -81,7 +84,9 @@ export class BulkSendService implements OnDestroy {
       return false;
     }
 
-    return !!this.state.getDraftTextForJid(current.jid).trim() || !!this.resolveCurrentImageDataUrl(current.jid, queue);
+    const currentJid = this.resolveQueueItemJid(current.jid);
+
+    return !!this.state.getDraftTextForJid(currentJid).trim() || !!this.resolveCurrentImageDataUrl(currentJid, queue);
   }
 
   start(contacts: WhatsappContact[], template: string, imageDataUrl?: string, options: BulkStartOptions = {}): void {
@@ -89,6 +94,7 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
+    this.clearPostSendDelay();
     this.clearDraftStateForJids(Array.from(this.draftStateJids));
 
     const queue: BulkQueue = {
@@ -136,9 +142,10 @@ export class BulkSendService implements OnDestroy {
     }
 
     const current = this.currentItem;
+    const currentJid = current ? this.resolveQueueItemJid(current.jid) : '';
 
     this.updateCurrent('skipped');
-    this.clearDraftStateForJids(current ? [current.jid] : []);
+    this.clearDraftStateForJids(currentJid ? [currentJid] : []);
     this.advanceToNext();
   }
 
@@ -149,8 +156,9 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
-    const caption = this.state.getDraftTextForJid(current.jid).trim();
-    const imageDataUrl = this.resolveCurrentImageDataUrl(current.jid, queue);
+    const currentJid = this.resolveQueueItemJid(current.jid);
+    const caption = this.state.getDraftTextForJid(currentJid).trim();
+    const imageDataUrl = this.resolveCurrentImageDataUrl(currentJid, queue);
 
     if (imageDataUrl) {
       const file = this.dataUrlToFile(imageDataUrl);
@@ -158,7 +166,7 @@ export class BulkSendService implements OnDestroy {
         return;
       }
 
-      this.state.sendMedia(current.jid, file, caption).subscribe({
+      this.state.sendMedia(currentJid, file, caption).subscribe({
         next: () => {},
         error: () => {}
       });
@@ -169,7 +177,7 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
-    this.state.sendText(current.jid, caption).subscribe({
+    this.state.sendText(currentJid, caption).subscribe({
       next: () => {},
       error: () => {}
     });
@@ -204,17 +212,23 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
-    if (this.state.selectedContactJid !== current.jid) {
-      void this.state.selectContact(current.jid, { loadHistory: false, markAsRead: false });
+    const currentJid = this.resolveQueueItemJid(current.jid);
+
+    if (this.state.selectedContactJid !== currentJid) {
+      void this.state.selectContact(currentJid, { loadHistory: false, markAsRead: false });
     }
 
-    this.state.setDraftTextForJid(current.jid, renderBulkTemplate(queue.template, current.name));
-    this.state.setDraftImageDataUrlForJid(current.jid, queue.imageDataUrl ?? null);
-    this.draftStateJids.add(current.jid);
+    this.state.setDraftTextForJid(currentJid, renderBulkTemplate(queue.template, current.name));
+    this.state.setDraftImageDataUrlForJid(currentJid, queue.imageDataUrl ?? null);
+    this.draftStateJids.add(currentJid);
   }
 
   private resolveCurrentImageDataUrl(jid: string, queue: BulkQueue): string | null {
     return queue.imageDataUrl ?? this.state.getDraftImageDataUrlForJid(jid);
+  }
+
+  private resolveQueueItemJid(jid: string): string {
+    return this.state.resolveConversationJid(jid);
   }
 
   private dataUrlToFile(dataUrl: string): File | null {
@@ -309,14 +323,32 @@ export class BulkSendService implements OnDestroy {
       )
       .subscribe(event => {
         const current = this.currentItem;
-        if (!current || current.jid !== event.jid) {
+        const currentJid = current ? this.resolveQueueItemJid(current.jid) : '';
+        if (!current || currentJid !== event.jid) {
           return;
         }
 
         this.updateCurrent('done');
-        this.clearDraftStateForJids([current.jid]);
-        this.advanceToNext();
+        this.clearDraftStateForJids([currentJid]);
+        this.startPostSendDelay();
       });
+  }
+
+  private startPostSendDelay(): void {
+    this.clearPostSendDelay();
+    this.postSendDelayTimerId = window.setTimeout(() => {
+      this.postSendDelayTimerId = null;
+      this.advanceToNext();
+    }, POST_SEND_DELAY_MS);
+  }
+
+  private clearPostSendDelay(): void {
+    if (this.postSendDelayTimerId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.postSendDelayTimerId);
+    this.postSendDelayTimerId = null;
   }
 
   private setQueue(queue: BulkQueue | null): void {

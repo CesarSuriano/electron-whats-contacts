@@ -3,7 +3,10 @@ import {
   DEFAULT_MESSAGE_TEMPLATES,
   MESSAGE_TEMPLATE_EDITOR_CONFIG,
   getFirstName,
+  normalizeMessageTemplateForEditing,
+  renderMessageTemplateEditorHtml,
   renderMessageTemplate
+  ,renderMessageTemplatePreviewHtml
 } from './message-template.helper';
 
 function makeCliente(nome: string): Cliente {
@@ -83,5 +86,37 @@ describe('renderMessageTemplate', () => {
   it('works with template having no placeholders', () => {
     const result = renderMessageTemplate('Sem substitutos', makeCliente('Ana'));
     expect(result).toBe('Sem substitutos');
+  });
+});
+
+describe('normalizeMessageTemplateForEditing', () => {
+  it('converts escaped line breaks into actual new lines', () => {
+    expect(normalizeMessageTemplateForEditing('linha 1\\nlinha 2')).toBe('linha 1\nlinha 2');
+  });
+
+  it('normalizes CRLF into LF', () => {
+    expect(normalizeMessageTemplateForEditing('linha 1\r\nlinha 2')).toBe('linha 1\nlinha 2');
+  });
+});
+
+describe('renderMessageTemplatePreviewHtml', () => {
+  it('renders WhatsApp formatting without exposing the raw markers', () => {
+    const html = renderMessageTemplatePreviewHtml('Olá, *{nome}*!');
+    expect(html).toContain('<strong><span class="message-template-preview-personalization">Maria</span></strong>');
+    expect(html).not.toContain('message-template-format-marker');
+  });
+});
+
+describe('renderMessageTemplateEditorHtml', () => {
+  it('keeps the raw markers visible while styling the formatted content', () => {
+    const html = renderMessageTemplateEditorHtml('*Olá* e _oi_');
+    expect(html).toContain('message-template-format-marker');
+    expect(html).toContain('message-template-format-strong');
+    expect(html).toContain('message-template-format-italic');
+  });
+
+  it('highlights the name token inside the editor', () => {
+    const html = renderMessageTemplateEditorHtml('Oi, {nome}!');
+    expect(html).toContain('<span class="message-template-token">{nome}</span>');
   });
 });

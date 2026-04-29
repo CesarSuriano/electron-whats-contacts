@@ -7,7 +7,7 @@ import { AppLabel } from '../../../../models/app-label.model';
 import { WhatsappContact } from '../../../../models/whatsapp.model';
 import { LabelService } from '../../../../services/label.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
-import { extractDigits, formatBrazilianPhone } from '../../helpers/phone-format.helper';
+import { formatBrazilianPhone, resolveDisplayedPhoneSource } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
 @Component({
@@ -64,7 +64,7 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
       return '';
     }
 
-    const phoneSource = this.resolvePhoneSource(this.contact);
+    const phoneSource = resolveDisplayedPhoneSource(this.contact);
     return formatBrazilianPhone(phoneSource);
   }
 
@@ -143,76 +143,5 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
   @HostListener('document:keydown.escape')
   onEscape(): void {
     this.isOverflowMenuOpen = false;
-  }
-
-  private resolvePhoneSource(contact: WhatsappContact): string {
-    const jid = typeof contact.jid === 'string' ? contact.jid.trim() : '';
-    const phoneDigits = extractDigits(contact.phone || '');
-    const jidDigits = extractDigits(jid);
-
-    if (jid.endsWith('@g.us')) {
-      return '';
-    }
-
-    if (jid.endsWith('@lid')) {
-      // @lid is an internal linked-id. If we still only have this id, do not
-      // expose it as a phone number in the UI.
-      return this.isLikelyPublicPhone(phoneDigits) ? phoneDigits : '';
-    }
-
-    if (jid.endsWith('@c.us')) {
-      if (!phoneDigits) {
-        return jidDigits;
-      }
-
-      if (!jidDigits) {
-        return this.isLikelyPublicPhone(phoneDigits) ? phoneDigits : '';
-      }
-
-      if (this.areBrazilianVariants(phoneDigits, jidDigits)) {
-        return phoneDigits.length >= jidDigits.length ? phoneDigits : jidDigits;
-      }
-
-      if (this.looksLikeLinkedId(phoneDigits) && this.isLikelyPublicPhone(jidDigits)) {
-        return jidDigits;
-      }
-
-      return this.isLikelyPublicPhone(phoneDigits) ? phoneDigits : jidDigits;
-    }
-
-    if (this.isLikelyPublicPhone(phoneDigits)) {
-      return phoneDigits;
-    }
-
-    return jidDigits;
-  }
-
-  private isLikelyPublicPhone(value: string): boolean {
-    return value.length >= 10 && value.length <= 15;
-  }
-
-  private looksLikeLinkedId(value: string): boolean {
-    return value.length > 15;
-  }
-
-  private areBrazilianVariants(a: string, b: string): boolean {
-    const normalize = (value: string): string => {
-      const withoutCountry = value.startsWith('55') ? value.slice(2) : value;
-      if (withoutCountry.length !== 10 && withoutCountry.length !== 11) {
-        return '';
-      }
-
-      const ddd = withoutCountry.slice(0, 2);
-      const local = withoutCountry.slice(2);
-      const withoutNinth = local.length === 9 && local.startsWith('9')
-        ? local.slice(1)
-        : local;
-
-      return `${ddd}:${withoutNinth}`;
-    };
-
-    const normalizedA = normalize(a);
-    const normalizedB = normalize(b);
-    return Boolean(normalizedA && normalizedB && normalizedA === normalizedB);
   }
 }

@@ -1,5 +1,7 @@
 ﻿.bulk-panel {
-  @apply fixed bottom-[5.75rem] right-5 z-30 flex max-h-[calc(100vh-8rem)] w-[340px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_20px_40px_rgba(11,20,26,0.18)];
+  @apply fixed right-5 z-30 flex max-h-[calc(100vh-8rem)] w-[340px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-[0_20px_40px_rgba(11,20,26,0.18)];
+  bottom: var(--uniq-whatsapp-composer-clearance, 5.75rem);
+  transition: bottom 0.12s ease-out;
   animation: slideUp 0.25s ease-out;
 }
 

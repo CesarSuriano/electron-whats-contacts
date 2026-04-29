@@ -5,7 +5,7 @@ import { takeUntil } from 'rxjs/operators';
 
 import { AppShellSection } from '../../models/shell.model';
 import { ClientesDataService } from '../../services/clientes-data.service';
-import { compareClientes } from '../../helpers/cliente-date.helper';
+import { buildRecentClienteIdSet, compareClientes } from '../../helpers/cliente-date.helper';
 import { MESSAGE_TEMPLATE_EDITOR_CONFIG } from '../../helpers/message-template.helper';
 import { APP_VERSION, APP_WHATS_NEW } from '../../helpers/app-info.helper';
 import { formatTimestamp } from '../../helpers/timestamp.helper';
@@ -19,7 +19,7 @@ import { ScheduledMessageService } from '../../services/scheduled-message.servic
 import { RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
 
 type HomeSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings';
-type ClientFilter = 'all' | 'today' | 'upcoming';
+type ClientFilter = 'all' | 'today' | 'upcoming' | 'new';
 
 @Component({
   selector: 'app-home',
@@ -58,7 +58,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   pendingXmlContent: string | null = null;
   messageTemplates: MessageTemplates;
 
-  useInternalWhatsapp = false;
+  useInternalWhatsapp = true;
   selectedClienteIds = new Set<number>();
 
   unreadConversations = 0;
@@ -194,6 +194,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   filteredClientes: Cliente[] = [];
   birthdaysToday: Cliente[] = [];
   pendingSchedules: ScheduledMessage[] = [];
+  recentClienteIds = new Set<number>();
 
   changeSort(column: SortColumn): void {
     if (this.sortedColumn === column) {
@@ -243,9 +244,16 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.updateDerivedState();
   }
 
+  get displayedSortedColumn(): SortColumn {
+    return this.activeClientFilter === 'new' ? 'dataCadastro' : this.sortedColumn;
+  }
+
+  get displayedSortDirection(): SortDirection {
+    return this.activeClientFilter === 'new' ? 'desc' : this.sortDirection;
+  }
+
   toggleWhatsappMode(mode: 'official' | 'internal'): void {
     this.useInternalWhatsapp = mode === 'internal';
-    this.selectedClienteIds = new Set();
   }
 
   toggleClienteSelection(id: number): void {
@@ -511,10 +519,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
   }
 
-  private compareClientes(a: Cliente, b: Cliente): number {
-    return compareClientes(a, b, this.sortedColumn, this.sortDirection);
-  }
-
   private openWhatsapp(phone: string, message: string): void {
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) {
@@ -568,12 +572,19 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private updateDerivedState(): void {
-    const sorted = [...this.clientes].sort((a, b) => this.compareClientes(a, b));
+    const sorted = [...this.clientes].sort((a, b) =>
+      compareClientes(a, b, this.displayedSortedColumn, this.displayedSortDirection)
+    );
     this.sortedClientes = sorted;
+    this.recentClienteIds = buildRecentClienteIdSet(this.clientes);
 
     const normalizedTerm = this.clienteSearchTerm.trim().toLocaleLowerCase('pt-BR');
     this.filteredClientes = sorted.filter(cliente => {
-      if (this.activeClientFilter !== 'all' && cliente.birthdayStatus !== this.activeClientFilter) {
+      if ((this.activeClientFilter === 'today' || this.activeClientFilter === 'upcoming')
+        && cliente.birthdayStatus !== this.activeClientFilter) {
+        return false;
+      }
+      if (this.activeClientFilter === 'new' && !this.recentClienteIds.has(cliente.id)) {
         return false;
       }
       if (!normalizedTerm) {

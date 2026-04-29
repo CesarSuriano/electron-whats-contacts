@@ -29,4 +29,15 @@ describe('LidMap', () => {
     map.clear();
     assert.equal(map.getLid('b@c.us'), undefined);
   });
+
+  it('replaces the previous canonical when the same linked-id is remapped', () => {
+    const map = new LidMap();
+    map.set('278649089585374@c.us', '278649089585374@lid');
+
+    const displaced = map.set('554499104514@c.us', '278649089585374@lid');
+
+    assert.deepEqual(displaced, ['278649089585374@c.us']);
+    assert.equal(map.getLid('278649089585374@c.us'), undefined);
+    assert.equal(map.findCanonical('278649089585374@lid'), '554499104514@c.us');
+  });
 });

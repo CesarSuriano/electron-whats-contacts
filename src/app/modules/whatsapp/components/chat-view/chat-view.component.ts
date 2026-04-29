@@ -68,8 +68,8 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     }
 
     this.state.selectedContact$.pipe(takeUntil(this.destroy$)).subscribe(contact => {
-      const previousContactJid = this.contact?.jid || '';
-      const nextContactJid = contact?.jid || '';
+      const previousContactJid = this.resolveContactJid(this.contact);
+      const nextContactJid = this.resolveContactJid(contact);
 
       if (nextContactJid !== previousContactJid) {
         this.flushPendingDraftSync();
@@ -131,7 +131,7 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     });
 
     this.state.draftText$.pipe(takeUntil(this.destroy$)).subscribe(text => {
-      if (this.pendingDraftSyncJid && this.pendingDraftSyncJid === (this.contact?.jid || '') && text !== this.pendingDraftSyncValue) {
+      if (this.pendingDraftSyncJid && this.pendingDraftSyncJid === this.resolveActiveContactJid() && text !== this.pendingDraftSyncValue) {
         this.clearPendingDraftSync();
       }
 
@@ -262,18 +262,20 @@ export class ChatViewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const contactJid = this.resolveActiveContactJid();
+
     const shouldPromoteQueuedSuggestion = this.shouldPromoteQueuedSuggestionAfterSend(text);
     if (!shouldPromoteQueuedSuggestion) {
       this.discardCurrentSuggestionSequence();
     }
 
-    this.state.sendText(this.contact.jid, text).subscribe({
+    this.state.sendText(contactJid, text).subscribe({
       next: () => {
         if (!this.bulkSend.hasActiveQueue) {
           this.clearPendingDraftSync();
           this.composer?.resetAfterSend();
           this.draftText = '';
-          this.state.setDraftTextForJid(this.contact!.jid, '');
+          this.state.setDraftTextForJid(contactJid, '');
           this.clearSuggestionProviders();
 
           if (!shouldPromoteQueuedSuggestion || !this.promoteQueuedSuggestion()) {
@@ -294,17 +296,19 @@ export class ChatViewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const contactJid = this.resolveActiveContactJid();
+
     this.discardCurrentSuggestionSequence();
     this.pendingAiSuggestionPromotion = false;
     this.acceptedAiSuggestionDraft = '';
 
-    this.state.sendMedia(this.contact.jid, payload.file, payload.caption).subscribe({
+    this.state.sendMedia(contactJid, payload.file, payload.caption).subscribe({
       next: () => {
         if (!this.bulkSend.hasActiveQueue) {
           this.clearPendingDraftSync();
           this.composer?.resetAfterSend();
           this.draftText = '';
-          this.state.setDraftTextForJid(this.contact!.jid, '');
+          this.state.setDraftTextForJid(contactJid, '');
           this.clearSuggestionProviders();
 
           this.lastRequestedAiContextKey = '';
@@ -531,7 +535,7 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   private scheduleDraftSync(value: string): void {
-    const jid = this.contact?.jid || '';
+    const jid = this.resolveActiveContactJid();
     if (!jid) {
       return;
     }
@@ -568,6 +572,18 @@ export class ChatViewComponent implements OnInit, OnDestroy {
 
     this.pendingDraftSyncJid = '';
     this.pendingDraftSyncValue = '';
+  }
+
+  private resolveActiveContactJid(): string {
+    return this.resolveContactJid(this.contact);
+  }
+
+  private resolveContactJid(contact: WhatsappContact | null): string {
+    if (!contact) {
+      return '';
+    }
+
+    return this.state.resolveConversationJid(contact.jid);
   }
 
   private scheduleComposerFocus(): void {

@@ -37,6 +37,13 @@ describe('ContactStore.createDefault', () => {
     assert.deepEqual(entry.labels, ['Cliente']);
     assert.equal(entry.jid, '5511@c.us');
   });
+
+  it('marks @g.us entries as group conversations by default', () => {
+    const store = new ContactStore();
+    const entry = store.createDefault('120363000000000000@g.us');
+    assert.equal(entry.isGroup, true);
+    assert.equal(entry.phone, '120363000000000000');
+  });
 });
 
 describe('ContactStore.upsertOnOutbound', () => {
@@ -89,6 +96,18 @@ describe('ContactStore.upsertOnOutbound', () => {
     assert.equal(entry.lastMessageType, 'image');
     assert.equal(entry.lastMessageHasMedia, true);
     assert.equal(entry.lastMessageMediaMimetype, 'image/jpeg');
+  });
+
+  it('creates new group contacts with isGroup=true on outbound send', () => {
+    const store = new ContactStore();
+    const entry = store.upsertOnOutbound({
+      jid: '120363000000000000@g.us',
+      preview: 'Olá grupo',
+      receivedAt: new Date().toISOString(),
+      type: 'chat'
+    });
+    assert.equal(entry.isGroup, true);
+    assert.equal(entry.jid, '120363000000000000@g.us');
   });
 });
 

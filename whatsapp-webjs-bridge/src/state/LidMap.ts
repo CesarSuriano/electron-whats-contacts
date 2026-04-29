@@ -5,8 +5,18 @@
 export class LidMap {
   private readonly canonicalToLid = new Map<string, string>();
 
-  set(canonicalJid: string, lidJid: string): void {
+  set(canonicalJid: string, lidJid: string): string[] {
+    const displacedCanonicals: string[] = [];
+
+    for (const [existingCanonicalJid, existingLidJid] of Array.from(this.canonicalToLid.entries())) {
+      if (existingCanonicalJid !== canonicalJid && existingLidJid === lidJid) {
+        this.canonicalToLid.delete(existingCanonicalJid);
+        displacedCanonicals.push(existingCanonicalJid);
+      }
+    }
+
     this.canonicalToLid.set(canonicalJid, lidJid);
+    return displacedCanonicals;
   }
 
   getLid(canonicalJid: string): string | undefined {

@@ -51,25 +51,6 @@
         <section class="home-clients" *ngSwitchCase="'clients'">
           <section class="home-clients-toolbar">
             <div class="home-clients-toolbar__top">
-              <label class="home-search-field">
-                <span class="material-symbols-outlined home-search-field__icon">search</span>
-                <input
-                  type="text"
-                  placeholder="Buscar por nome, CPF..."
-                  [ngModel]="clienteSearchTerm"
-                  (ngModelChange)="onClienteSearchChange($event)"
-                  class="home-search-field__input"
-                />
-              </label>
-
-              <div class="home-filter-group">
-                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'all'" (click)="setClientFilter('all')">Todos</button>
-                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'today'" (click)="setClientFilter('today')">Aniversariantes hoje</button>
-                <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'upcoming'" (click)="setClientFilter('upcoming')">Próximos 7 dias</button>
-              </div>
-            </div>
-
-            <div class="home-clients-toolbar__bottom">
               <div class="home-mode-control">
                 <span class="home-mode-control__label">Enviar via</span>
                 <div class="home-mode-switch">
@@ -94,21 +75,50 @@
                   <span class="material-symbols-outlined btn-icon-symbol">edit</span>
                   Editar mensagens
                 </button>
-                <button class="btn btn-primary home-toolbar-button" type="button" (click)="openUploadModal()">
+                <button class="btn btn-outline home-toolbar-button home-toolbar-button--upload" type="button" (click)="openUploadModal()">
                   <span class="material-symbols-outlined btn-icon-symbol">upload_file</span>
                   Enviar arquivo
                 </button>
+              </div>
+            </div>
+
+            <div class="home-clients-toolbar__bottom">
+              <label class="home-search-field">
+                <span class="material-symbols-outlined home-search-field__icon">search</span>
+                <input
+                  type="text"
+                  placeholder="Buscar por nome, CPF..."
+                  [ngModel]="clienteSearchTerm"
+                  (ngModelChange)="onClienteSearchChange($event)"
+                  class="home-search-field__input"
+                />
+              </label>
+
+              <div class="home-filter-cluster">
+                <span class="home-filter-cluster__label">
+                  <span class="material-symbols-outlined home-filter-cluster__label-icon">filter_alt</span>
+                  Filtros
+                </span>
+
+                <div class="home-filter-group">
+                  <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'all'" (click)="setClientFilter('all')">Todos</button>
+                  <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'today'" (click)="setClientFilter('today')">Aniversariantes hoje</button>
+                  <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'upcoming'" (click)="setClientFilter('upcoming')">Aniversário nos próximos 7 dias</button>
+                  <button type="button" class="home-filter-pill" [class.home-filter-pill--active]="activeClientFilter === 'new'" (click)="setClientFilter('new')">Novos clientes</button>
+                </div>
               </div>
             </div>
           </section>
 
           <div class="home-bulk-bar" *ngIf="useInternalWhatsapp">
             <span class="home-bulk-bar__count">{{ selectionSummaryLabel }}</span>
-            <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
-              <span class="home-bulk-bar__emoji">🎉</span> Enviar Parabéns
+            <button class="btn btn-primary home-bulk-bar__button home-bulk-bar__button--birthday" type="button" [disabled]="selectionCount === 0" (click)="sendBulkBirthday()">
+              <span class="material-symbols-outlined home-bulk-bar__icon">card_giftcard</span>
+              <span>Enviar Parabéns</span>
             </button>
-            <button class="btn btn-outline home-bulk-bar__button" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
-              <span class="home-bulk-bar__emoji">⭐</span> Enviar Avaliação
+            <button class="btn btn-primary home-bulk-bar__button home-bulk-bar__button--review" type="button" [disabled]="selectionCount === 0" (click)="sendBulkReview()">
+              <span class="material-symbols-outlined home-bulk-bar__icon">star</span>
+              <span>Enviar Avaliação</span>
             </button>
             <button class="home-bulk-bar__cancel" type="button" [disabled]="selectionCount === 0" (click)="clearSelection()">Cancelar seleção</button>
           </div>
@@ -116,10 +126,11 @@
           <section class="home-table-shell" *ngIf="filteredClientes.length; else clientsLoadingOrEmpty">
             <app-clientes-table
               [clientes]="filteredClientes"
-              [sortedColumn]="sortedColumn"
-              [sortDirection]="sortDirection"
+              [sortedColumn]="displayedSortedColumn"
+              [sortDirection]="displayedSortDirection"
               [selectionMode]="useInternalWhatsapp"
               [selectedClienteIds]="selectedClienteIds"
+              [recentClienteIds]="recentClienteIds"
               [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
               (sortChange)="changeSort($event)"
               (birthdayClick)="openWhatsappBirthday($event)"

@@ -80,7 +80,21 @@
 }
 
 .conversation-list__item--flashing {
-  @apply animate-pulse;
+  animation: conversation-list-flash 650ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+@keyframes conversation-list-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--color-accent, #cf4b63) 24%, var(--color-wa-surface, #fdf8f5));
+  }
+
+  55% {
+    background-color: color-mix(in srgb, var(--color-accent, #cf4b63) 12%, var(--color-wa-surface, #fdf8f5));
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
 
 .conversation-list__selection-checkbox {

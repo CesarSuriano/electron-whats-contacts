@@ -1,10 +1,11 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../../../models/message-template.model';
 import { ScheduledMessage } from '../../../../models/scheduled-message.model';
 import { WhatsappContact, WhatsappInstance } from '../../../../models/whatsapp.model';
+import { Cliente } from '../../../../models/cliente.model';
 import { MessageTemplateService } from '../../../../services/message-template.service';
 import { PendingBulkSendService } from '../../../../services/pending-bulk-send.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
@@ -15,6 +16,16 @@ import { WhatsappConsoleComponent } from './whatsapp-console.component';
 
 const makeContact = (jid: string): WhatsappContact => ({
   jid, phone: jid.replace('@c.us', ''), name: 'User', found: true
+});
+
+const makeCliente = (id: number, nome: string, telefone: string): Cliente => ({
+  id,
+  nome,
+  cpf: '',
+  telefone,
+  dataCadastro: '',
+  dataNascimento: '',
+  birthdayStatus: 'none'
 });
 
 describe('WhatsappConsoleComponent', () => {
@@ -49,8 +60,28 @@ describe('WhatsappConsoleComponent', () => {
   const scheduleLifecycle$ = new Subject<any>();
 
   beforeEach(async () => {
+    instances$.next([]);
+    selectedInstance$.next('');
+    errorMessage$.next('');
+    loadingState$.next({ instances: false, contacts: false, messages: false, sending: false });
+    syncStatus$.next({
+      active: false,
+      mode: 'idle',
+      message: '',
+      detail: '',
+      currentStep: 0,
+      totalSteps: 0,
+      progressPercent: 0
+    });
+    selectionMode$.next(false);
+    contacts$.next([]);
+    selectedJids$.next(new Set());
+    schedules$.next([]);
+    upcoming$.next(null);
+    openRequests$.next(undefined);
+
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'loadInstances', 'selectInstance', 'refresh', 'selectAll', 'exitSelectionMode'
+      'loadInstances', 'selectInstance', 'refresh', 'selectAll', 'exitSelectionMode', 'clearErrorMessage', 'resolveConversationJid'
     ], {
       instances$: instances$.asObservable(),
       selectedInstance$: selectedInstance$.asObservable(),
@@ -61,14 +92,23 @@ describe('WhatsappConsoleComponent', () => {
       contacts$: contacts$.asObservable(),
       selectedJids$: selectedJids$.asObservable()
     });
+    Object.defineProperty(stateSpy, 'selectedInstance', {
+      get: () => selectedInstance$.value
+    });
+    stateSpy.resolveConversationJid.and.callFake((jid: string) => jid);
 
     bulkSpy = jasmine.createSpyObj('BulkSendService', ['start'], {
       scheduleLifecycle$: scheduleLifecycle$.asObservable()
     });
     pendingBulkSpy = jasmine.createSpyObj('PendingBulkSendService', ['consume']);
     pendingBulkSpy.consume.and.returnValue(null);
-    templateServiceSpy = jasmine.createSpyObj('MessageTemplateService', ['getTemplate']);
+    templateServiceSpy = jasmine.createSpyObj('MessageTemplateService', ['getTemplate', 'getTemplates', 'getTemplateImage']);
     templateServiceSpy.getTemplate.and.returnValue('');
+    templateServiceSpy.getTemplates.and.returnValue({
+      birthday: 'Feliz aniversario, {nome}!',
+      review: 'Oi {nome}, pode avaliar nosso atendimento?'
+    });
+    templateServiceSpy.getTemplateImage.and.returnValue(undefined);
     scheduleListLauncherSpy = jasmine.createSpyObj('ScheduleListLauncherService', ['consumePendingOpen']);
     scheduleListLauncherSpy.consumePendingOpen.and.returnValue(false);
     Object.defineProperty(scheduleListLauncherSpy, 'openRequests$', {
@@ -104,6 +144,29 @@ describe('WhatsappConsoleComponent', () => {
   it('calls loadInstances on init', () => {
     expect(stateSpy.loadInstances).toHaveBeenCalled();
   });
+
+  it('dismisses the error banner when the user clicks close', () => {
+    errorMessage$.next('Não foi possível enviar a mensagem.');
+    fixture.detectChanges();
+
+    const dismissButton = fixture.nativeElement.querySelector('.whatsapp-console__error-dismiss') as HTMLButtonElement;
+    dismissButton.click();
+
+    expect(component.errorMessage).toBe('');
+    expect(stateSpy.clearErrorMessage).toHaveBeenCalled();
+  });
+
+  it('auto-dismisses the error banner after four seconds', fakeAsync(() => {
+    errorMessage$.next('Não foi possível enviar a mensagem.');
+    fixture.detectChanges();
+
+    expect(component.errorMessage).toBe('Não foi possível enviar a mensagem.');
+
+    tick(4000);
+
+    expect(component.errorMessage).toBe('');
+    expect(stateSpy.clearErrorMessage).toHaveBeenCalled();
+  }));
 
   it('templateEditorConfig title is correct', () => {
     expect(component.templateEditorConfig.title).toBe('Envio para vários contatos');
@@ -248,6 +311,35 @@ describe('WhatsappConsoleComponent', () => {
     expect(bulkSpy.start).toHaveBeenCalledWith(component.allContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
   });
 
+  it('resolves equivalent scheduled contacts before starting a schedule execution', () => {
+    const schedule: ScheduledMessage = {
+      id: 'sch-2',
+      scheduledAt: '2026-04-24T12:00:00.000Z',
+      recurrence: 'none',
+      template: 'Oi {nome}',
+      contacts: [{ jid: '120363999999999999@lid', name: 'Ana', phone: '5511987654321' }],
+      status: 'pending',
+      createdAt: '2026-04-24T10:00:00.000Z'
+    };
+    const canonical: WhatsappContact = {
+      jid: '5511987654321@c.us',
+      phone: '5511987654321',
+      name: 'Ana Silva',
+      found: true
+    };
+
+    stateSpy.resolveConversationJid.and.callFake((jid: string) =>
+      jid === '120363999999999999@lid' ? '5511987654321@c.us' : jid
+    );
+    component.schedules = [schedule];
+    component.allContacts = [canonical];
+
+    component.onTriggerSchedule(schedule.id);
+
+    expect(scheduledMessageServiceSpy.beginExecution).toHaveBeenCalledWith(schedule.id);
+    expect(bulkSpy.start).toHaveBeenCalledWith([canonical], schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
+  });
+
   it('completes the schedule when the scheduled bulk finishes', () => {
     scheduleLifecycle$.next({ scheduleId: 'sch-1', outcome: 'completed' });
 
@@ -258,5 +350,185 @@ describe('WhatsappConsoleComponent', () => {
     scheduleLifecycle$.next({ scheduleId: 'sch-1', outcome: 'cancelled' });
 
     expect(scheduledMessageServiceSpy.cancelExecution).toHaveBeenCalledWith('sch-1');
+  });
+
+  it('maps pending clientes to the correct contacts and includes selected clients not in contacts', () => {
+    contacts$.next([]);
+    fixture.destroy();
+
+    pendingBulkSpy.consume.and.returnValue({
+      templateType: 'birthday',
+      clientes: [
+        makeCliente(1, 'Ana', '(11) 98765-4321'),
+        makeCliente(2, 'Bia', '(11) 98888-7777'),
+        makeCliente(3, 'Clara', '(11) 97777-6666')
+      ]
+    });
+
+    const wrongGroup: WhatsappContact = {
+      jid: '123@g.us',
+      phone: '',
+      name: 'Grupo errado',
+      found: true,
+      isGroup: true
+    };
+    const anaContact: WhatsappContact = {
+      jid: '5511987654321@c.us',
+      phone: '5511987654321',
+      name: 'Ana Silva',
+      found: true
+    };
+    const biaContact: WhatsappContact = {
+      jid: '5511988887777@c.us',
+      phone: '5511988887777',
+      name: 'Bia Souza',
+      found: true
+    };
+
+    contacts$.next([wrongGroup, anaContact, biaContact]);
+    selectedInstance$.next('inst-1');
+
+    fixture = TestBed.createComponent(WhatsappConsoleComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(bulkSpy.start).toHaveBeenCalled();
+    const [mappedContacts, template, imageDataUrl] = bulkSpy.start.calls.mostRecent().args;
+    expect(mappedContacts).toEqual([
+      anaContact,
+      biaContact,
+      {
+        jid: '5511977776666@c.us',
+        phone: '5511977776666',
+        name: 'Clara',
+        found: false
+      }
+    ]);
+    expect(template).toBe('Feliz aniversario, {nome}!');
+    expect(imageDataUrl).toBeUndefined();
+  });
+
+  it('starts pending bulk even when contacts stream is initially empty', () => {
+    contacts$.next([]);
+    loadingState$.next({ instances: false, contacts: false, messages: false, sending: false });
+    fixture.destroy();
+
+    pendingBulkSpy.consume.and.returnValue({
+      templateType: 'birthday',
+      clientes: [
+        makeCliente(1, 'Ana', '(11) 98765-4321'),
+        makeCliente(2, 'Bia', '(11) 98888-7777')
+      ]
+    });
+
+    fixture = TestBed.createComponent(WhatsappConsoleComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(bulkSpy.start).not.toHaveBeenCalled();
+
+    selectedInstance$.next('inst-1');
+    loadingState$.next({ instances: false, contacts: true, messages: false, sending: false });
+    loadingState$.next({ instances: false, contacts: false, messages: false, sending: false });
+
+    expect(bulkSpy.start).toHaveBeenCalled();
+    const [mappedContacts] = bulkSpy.start.calls.mostRecent().args;
+    expect(mappedContacts).toEqual([
+      {
+        jid: '5511987654321@c.us',
+        phone: '5511987654321',
+        name: 'Ana',
+        found: false
+      },
+      {
+        jid: '5511988887777@c.us',
+        phone: '5511988887777',
+        name: 'Bia',
+        found: false
+      }
+    ]);
+  });
+
+  it('waits for bootstrap completion instead of starting from stale pre-load contacts', () => {
+    contacts$.next([
+      {
+        jid: '5599999999999@c.us',
+        phone: '5599999999999',
+        name: 'Conversa antiga',
+        found: true
+      }
+    ]);
+    selectedInstance$.next('');
+    loadingState$.next({ instances: false, contacts: false, messages: false, sending: false });
+    fixture.destroy();
+
+    pendingBulkSpy.consume.and.returnValue({
+      templateType: 'birthday',
+      clientes: [makeCliente(1, 'Ana', '(11) 98765-4321')]
+    });
+
+    fixture = TestBed.createComponent(WhatsappConsoleComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(bulkSpy.start).not.toHaveBeenCalled();
+
+    selectedInstance$.next('inst-1');
+    expect(bulkSpy.start).not.toHaveBeenCalled();
+
+    loadingState$.next({ instances: false, contacts: true, messages: false, sending: false });
+    contacts$.next([
+      {
+        jid: '5511987654321@c.us',
+        phone: '5511987654321',
+        name: 'Ana Silva',
+        found: true
+      }
+    ]);
+    expect(bulkSpy.start).not.toHaveBeenCalled();
+
+    loadingState$.next({ instances: false, contacts: false, messages: false, sending: false });
+
+    expect(bulkSpy.start).toHaveBeenCalled();
+    const [mappedContacts] = bulkSpy.start.calls.mostRecent().args;
+    expect(mappedContacts).toEqual([
+      {
+        jid: '5511987654321@c.us',
+        phone: '5511987654321',
+        name: 'Ana Silva',
+        found: true
+      }
+    ]);
+  });
+
+  it('does not enqueue duplicated jid when multiple clientes map to the same contact', () => {
+    contacts$.next([]);
+    fixture.destroy();
+
+    pendingBulkSpy.consume.and.returnValue({
+      templateType: 'birthday',
+      clientes: [
+        makeCliente(1, 'Ana', '(11) 98765-4321'),
+        makeCliente(2, 'Ana duplicada', '11 98765-4321')
+      ]
+    });
+
+    const anaContact: WhatsappContact = {
+      jid: '5511987654321@c.us',
+      phone: '5511987654321',
+      name: 'Ana Silva',
+      found: true
+    };
+
+    contacts$.next([anaContact]);
+    selectedInstance$.next('inst-1');
+
+    fixture = TestBed.createComponent(WhatsappConsoleComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(bulkSpy.start).toHaveBeenCalled();
+    const [mappedContacts] = bulkSpy.start.calls.mostRecent().args;
+    expect(mappedContacts).toEqual([anaContact]);
   });
 });

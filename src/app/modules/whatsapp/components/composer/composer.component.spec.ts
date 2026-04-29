@@ -8,6 +8,10 @@ describe('ComposerComponent', () => {
   let fixture: ComponentFixture<ComposerComponent>;
   let component: ComposerComponent;
 
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--uniq-whatsapp-composer-clearance');
+  });
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ComposerComponent],
@@ -299,5 +303,45 @@ describe('ComposerComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.composer__control-group--quick-reply')).toBeTruthy();
+  });
+
+  it('renders the attach button before the quick reply button', () => {
+    fixture.detectChanges();
+
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('.composer__row button[aria-label]')) as HTMLButtonElement[];
+    const labels = buttons.slice(0, 3).map(button => button.getAttribute('aria-label'));
+
+    expect(labels).toEqual(['Emojis', 'Anexar arquivo', 'Mensagens rápidas']);
+  });
+
+  it('grows the textarea up to eight lines and updates the bulk panel clearance', () => {
+    const textarea = fixture.nativeElement.querySelector('.composer__textarea') as HTMLTextAreaElement;
+    spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    spyOn(window, 'getComputedStyle').and.returnValue({
+      lineHeight: '20px',
+      paddingTop: '12px',
+      paddingBottom: '12px',
+      borderTopWidth: '0px',
+      borderBottomWidth: '0px',
+      minHeight: '46px'
+    } as CSSStyleDeclaration);
+    spyOnProperty(window, 'innerHeight', 'get').and.returnValue(1000);
+    spyOn(fixture.nativeElement, 'getBoundingClientRect').and.returnValue({
+      top: 700,
+      height: 120
+    } as DOMRect);
+    Object.defineProperty(textarea, 'scrollHeight', {
+      configurable: true,
+      get: () => 260
+    });
+
+    component.onTextChange(Array.from({ length: 12 }, (_, index) => `Linha ${index + 1}`).join('\n'));
+
+    expect(textarea.style.height).toBe('184px');
+    expect(textarea.style.overflowY).toBe('auto');
+    expect(document.documentElement.style.getPropertyValue('--uniq-whatsapp-composer-clearance')).toBe('320px');
   });
 });
