@@ -237,6 +237,18 @@ describe('BulkSendService', () => {
     expect(stateMock.sendMedia.calls.argsFor(1)[2]).toBe('');
   });
 
+  it('updateTemplate refreshes the active queue draft instead of starting a new queue', () => {
+    const imageDataUrls = ['data:image/png;base64,updated'];
+    service.start([makeContact('5511@c.us', 'Ana'), makeContact('5522@c.us', 'Bia')], 'Olá {nome}');
+    stateMock.setDraftTextForJid.calls.reset();
+    stateMock.setDraftImageDataUrlsForJid.calls.reset();
+
+    service.updateTemplate('Nova {nome}', imageDataUrls);
+
+    expect(stateMock.setDraftTextForJid).toHaveBeenCalledWith('5511@c.us', 'Nova Ana');
+    expect(stateMock.setDraftImageDataUrlsForJid).toHaveBeenCalledWith('5511@c.us', imageDataUrls);
+  });
+
   it('opens and sends using the resolved canonical jid when the queue item jid is synthetic', () => {
     stateMock.resolveConversationJid.and.callFake((jid: string) =>
       jid === '551187654321@c.us' ? '5511987654321@c.us' : jid

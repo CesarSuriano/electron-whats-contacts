@@ -10,9 +10,6 @@ export class BulkActionBarComponent {
   @Input() totalVisible = 0;
   @Input() allSelected = false;
   @Input() disabled = false;
-  /** Mostra o botão "Editar mensagem" — só faz sentido depois que o usuário
-   *  já abriu o modal de mensagem em massa pelo menos uma vez. */
-  @Input() canEditBulkMessage = false;
 
   @Output() selectAll = new EventEmitter<void>();
   @Output() clearSelection = new EventEmitter<void>();
@@ -20,5 +17,4 @@ export class BulkActionBarComponent {
   @Output() openBulkSend = new EventEmitter<void>();
   @Output() openSchedule = new EventEmitter<void>();
   @Output() openLabels = new EventEmitter<void>();
-  @Output() editBulkMessage = new EventEmitter<void>();
 }

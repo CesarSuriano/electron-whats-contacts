@@ -4,6 +4,22 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24);
 }
 
+.upload-modal-header {
+  @apply flex items-start justify-between gap-4;
+}
+
+.upload-modal-header h2 {
+  @apply m-0 text-[1.2rem] text-accent;
+}
+
+.upload-modal-header p {
+  @apply mb-0 mt-1.5 text-[0.92rem] text-txt-muted;
+}
+
+.upload-modal-footer {
+  @apply flex justify-end gap-3;
+}
+
 .schedule-form {
   @apply flex flex-col gap-4;
 }
@@ -53,4 +69,18 @@
 
 .schedule-modal__confirm {
   @apply min-w-[10rem];
+}
+
+@media (max-width: 600px) {
+  .schedule-modal {
+    @apply p-4;
+  }
+
+  .upload-modal-footer {
+    @apply flex-col-reverse;
+  }
+
+  .upload-modal-footer .btn {
+    @apply w-full;
+  }
 }

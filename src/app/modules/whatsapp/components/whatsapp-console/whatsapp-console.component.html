@@ -5,14 +5,12 @@
     [totalVisible]="totalVisible"
     [allSelected]="allSelected"
     [disabled]="isUiBlocked"
-    [canEditBulkMessage]="canEditBulkMessage"
     (selectAll)="onSelectAll()"
     (clearSelection)="onClearSelection()"
     (exitMode)="onExitSelectionMode()"
     (openBulkSend)="onOpenBulkSend()"
     (openSchedule)="onScheduleFromSelection()"
     (openLabels)="onOpenBulkLabels()"
-    (editBulkMessage)="onEditBulkMessage()"
   ></app-bulk-action-bar>
 
   <header class="whatsapp-console__toolbar" *ngIf="!isSelectionMode && instances.length > 1">
@@ -72,13 +70,13 @@
     </div>
   </ng-template>
 
-  <app-bulk-task-panel></app-bulk-task-panel>
+  <app-bulk-task-panel (editMessage)="onEditActiveBulkMessage()"></app-bulk-task-panel>
 
   <app-message-template-modal
     [isOpen]="isTemplateModalOpen"
     [editorConfig]="templateEditorConfig"
-    [initialTemplate]="lastBulkTemplate"
-    [initialImageDataUrls]="lastBulkImageDataUrls"
+    [initialTemplate]="bulkTemplateInitialTemplate"
+    [initialImageDataUrls]="bulkTemplateInitialImageDataUrls"
     [bulkMode]="true"
     (close)="onCloseTemplateModal()"
     (save)="onSaveTemplate($event)"
@@ -94,7 +92,7 @@
     [isOpen]="scheduleTemplateModalOpen"
     [editorConfig]="scheduleTemplateConfig"
     [initialTemplate]="scheduleEditInitialTemplate"
-    [initialImageDataUrl]="scheduleEditInitialImage"
+    [initialImageDataUrls]="scheduleEditInitialImages"
     (close)="onScheduleTemplateClose()"
     (save)="onScheduleTemplateSave($event)"
   ></app-message-template-modal>

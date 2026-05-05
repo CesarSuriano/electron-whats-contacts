@@ -145,6 +145,22 @@ export class BulkSendService implements OnDestroy {
     }
   }
 
+  updateTemplate(template: string, imageData?: string | string[]): void {
+    const queue = this.queueSubject.value;
+    if (!queue || this.isSendingCurrent) {
+      return;
+    }
+
+    const imageDataUrls = this.normalizeImageDataUrls(imageData);
+    this.setQueue({
+      ...queue,
+      template,
+      imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
+      imageDataUrl: imageDataUrls[0]
+    });
+    this.openCurrent();
+  }
+
   trackCurrentSend(jid: string, messageCount: number): void {
     const current = this.currentItem;
     const currentJid = current ? this.resolveQueueItemJid(current.jid) : '';

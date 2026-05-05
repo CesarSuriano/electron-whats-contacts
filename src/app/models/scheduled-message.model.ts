@@ -11,11 +11,14 @@ export interface ScheduledMessage {
   scheduledAt: string;
   recurrence: ScheduleRecurrence;
   template: string;
+  imageDataUrls?: string[];
+  // Compatibilidade com agendamentos antigos salvos antes do suporte a múltiplas imagens.
   imageDataUrl?: string;
   contacts: ScheduledContact[];
   status: 'pending' | 'notified' | 'done' | 'cancelled';
   createdAt: string;
   lastTriggeredAt?: string;
+  reminderDismissedForScheduledAt?: string;
 }
 
 export const RECURRENCE_LABELS: Record<ScheduleRecurrence, string> = {

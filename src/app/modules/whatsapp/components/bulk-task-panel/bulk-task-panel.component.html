@@ -9,6 +9,17 @@
     </div>
 
     <div class="bulk-panel-header-actions">
+      <button
+        type="button"
+        class="bulk-panel-header-btn"
+        (click)="requestEdit()"
+        [disabled]="!canEditMessage"
+        aria-label="Editar mensagem"
+        title="Editar mensagem"
+      >
+        <span class="material-symbols-outlined">edit_note</span>
+        <span>Editar</span>
+      </button>
       <button type="button" class="btn-icon" (click)="toggleMinimize()" [attr.aria-label]="isMinimized ? 'Expandir' : 'Minimizar'">
         <span class="material-symbols-outlined">{{ isMinimized ? 'expand_less' : 'expand_more' }}</span>
       </button>

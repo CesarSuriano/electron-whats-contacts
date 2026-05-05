@@ -41,20 +41,20 @@ export class ScheduledMessageService implements OnDestroy {
   }
 
   create(schedule: Omit<ScheduledMessage, 'id' | 'createdAt' | 'status'>): ScheduledMessage {
-    const entry: ScheduledMessage = {
+    const entry = this.normalizeSchedule({
       ...schedule,
       id: this.generateId(),
       status: 'pending',
       createdAt: new Date().toISOString()
-    };
+    });
     const list = [...this.schedulesSubject.value, entry];
     this.setSchedules(list);
     return entry;
   }
 
-  update(id: string, patch: Partial<Pick<ScheduledMessage, 'scheduledAt' | 'recurrence' | 'template' | 'imageDataUrl' | 'contacts'>>): void {
+  update(id: string, patch: Partial<Pick<ScheduledMessage, 'scheduledAt' | 'recurrence' | 'template' | 'imageDataUrls' | 'imageDataUrl' | 'contacts'>>): void {
     const list = this.schedulesSubject.value.map(s =>
-      s.id === id ? { ...s, ...patch } : s
+      s.id === id ? this.normalizeSchedule({ ...s, ...patch }) : s
     );
     this.setSchedules(list);
   }
@@ -124,7 +124,13 @@ export class ScheduledMessageService implements OnDestroy {
 
   dismissNotification(id: string): void {
     const list = this.schedulesSubject.value.map(s =>
-      s.id === id && s.status === 'notified' ? { ...s, status: 'pending' as const } : s
+      s.id === id && s.status === 'notified'
+        ? {
+            ...s,
+            status: 'pending' as const,
+            reminderDismissedForScheduledAt: s.scheduledAt
+          }
+        : s
     );
     this.setSchedules(list);
     if (this.upcomingSubject.value?.id === id) {
@@ -149,6 +155,7 @@ export class ScheduledMessageService implements OnDestroy {
 
     for (const schedule of schedules) {
       if (schedule.status !== 'pending' || this.executingScheduleIds.has(schedule.id)) continue;
+      if (schedule.reminderDismissedForScheduledAt === schedule.scheduledAt) continue;
 
       const targetMs = new Date(schedule.scheduledAt).getTime();
       if (!Number.isFinite(targetMs)) continue;
@@ -212,8 +219,12 @@ export class ScheduledMessageService implements OnDestroy {
       if (!raw) return;
       const parsed = JSON.parse(raw) as ScheduledMessage[];
       if (Array.isArray(parsed)) {
-        const restored = parsed.map(s =>
-          s.status === 'notified' ? { ...s, status: 'pending' as const } : s
+        const restored = parsed.map(schedule => {
+          const normalized = this.normalizeSchedule(schedule);
+          return normalized.status === 'notified'
+            ? { ...normalized, status: 'pending' as const }
+            : normalized;
+        }
         );
         this.schedulesSubject.next(restored);
       }
@@ -232,5 +243,24 @@ export class ScheduledMessageService implements OnDestroy {
       window.clearInterval(this.checkTimer);
       this.checkTimer = null;
     }
+  }
+
+  private normalizeSchedule(schedule: ScheduledMessage): ScheduledMessage {
+    const imageDataUrls = this.resolveImageDataUrls(schedule);
+
+    return {
+      ...schedule,
+      reminderDismissedForScheduledAt: schedule.reminderDismissedForScheduledAt || undefined,
+      imageDataUrls: imageDataUrls.length ? [...imageDataUrls] : undefined,
+      imageDataUrl: imageDataUrls[0]
+    };
+  }
+
+  private resolveImageDataUrls(schedule: Pick<ScheduledMessage, 'imageDataUrls' | 'imageDataUrl'>): string[] {
+    if (Array.isArray(schedule.imageDataUrls) && schedule.imageDataUrls.length) {
+      return schedule.imageDataUrls.filter((dataUrl): dataUrl is string => Boolean(dataUrl));
+    }
+
+    return schedule.imageDataUrl ? [schedule.imageDataUrl] : [];
   }
 }

@@ -36,7 +36,23 @@
 }
 
 .bulk-panel-header-actions {
-  @apply inline-flex gap-1;
+  @apply inline-flex items-center gap-1;
+}
+
+.bulk-panel-header-btn {
+  @apply inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.18] bg-white/[0.12] px-3 text-[0.75rem] font-medium text-white;
+}
+
+.bulk-panel-header-btn:hover:not(:disabled) {
+  @apply bg-white/[0.22];
+}
+
+.bulk-panel-header-btn:disabled {
+  @apply cursor-not-allowed opacity-50;
+}
+
+.bulk-panel-header-btn .material-symbols-outlined {
+  @apply text-[1rem];
 }
 
 .btn-icon {
@@ -198,4 +214,14 @@
 
 .bulk-panel-confirm__actions {
   @apply grid grid-cols-2 gap-2;
+}
+
+@media (max-width: 420px) {
+  .bulk-panel-header-btn span:last-child {
+    @apply hidden;
+  }
+
+  .bulk-panel-header-btn {
+    @apply w-8 justify-center px-0;
+  }
 }

@@ -12,7 +12,7 @@ import { ScheduledMessageService } from '../../../../services/scheduled-message.
 import { ScheduleResult } from '../../../../components/schedule-modal/schedule-modal.component';
 import { ScheduleCreateRequest, ScheduleEditRequest } from '../../../../components/schedule-list-modal/schedule-list-modal.component';
 import { extractDigits } from '../../helpers/phone-format.helper';
-import { BulkSendService } from '../../services/bulk-send.service';
+import { BulkQueue, BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
 const ERROR_AUTO_DISMISS_MS = 4000;
@@ -50,13 +50,10 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     title: 'Envio para vários contatos',
     description: 'Escreva a mensagem que será pré-preenchida para cada contato selecionado. Use {nome} para incluir o nome do contato.'
   };
-  /**
-   * Último template usado num envio em massa nesta sessão. Mantido entre
-   * aberturas do modal pra que o botão "Editar mensagem" da bulk-action-bar
-   * possa reabrir o modal pré-preenchido.
-   */
-  lastBulkTemplate = '';
-  lastBulkImageDataUrls: string[] = [];
+  activeBulkQueue: BulkQueue | null = null;
+  bulkTemplateInitialTemplate = '';
+  bulkTemplateInitialImageDataUrls: string[] = [];
+  isEditingActiveBulkMessage = false;
 
   isScheduleModalOpen = false;
   isScheduleListModalOpen = false;
@@ -74,7 +71,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     description: 'Escreva a mensagem que será enviada. Use {nome} para incluir o nome do contato.'
   };
   scheduleEditInitialTemplate = '';
-  scheduleEditInitialImage: string | undefined;
+  scheduleEditInitialImages: string[] = [];
 
   allContacts: WhatsappContact[] = [];
   visibleContacts: WhatsappContact[] = [];
@@ -196,6 +193,18 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         this.scheduledMessageService.cancelExecution(event.scheduleId);
       });
 
+    this.bulkSend.queue$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(queue => {
+        this.activeBulkQueue = queue;
+
+        if (!queue && this.isEditingActiveBulkMessage) {
+          this.isEditingActiveBulkMessage = false;
+          this.isTemplateModalOpen = false;
+          this.resetBulkTemplateModalState();
+        }
+      });
+
     this.scheduleListLauncher.openRequests$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
@@ -260,21 +269,21 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     if (!this.selectedCount || this.isUiBlocked) {
       return;
     }
+
+    this.isEditingActiveBulkMessage = false;
+    this.resetBulkTemplateModalState();
     this.isTemplateModalOpen = true;
   }
 
-  onEditBulkMessage(): void {
-    if (this.isUiBlocked) {
+  onEditActiveBulkMessage(): void {
+    if (this.isUiBlocked || !this.activeBulkQueue || this.bulkSend.isSendingCurrent) {
       return;
     }
-    // Reabre o modal pré-preenchido com o último template (incluindo
-    // imagens). Útil pra corrigir um typo antes de iniciar um novo envio
-    // em massa pra outra seleção de contatos.
-    this.isTemplateModalOpen = true;
-  }
 
-  get canEditBulkMessage(): boolean {
-    return this.lastBulkTemplate.trim().length > 0 || this.lastBulkImageDataUrls.length > 0;
+    this.isEditingActiveBulkMessage = true;
+    this.bulkTemplateInitialTemplate = this.activeBulkQueue.template;
+    this.bulkTemplateInitialImageDataUrls = this.resolveBulkQueueImageDataUrls(this.activeBulkQueue);
+    this.isTemplateModalOpen = true;
   }
 
   onOpenBulkLabels(): void {
@@ -319,6 +328,8 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   onCloseTemplateModal(): void {
+    this.isEditingActiveBulkMessage = false;
+    this.resetBulkTemplateModalState();
     this.isTemplateModalOpen = false;
   }
 
@@ -326,18 +337,25 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     const trimmed = result.text.trim();
     const imageDataUrls = result.imageDataUrls ? [...result.imageDataUrls] : [];
 
+    if (this.isEditingActiveBulkMessage) {
+      this.bulkSend.updateTemplate(trimmed, imageDataUrls);
+      this.isEditingActiveBulkMessage = false;
+      this.resetBulkTemplateModalState();
+      this.isTemplateModalOpen = false;
+      return;
+    }
+
     const selectedContacts = this.allContacts.filter(c => this.selectedJidSet.has(c.jid));
     if (!selectedContacts.length) {
+      this.resetBulkTemplateModalState();
       this.isTemplateModalOpen = false;
       return;
     }
 
     // Em modo bulk permitimos iniciar sem mensagem nem imagem: o usuário
     // vai compor uma mensagem específica para cada contato no painel.
-    this.lastBulkTemplate = trimmed;
-    this.lastBulkImageDataUrls = imageDataUrls;
-
     this.bulkSend.start(selectedContacts, trimmed, imageDataUrls);
+    this.resetBulkTemplateModalState();
     this.isTemplateModalOpen = false;
     this.state.exitSelectionMode();
   }
@@ -362,7 +380,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.pendingScheduleRecurrence = result.recurrence;
     this.isScheduleModalOpen = false;
     this.scheduleEditInitialTemplate = '';
-    this.scheduleEditInitialImage = undefined;
+    this.scheduleEditInitialImages = [];
     this.scheduleTemplateModalOpen = true;
   }
 
@@ -372,7 +390,8 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   onScheduleTemplateSave(result: MessageTemplateSaveResult): void {
     const text = result.text.trim();
-    if (!text) return;
+    const imageDataUrls = result.imageDataUrls ? [...result.imageDataUrls] : [];
+    if (!text && !imageDataUrls.length) return;
 
     const contacts: ScheduledContact[] = this.scheduleContacts.map(c => ({
       jid: c.jid,
@@ -385,7 +404,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         scheduledAt: this.pendingScheduleDate,
         recurrence: this.pendingScheduleRecurrence,
         template: text,
-        imageDataUrl: result.imageDataUrls?.[0],
+        imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
         contacts
       });
     } else {
@@ -393,7 +412,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         scheduledAt: this.pendingScheduleDate,
         recurrence: this.pendingScheduleRecurrence,
         template: text,
-        imageDataUrl: result.imageDataUrls?.[0],
+        imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
         contacts
       });
     }
@@ -420,7 +439,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       .map(sc => this.resolveScheduledContact(sc))
       .filter((contact): contact is WhatsappContact => contact !== null);
     this.scheduleEditInitialTemplate = '';
-    this.scheduleEditInitialImage = undefined;
+    this.scheduleEditInitialImages = [];
     this.scheduleTemplateModalOpen = true;
   }
 
@@ -437,7 +456,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
     if (request.mode === 'edit-message') {
       this.scheduleEditInitialTemplate = sch.template;
-      this.scheduleEditInitialImage = sch.imageDataUrl;
+      this.scheduleEditInitialImages = this.resolveScheduleImageDataUrls(sch);
       this.isScheduleListModalOpen = false;
       this.scheduleTemplateModalOpen = true;
     } else {
@@ -460,10 +479,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     const matchedContacts = schedule.contacts
       .map(sc => this.resolveScheduledContact(sc))
       .filter((c): c is WhatsappContact => c !== null);
+    const imageDataUrls = this.resolveScheduleImageDataUrls(schedule);
 
     if (matchedContacts.length) {
       this.scheduledMessageService.beginExecution(schedule.id);
-      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
+      this.bulkSend.start(matchedContacts, schedule.template, imageDataUrls.length ? imageDataUrls : undefined, { scheduleId: schedule.id });
     }
     this.isScheduleListModalOpen = false;
   }
@@ -472,10 +492,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     const matchedContacts = schedule.contacts
       .map(sc => this.resolveScheduledContact(sc))
       .filter((c): c is WhatsappContact => c !== null);
+    const imageDataUrls = this.resolveScheduleImageDataUrls(schedule);
 
     if (matchedContacts.length) {
       this.scheduledMessageService.beginExecution(schedule.id);
-      this.bulkSend.start(matchedContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
+      this.bulkSend.start(matchedContacts, schedule.template, imageDataUrls.length ? imageDataUrls : undefined, { scheduleId: schedule.id });
     }
   }
 
@@ -504,6 +525,27 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     const template = this.messageTemplateService.getTemplates()[pending.templateType];
     const imageDataUrl = this.messageTemplateService.getTemplateImage(pending.templateType);
     this.bulkSend.start(uniqueContacts, template, imageDataUrl);
+  }
+
+  private resolveBulkQueueImageDataUrls(queue: Pick<BulkQueue, 'imageDataUrls' | 'imageDataUrl'>): string[] {
+    if (Array.isArray(queue.imageDataUrls) && queue.imageDataUrls.length) {
+      return queue.imageDataUrls.filter((dataUrl): dataUrl is string => Boolean(dataUrl));
+    }
+
+    return queue.imageDataUrl ? [queue.imageDataUrl] : [];
+  }
+
+  private resetBulkTemplateModalState(): void {
+    this.bulkTemplateInitialTemplate = '';
+    this.bulkTemplateInitialImageDataUrls = [];
+  }
+
+  private resolveScheduleImageDataUrls(schedule: Pick<ScheduledMessage, 'imageDataUrls' | 'imageDataUrl'>): string[] {
+    if (Array.isArray(schedule.imageDataUrls) && schedule.imageDataUrls.length) {
+      return schedule.imageDataUrls.filter((dataUrl): dataUrl is string => Boolean(dataUrl));
+    }
+
+    return schedule.imageDataUrl ? [schedule.imageDataUrl] : [];
   }
 
   private resolveScheduledContact(contact: ScheduledContact): WhatsappContact | null {

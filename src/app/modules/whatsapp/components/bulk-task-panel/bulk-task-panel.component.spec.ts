@@ -145,6 +145,19 @@ describe('BulkTaskPanelComponent', () => {
     expect(bulkSendSpy.sendCurrent).toHaveBeenCalled();
   });
 
+  it('emits editMessage when the edit control is clicked', () => {
+    queue$.next(makeQueue());
+    fixture.detectChanges();
+
+    const emitted = jasmine.createSpy('editMessage');
+    component.editMessage.subscribe(emitted);
+
+    const button = fixture.nativeElement.querySelector('.bulk-panel-header-btn') as HTMLButtonElement;
+    button.click();
+
+    expect(emitted).toHaveBeenCalled();
+  });
+
   it('Enter sends the current item when focus is outside interactive controls', () => {
     queue$.next(makeQueue());
     canSendCurrent = true;
@@ -224,23 +237,26 @@ describe('BulkTaskPanelComponent', () => {
     expect(bulkSendSpy.sendCurrent).not.toHaveBeenCalled();
   });
 
-  it('disables skip, cancel and send while the current item is still sending', () => {
+  it('disables the header edit button plus skip, cancel and send while the current item is still sending', () => {
     queue$.next(makeQueue());
     canSendCurrent = false;
     isSendingCurrent = true;
     fixture.detectChanges();
 
+    const editButton = fixture.nativeElement.querySelector('.bulk-panel-header-btn') as HTMLButtonElement;
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('.btn-control')) as HTMLButtonElement[];
 
+    expect(editButton.disabled).toBeTrue();
     expect(buttons[1].disabled).toBeTrue();
     expect(buttons[2].disabled).toBeTrue();
     expect(buttons[3].disabled).toBeTrue();
   });
 
-  it('renders the four bulk action buttons with shortcuts', () => {
+  it('renders the header edit button and the four footer bulk action buttons with shortcuts', () => {
     queue$.next(makeQueue());
     fixture.detectChanges();
 
+    const editButton = fixture.nativeElement.querySelector('.bulk-panel-header-btn') as HTMLButtonElement;
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('.btn-control')) as HTMLButtonElement[];
     const controls = buttons.map(button => {
       const label = button.querySelector('.btn-control__label')?.textContent?.trim();
@@ -248,6 +264,7 @@ describe('BulkTaskPanelComponent', () => {
       return shortcut ? `${label} ${shortcut}` : label;
     });
 
+    expect(editButton.textContent).toContain('Editar');
     expect(controls).toEqual([
       'Pausar',
       'Pular',

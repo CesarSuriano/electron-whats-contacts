@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
+import { Component, EventEmitter, HostListener, OnDestroy, OnInit, Output } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -12,6 +12,8 @@ const MAX_VISIBLE_ITEMS = 18;
   styleUrls: ['./bulk-task-panel.component.scss']
 })
 export class BulkTaskPanelComponent implements OnInit, OnDestroy {
+  @Output() editMessage = new EventEmitter<void>();
+
   queue: BulkQueue | null = null;
   isMinimized = false;
   visibleItems: BulkItem[] = [];
@@ -60,8 +62,20 @@ export class BulkTaskPanelComponent implements OnInit, OnDestroy {
     return this.bulkSend.isSendingCurrent;
   }
 
+  get canEditMessage(): boolean {
+    return Boolean(this.queue) && !this.isSendingCurrent;
+  }
+
   send(): void {
     this.bulkSend.sendCurrent();
+  }
+
+  requestEdit(): void {
+    if (!this.canEditMessage) {
+      return;
+    }
+
+    this.editMessage.emit();
   }
 
   pause(): void {

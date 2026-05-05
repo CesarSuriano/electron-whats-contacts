@@ -1,5 +1,5 @@
 {
-  "version": "2.4.0",
-  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/2.4.0/UniqSystem.Setup.2.4.0.exe",
+  "version": "2.4.1",
+  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/2.4.1/UniqSystem.Setup.2.4.1.exe",
   "notes": "- Confirmação antes de apagar mensagens no WhatsApp\n- Encaminhamento de mensagens para múltiplos contatos com seleção visual\n- Etiquetas do WhatsApp integradas ao cabeçalho, ao seletor e aos filtros da lista de conversas\n- Aba de clientes reorganizada com painel de envio selecionado e ações mais consistentes\n- Correções de bugs"
 }

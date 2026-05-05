@@ -40,22 +40,4 @@
       Definir mensagem
     </button>
   </div>
-
-  <!--
-    5º botão, separado em um cluster próprio porque tem semântica diferente
-    dos outros: ele não dispara uma ação primária da seleção em massa, ele
-    abre de novo o modal pra editar a mensagem que o usuário já definiu
-    (quando esse botão fica visível).
-  -->
-  <div class="bulk-actions bulk-actions--secondary" *ngIf="canEditBulkMessage">
-    <button
-      type="button"
-      class="btn-secondary"
-      [disabled]="disabled"
-      (click)="editBulkMessage.emit()"
-    >
-      <span class="material-symbols-outlined">edit_note</span>
-      Editar mensagem
-    </button>
-  </div>
 </div>

@@ -10,7 +10,7 @@ import { MessageTemplateService } from '../../../../services/message-template.se
 import { PendingBulkSendService } from '../../../../services/pending-bulk-send.service';
 import { ScheduleListLauncherService } from '../../../../services/schedule-list-launcher.service';
 import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
-import { BulkSendService } from '../../services/bulk-send.service';
+import { BulkQueue, BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService, WhatsappSyncStatus } from '../../services/whatsapp-state.service';
 import { WhatsappConsoleComponent } from './whatsapp-console.component';
 
@@ -58,6 +58,7 @@ describe('WhatsappConsoleComponent', () => {
   const upcoming$ = new BehaviorSubject(null);
   const openRequests$ = new BehaviorSubject<void>(undefined);
   const scheduleLifecycle$ = new Subject<any>();
+  const bulkQueue$ = new BehaviorSubject<BulkQueue | null>(null);
 
   beforeEach(async () => {
     instances$.next([]);
@@ -79,6 +80,7 @@ describe('WhatsappConsoleComponent', () => {
     schedules$.next([]);
     upcoming$.next(null);
     openRequests$.next(undefined);
+    bulkQueue$.next(null);
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
       'loadInstances', 'selectInstance', 'refresh', 'selectAll', 'exitSelectionMode', 'clearErrorMessage', 'resolveConversationJid'
@@ -97,8 +99,10 @@ describe('WhatsappConsoleComponent', () => {
     });
     stateSpy.resolveConversationJid.and.callFake((jid: string) => jid);
 
-    bulkSpy = jasmine.createSpyObj('BulkSendService', ['start'], {
-      scheduleLifecycle$: scheduleLifecycle$.asObservable()
+    bulkSpy = jasmine.createSpyObj('BulkSendService', ['start', 'updateTemplate'], {
+      scheduleLifecycle$: scheduleLifecycle$.asObservable(),
+      queue$: bulkQueue$.asObservable(),
+      isSendingCurrent: false
     });
     pendingBulkSpy = jasmine.createSpyObj('PendingBulkSendService', ['consume']);
     pendingBulkSpy.consume.and.returnValue(null);
@@ -311,6 +315,25 @@ describe('WhatsappConsoleComponent', () => {
         ['data:image/png;base64,aaa', 'data:image/png;base64,bbb']
       );
     });
+
+    it('updates the active queue instead of restarting bulk when editing an in-flight message', () => {
+      bulkQueue$.next({
+        template: 'Antiga {nome}',
+        imageDataUrls: ['data:image/png;base64,old'],
+        items: [{ jid: '5511@c.us', name: 'User', status: 'current' }],
+        isPaused: false,
+        createdAt: '2026-04-24T10:00:00.000Z'
+      });
+
+      component.onEditActiveBulkMessage();
+      component.onSaveTemplate({
+        text: 'Nova {nome}',
+        imageDataUrls: ['data:image/png;base64,new-1', 'data:image/png;base64,new-2']
+      });
+
+      expect(bulkSpy.updateTemplate).toHaveBeenCalledWith('Nova {nome}', ['data:image/png;base64,new-1', 'data:image/png;base64,new-2']);
+      expect(bulkSpy.start).not.toHaveBeenCalled();
+    });
   });
 
   it('starts a schedule execution through bulk send and suppresses its notification', () => {
@@ -319,6 +342,7 @@ describe('WhatsappConsoleComponent', () => {
       scheduledAt: '2026-04-24T12:00:00.000Z',
       recurrence: 'none',
       template: 'Oi {nome}',
+      imageDataUrls: ['data:image/png;base64,one', 'data:image/png;base64,two'],
       contacts: [{ jid: '5511@c.us', name: 'User', phone: '5511' }],
       status: 'pending',
       createdAt: '2026-04-24T10:00:00.000Z'
@@ -330,7 +354,7 @@ describe('WhatsappConsoleComponent', () => {
     component.onTriggerSchedule(schedule.id);
 
     expect(scheduledMessageServiceSpy.beginExecution).toHaveBeenCalledWith(schedule.id);
-    expect(bulkSpy.start).toHaveBeenCalledWith(component.allContacts, schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
+    expect(bulkSpy.start).toHaveBeenCalledWith(component.allContacts, schedule.template, schedule.imageDataUrls, { scheduleId: schedule.id });
   });
 
   it('resolves equivalent scheduled contacts before starting a schedule execution', () => {
@@ -339,6 +363,7 @@ describe('WhatsappConsoleComponent', () => {
       scheduledAt: '2026-04-24T12:00:00.000Z',
       recurrence: 'none',
       template: 'Oi {nome}',
+      imageDataUrls: ['data:image/png;base64,one', 'data:image/png;base64,two'],
       contacts: [{ jid: '120363999999999999@lid', name: 'Ana', phone: '5511987654321' }],
       status: 'pending',
       createdAt: '2026-04-24T10:00:00.000Z'
@@ -359,7 +384,26 @@ describe('WhatsappConsoleComponent', () => {
     component.onTriggerSchedule(schedule.id);
 
     expect(scheduledMessageServiceSpy.beginExecution).toHaveBeenCalledWith(schedule.id);
-    expect(bulkSpy.start).toHaveBeenCalledWith([canonical], schedule.template, schedule.imageDataUrl, { scheduleId: schedule.id });
+    expect(bulkSpy.start).toHaveBeenCalledWith([canonical], schedule.template, schedule.imageDataUrls, { scheduleId: schedule.id });
+  });
+
+  it('stores all scheduled imageDataUrls when saving the message step', () => {
+    component.scheduleContacts = [makeContact('5511@c.us')];
+    component.pendingScheduleDate = '2026-04-24T12:00:00.000Z';
+    component.pendingScheduleRecurrence = 'none';
+
+    scheduledMessageServiceSpy.update = jasmine.createSpy('update');
+    scheduledMessageServiceSpy.create = jasmine.createSpy('create');
+
+    component.onScheduleTemplateSave({
+      text: 'Oi {nome}',
+      imageDataUrls: ['data:image/png;base64,one', 'data:image/png;base64,two']
+    });
+
+    expect(scheduledMessageServiceSpy.create).toHaveBeenCalledWith(jasmine.objectContaining({
+      template: 'Oi {nome}',
+      imageDataUrls: ['data:image/png;base64,one', 'data:image/png;base64,two']
+    }));
   });
 
   it('completes the schedule when the scheduled bulk finishes', () => {
