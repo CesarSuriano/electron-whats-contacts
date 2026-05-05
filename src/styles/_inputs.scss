@@ -1,0 +1,20 @@
+.input {
+	@apply w-full rounded border border-border-strong bg-surface px-3.5 py-2.5 text-[14.5px] text-txt transition-colors;
+}
+.input:focus {
+	@apply outline-none border-accent;
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.input-group { @apply relative; }
+.input-group .input { @apply pl-[34px]; }
+.input-group .input-icon {
+	@apply pointer-events-none absolute left-2.5 top-1/2 inline-flex -translate-y-1/2 text-txt-subtle;
+}
+
+.sort-arrow {
+	@apply ml-1 text-[0.7rem];
+}
+
+.action-icon {
+	@apply mr-1.5 text-[1rem];
+}

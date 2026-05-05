@@ -50,6 +50,13 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     title: 'Envio para vários contatos',
     description: 'Escreva a mensagem que será pré-preenchida para cada contato selecionado. Use {nome} para incluir o nome do contato.'
   };
+  /**
+   * Último template usado num envio em massa nesta sessão. Mantido entre
+   * aberturas do modal pra que o botão "Editar mensagem" da bulk-action-bar
+   * possa reabrir o modal pré-preenchido.
+   */
+  lastBulkTemplate = '';
+  lastBulkImageDataUrls: string[] = [];
 
   isScheduleModalOpen = false;
   isScheduleListModalOpen = false;
@@ -256,6 +263,20 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.isTemplateModalOpen = true;
   }
 
+  onEditBulkMessage(): void {
+    if (this.isUiBlocked) {
+      return;
+    }
+    // Reabre o modal pré-preenchido com o último template (incluindo
+    // imagens). Útil pra corrigir um typo antes de iniciar um novo envio
+    // em massa pra outra seleção de contatos.
+    this.isTemplateModalOpen = true;
+  }
+
+  get canEditBulkMessage(): boolean {
+    return this.lastBulkTemplate.trim().length > 0 || this.lastBulkImageDataUrls.length > 0;
+  }
+
   onOpenBulkLabels(): void {
     if (!this.selectedCount || this.isUiBlocked) {
       return;
@@ -303,16 +324,20 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   onSaveTemplate(result: MessageTemplateSaveResult): void {
     const trimmed = result.text.trim();
-    if (!trimmed) {
-      return;
-    }
+    const imageDataUrls = result.imageDataUrls ? [...result.imageDataUrls] : [];
 
     const selectedContacts = this.allContacts.filter(c => this.selectedJidSet.has(c.jid));
     if (!selectedContacts.length) {
+      this.isTemplateModalOpen = false;
       return;
     }
 
-    this.bulkSend.start(selectedContacts, trimmed, result.imageDataUrl);
+    // Em modo bulk permitimos iniciar sem mensagem nem imagem: o usuário
+    // vai compor uma mensagem específica para cada contato no painel.
+    this.lastBulkTemplate = trimmed;
+    this.lastBulkImageDataUrls = imageDataUrls;
+
+    this.bulkSend.start(selectedContacts, trimmed, imageDataUrls);
     this.isTemplateModalOpen = false;
     this.state.exitSelectionMode();
   }
@@ -360,7 +385,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         scheduledAt: this.pendingScheduleDate,
         recurrence: this.pendingScheduleRecurrence,
         template: text,
-        imageDataUrl: result.imageDataUrl,
+        imageDataUrl: result.imageDataUrls?.[0],
         contacts
       });
     } else {
@@ -368,7 +393,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         scheduledAt: this.pendingScheduleDate,
         recurrence: this.pendingScheduleRecurrence,
         template: text,
-        imageDataUrl: result.imageDataUrl,
+        imageDataUrl: result.imageDataUrls?.[0],
         contacts
       });
     }

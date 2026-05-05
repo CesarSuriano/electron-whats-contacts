@@ -1,18 +1,20 @@
 <div class="composer">
-  <div class="composer__attachment" *ngIf="selectedFile">
-    <img class="composer__attachment-preview" *ngIf="filePreviewUrl" [src]="filePreviewUrl" alt="Pré-visualização" />
-    <div class="composer__attachment-placeholder" *ngIf="!filePreviewUrl">
-      <span class="material-symbols-outlined composer__attachment-placeholder-icon">description</span>
-    </div>
+  <div class="composer__attachments" *ngIf="selectedFiles.length">
+    <div class="composer__attachment" *ngFor="let file of selectedFiles; let i = index">
+      <img class="composer__attachment-preview" *ngIf="filePreviewUrls[i]" [src]="filePreviewUrls[i]" alt="Pré-visualização" />
+      <div class="composer__attachment-placeholder" *ngIf="!filePreviewUrls[i]">
+        <span class="material-symbols-outlined composer__attachment-placeholder-icon">description</span>
+      </div>
 
-    <div class="composer__attachment-copy">
-      <span class="composer__attachment-name">{{ selectedFile.name }}</span>
-      <span class="composer__attachment-size">{{ fileSizeLabel }}</span>
-    </div>
+      <div class="composer__attachment-copy">
+        <span class="composer__attachment-name">{{ file.name }}</span>
+        <span class="composer__attachment-size">{{ getFileSizeLabel(file) }}</span>
+      </div>
 
-    <button type="button" class="composer__icon-button composer__icon-button--clear" (click)="clearAttachment()" aria-label="Remover anexo">
-      <span class="material-symbols-outlined composer__icon-button-symbol">close</span>
-    </button>
+      <button type="button" class="composer__icon-button composer__icon-button--clear" (click)="clearAttachment(i)" aria-label="Remover anexo">
+        <span class="material-symbols-outlined composer__icon-button-symbol">close</span>
+      </button>
+    </div>
   </div>
 
   <p class="composer__attachment-error" *ngIf="attachmentError">{{ attachmentError }}</p>

@@ -3,26 +3,47 @@ import type { Container } from './container.js';
 import { loadConfigFromEnv } from './config.js';
 import { bindClientEvents, buildContainer } from './container.js';
 import { createApp } from './app.js';
+import {
+  getErrorMessage,
+  isRecoverableInitError,
+  isRecoverableLocalAuthLockError,
+  isRecoverableProcessError
+} from './whatsapp/RecoverableErrors.js';
 
 dotenv.config();
 
-const LOCAL_AUTH_LOCK_ERROR = /EBUSY: resource busy or locked/i;
-const LOCAL_AUTH_LOGOUT_PATH = /LocalAuth\.js|first_party_sets\.db-journal/i;
 const RECOVER_INIT_DELAY_MS = 1200;
 
-function isRecoverableLocalAuthLockError(error: unknown): boolean {
-  const message = String((error as { message?: unknown } | null)?.message || '');
-  const stack = String((error as { stack?: unknown } | null)?.stack || '');
-  const combined = `${message}\n${stack}`;
-  return LOCAL_AUTH_LOCK_ERROR.test(combined) && LOCAL_AUTH_LOGOUT_PATH.test(combined);
+function stopAutoRecoveryWithBudgetError(container: Container, origin: string, error: unknown): void {
+  const attempts = container.recoveryBudget.attemptsInWindow;
+  const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+
+  container.sessionState.status = 'init_error';
+  container.sessionState.qr = null;
+  container.sessionState.lastError = `Sessao do WhatsApp nao respondeu apos ${attempts}/${maxAttempts} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
+
+  console.error(
+    `[whatsapp-webjs-bridge] Limite de auto-recuperacao excedido (${origin}, ${attempts}/${maxAttempts}):`,
+    getErrorMessage(error)
+  );
+  container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
+}
+
+function tryConsumeRecoveryBudget(container: Container, origin: string, error: unknown): boolean {
+  if (container.recoveryBudget.tryConsume()) {
+    return true;
+  }
+
+  stopAutoRecoveryWithBudgetError(container, origin, error);
+  return false;
 }
 
 function installProcessGuards(container: Container): void {
   let recoverTimer: NodeJS.Timeout | null = null;
 
   const scheduleRecovery = (origin: 'uncaughtException' | 'unhandledRejection', error: unknown): void => {
-    if (!isRecoverableLocalAuthLockError(error)) {
-      const message = String((error as { message?: unknown } | null)?.message || error);
+    if (!isRecoverableProcessError(error)) {
+      const message = getErrorMessage(error);
       if (origin === 'unhandledRejection') {
         console.error('[whatsapp-webjs-bridge] Rejeicao nao tratada:', message);
       } else {
@@ -42,13 +63,30 @@ function installProcessGuards(container: Container): void {
       return;
     }
 
-    console.warn('[whatsapp-webjs-bridge] Ignorando erro recuperavel de lock no LocalAuth. Tentando recuperar sessao...');
-    container.sessionState.lastError = 'Sessao desconectada. Gerando novo QR code...';
+    if (isRecoverableLocalAuthLockError(error)) {
+      console.warn('[whatsapp-webjs-bridge] Ignorando erro recuperavel de lock no LocalAuth. Tentando recuperar sessao...');
+      container.sessionState.lastError = 'Sessao desconectada. Tentando recuperar sessao salva...';
+    } else {
+      console.warn('[whatsapp-webjs-bridge] Ignorando erro recuperavel de contexto do WhatsApp Web. Tentando restaurar sessao...');
+      container.sessionState.lastError = 'Contexto do WhatsApp Web reiniciado. Tentando restaurar sessao...';
+    }
+
     container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
 
     if (recoverTimer) {
       return;
     }
+
+    if (!tryConsumeRecoveryBudget(container, `process:${origin}`, error)) {
+      return;
+    }
+
+    const attempt = container.recoveryBudget.attemptsInWindow;
+    const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+    container.sessionState.lastError = isRecoverableLocalAuthLockError(error)
+      ? `Sessao desconectada. Tentando recuperar sessao salva (${attempt}/${maxAttempts})...`
+      : `Contexto do WhatsApp Web reiniciado. Tentando restaurar sessao (${attempt}/${maxAttempts})...`;
+    container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
 
     recoverTimer = setTimeout(() => {
       recoverTimer = null;
@@ -76,8 +114,68 @@ function installProcessGuards(container: Container): void {
 async function main(): Promise<void> {
   const config = loadConfigFromEnv();
   const container = buildContainer(config);
+  let startupRecoveryTimer: NodeJS.Timeout | null = null;
   bindClientEvents(container);
   installProcessGuards(container);
+
+  const stopRecoveringAndFail = (error: unknown, reason: string): void => {
+    container.sessionState.status = 'init_error';
+    container.sessionState.qr = null;
+    container.sessionState.lastError = (error as { message?: string } | null)?.message
+      || String(error)
+      || reason;
+    console.error(
+      `[whatsapp-webjs-bridge] ${reason}:`,
+      (error as { message?: string } | null)?.message || String(error)
+    );
+    container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
+  };
+
+  const scheduleStartupRecovery = (error: unknown): void => {
+    if (!isRecoverableInitError(error) || startupRecoveryTimer) {
+      return;
+    }
+
+    if (!tryConsumeRecoveryBudget(container, 'startup', error)) {
+      return;
+    }
+
+    const attempt = container.recoveryBudget.attemptsInWindow;
+    const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+    console.warn(
+      `[whatsapp-webjs-bridge] Inicializacao transitoria falhou (tentativa ${attempt}/${maxAttempts}). Tentando novamente...`
+    );
+    container.sessionState.status = 'initializing';
+    container.sessionState.qr = null;
+    container.sessionState.lastError = `Sessao demorou para responder. Tentando novamente (${attempt}/${maxAttempts})...`;
+    container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
+
+    startupRecoveryTimer = setTimeout(() => {
+      startupRecoveryTimer = null;
+
+      if (container.sessionManager.isManualDisconnectInProgress()) {
+        return;
+      }
+
+      if (container.sessionState.status === 'ready' || container.sessionState.status === 'authenticated' || container.sessionState.status === 'qr_required') {
+        return;
+      }
+
+      container.sessionState.status = 'initializing';
+      container.sessionState.qr = null;
+      container.sessionState.lastError = '';
+      container.broadcaster.broadcast('session_state', container.sessionManager.getSessionSnapshot());
+
+      container.sessionManager.ensureInitialized()
+        .catch(initError => {
+          if (isRecoverableInitError(initError)) {
+            scheduleStartupRecovery(initError);
+            return;
+          }
+          stopRecoveringAndFail(initError, 'Falha ao recuperar inicializacao com erro não-recuperável');
+        });
+    }, RECOVER_INIT_DELAY_MS);
+  };
 
   const app = createApp(container);
 
@@ -90,6 +188,11 @@ async function main(): Promise<void> {
     try {
       await container.sessionManager.ensureInitialized();
     } catch (error) {
+      if (isRecoverableInitError(error)) {
+        scheduleStartupRecovery(error);
+        return;
+      }
+
       container.sessionState.status = 'init_error';
       container.sessionState.lastError = (error as { message?: string } | null)?.message || String(error);
       console.error(

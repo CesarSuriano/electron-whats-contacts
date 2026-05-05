@@ -118,4 +118,12 @@ export class EventStore {
     const event = this._events.find(e => e.id === messageId);
     return event ? event.chatJid : null;
   }
+
+  removeEvent(messageId: string): boolean {
+    const index = this._events.findIndex(e => e.id === messageId);
+    if (index === -1) return false;
+    this._events.splice(index, 1);
+    this.recentEventIds.delete(messageId);
+    return true;
+  }
 }

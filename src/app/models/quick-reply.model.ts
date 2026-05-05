@@ -3,7 +3,7 @@ export interface QuickReply {
   shortcode: string;
   title?: string;
   content: string;
-  imageDataUrl?: string;
+  imageDataUrls?: string[];
   updatedAt: string;
 }
 
@@ -11,5 +11,5 @@ export interface QuickReplyDraft {
   shortcode: string;
   title?: string;
   content: string;
-  imageDataUrl?: string;
+  imageDataUrls?: string[];
 }

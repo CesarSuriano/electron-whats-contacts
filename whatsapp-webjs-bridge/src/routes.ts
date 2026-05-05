@@ -28,7 +28,10 @@ export function buildRoutes(container: Container): Router {
   router.get('/api/whatsapp/chats/:jid/messages', controllers.history.messages);
 
   router.post('/api/whatsapp/messages', controllers.messages.sendText);
+  router.post('/api/whatsapp/messages/reply', controllers.messages.replyMessage);
+  router.post('/api/whatsapp/messages/forward', controllers.messages.forwardMessage);
   router.post('/api/whatsapp/messages/media', upload.single('file'), controllers.messages.sendMedia);
+  router.delete('/api/whatsapp/messages/:messageId', controllers.messages.deleteMessage);
 
   return router;
 }

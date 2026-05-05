@@ -408,3 +408,80 @@ describe('IngestionService.ingestOutboundFromCreate', () => {
     assert.equal(contactStore.has('5511987654321@c.us'), false);
   });
 });
+
+// Bug C regression: quando aprendemos um mapeamento LID, qualquer entry
+// stale do LID no contactStore deve ser absorvida no canonical. Antes a
+// merge só rodava se o registerCanonicalLid "deslocava" um canonical
+// anterior, deixando entries LID órfãs (causa raiz da duplicação Vanessa).
+describe('IngestionService LID dedup', () => {
+  it('merges stale LID contact into canonical when inbound resolves the LID', async () => {
+    let getContactCalls = 0;
+    const { service, contactStore } = makeService();
+
+    // Pre-popula um contato LID stale (cenário: chegou via getChats refresh
+    // antes de aprendermos o mapeamento da Vanessa).
+    contactStore.set('19975478492855@lid', contactStore.createDefault('19975478492855@lid', {
+      name: '19975478492855@lid',
+      lastMessageAt: '2026-04-30T12:00:00.000Z',
+      lastMessagePreview: 'mensagem antiga',
+      unreadCount: 1
+    }));
+
+    // Pre-popula o canonical (vanessa via getChats com o nome correto).
+    contactStore.set('554499113703@c.us', contactStore.createDefault('554499113703@c.us', {
+      name: 'Vanessa Lima',
+      phone: '554499113703',
+      lastMessageAt: '2026-04-30T11:00:00.000Z'
+    }));
+
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-vanessa', fromMe: false, remote: '19975478492855@lid' },
+        from: '19975478492855@lid',
+        to: '5511000000000@c.us',
+        body: 'oi',
+        timestamp: 1700002000,
+        getContact: async () => {
+          getContactCalls += 1;
+          return {
+            id: { _serialized: '19975478492855@lid', user: '19975478492855' },
+            number: '554499113703'
+          };
+        }
+      },
+      'webjs-inbound'
+    );
+
+    // O contato LID deve ter desaparecido (mesclado no canonical).
+    assert.equal(contactStore.has('19975478492855@lid'), false, 'LID stale deve ter sido mesclado');
+
+    // O canonical deve ter mantido nome correto e absorvido o unreadCount.
+    const canonical = contactStore.get('554499113703@c.us');
+    assert.ok(canonical);
+    assert.equal(canonical.name, 'Vanessa Lima');
+    assert.ok((canonical.unreadCount ?? 0) >= 2, 'unreadCount deve incluir o stale + o novo inbound');
+  });
+
+  it('does not throw when LID has no stale entry to merge', async () => {
+    const { service, contactStore } = makeService();
+
+    await service.ingestInboundMessage(
+      {
+        id: { _serialized: 'msg-novo', fromMe: false, remote: '19975478492855@lid' },
+        from: '19975478492855@lid',
+        to: '5511000000000@c.us',
+        body: 'primeira',
+        timestamp: 1700002001,
+        getContact: async () => ({
+          id: { _serialized: '19975478492855@lid', user: '19975478492855' },
+          number: '554499113703'
+        })
+      },
+      'webjs-inbound'
+    );
+
+    // Sem dup: contact criado direto no canonical.
+    assert.equal(contactStore.has('19975478492855@lid'), false);
+    assert.ok(contactStore.get('554499113703@c.us'));
+  });
+});

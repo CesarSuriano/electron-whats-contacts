@@ -75,6 +75,15 @@ describe('MessageTemplateModalComponent', () => {
     expect(component.editableTemplate).toBe('Olá\n{nome}!');
   });
 
+  it('restores all initialImageDataUrls when opening the modal', () => {
+    component.isOpen = true;
+    component.initialImageDataUrls = ['data:image/png;base64,aaa', 'data:image/png;base64,bbb'];
+
+    component.ngOnChanges({ isOpen: { currentValue: true, previousValue: false, firstChange: true, isFirstChange: () => true } });
+
+    expect(component.selectedImageDataUrls).toEqual(['data:image/png;base64,aaa', 'data:image/png;base64,bbb']);
+  });
+
   it('resets editor state when isOpen becomes true', () => {
     component.isOpen = true;
     component.initialTemplate = 'T1';
@@ -101,10 +110,10 @@ describe('MessageTemplateModalComponent', () => {
     expect(result.text).toBe('Hello!');
   });
 
-  it('clearImage removes selectedImageDataUrl', () => {
-    component.selectedImageDataUrl = 'data:image/png;base64,abc';
+  it('clearImage removes all selectedImageDataUrls', () => {
+    component.selectedImageDataUrls = ['data:image/png;base64,abc'];
     component.clearImage();
-    expect(component.selectedImageDataUrl).toBeUndefined();
+    expect(component.selectedImageDataUrls.length).toBe(0);
   });
 
   it('undo does nothing when canUndo is false', () => {

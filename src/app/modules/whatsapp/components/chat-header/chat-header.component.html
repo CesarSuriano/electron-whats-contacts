@@ -17,9 +17,10 @@
       <span class="chat-header__label-dot" [style.background]="label.color"></span>
       <span class="chat-header__label-text">{{ label.name }}</span>
       <button
+        *ngIf="label.removable"
         type="button"
         class="chat-header__label-remove"
-        (click)="removeLabel(label)"
+        (click)="requestRemoveLabel(label)"
         [attr.aria-label]="'Remover etiqueta ' + label.name"
       >
         <span class="material-symbols-outlined">close</span>
@@ -54,19 +55,16 @@
           </div>
 
           <button
+            *ngIf="label.removable"
             type="button"
             class="chat-header__label-overflow-remove"
-            (click)="removeLabel(label)"
+            (click)="requestRemoveLabel(label)"
             [attr.aria-label]="'Remover etiqueta ' + label.name"
           >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <button type="button" class="chat-header__label-overflow-create" (click)="openLabelPicker()" title="Nova etiqueta">
-          <span class="material-symbols-outlined">add</span>
-          Nova etiqueta
-        </button>
       </div>
     </div>
 
@@ -86,9 +84,29 @@
       <app-label-picker-popover
         [isOpen]="isLabelPickerOpen"
         [jid]="contact.jid"
+        [contact]="contact"
+        [whatsappLabels]="whatsappLabels"
         (close)="closeLabelPicker()"
         (manage)="onManageRequested()"
       ></app-label-picker-popover>
     </div>
   </div>
 </header>
+
+<div class="chat-header__confirm-overlay" *ngIf="pendingRemovalLabel" (click)="closeRemoveLabelDialog()">
+  <div class="chat-header__confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="chat-header-remove-label-title" (click)="$event.stopPropagation()">
+    <div class="chat-header__confirm-header">
+      <h3 id="chat-header-remove-label-title" class="chat-header__confirm-title">Remover etiqueta</h3>
+      <button type="button" class="chat-header__confirm-close" (click)="closeRemoveLabelDialog()" aria-label="Fechar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <p class="chat-header__confirm-text">{{ removeLabelConfirmationText }}</p>
+
+    <footer class="chat-header__confirm-actions">
+      <button type="button" class="btn btn-outline" (click)="closeRemoveLabelDialog()">Cancelar</button>
+      <button type="button" class="btn btn-primary chat-header__confirm-button" (click)="confirmRemoveLabel()">Remover</button>
+    </footer>
+  </div>
+</div>

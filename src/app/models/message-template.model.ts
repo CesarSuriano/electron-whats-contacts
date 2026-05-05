@@ -18,5 +18,5 @@ export interface MessageTemplateEditorConfig {
 
 export interface MessageTemplateSaveResult {
   text: string;
-  imageDataUrl?: string;
+  imageDataUrls?: string[];
 }

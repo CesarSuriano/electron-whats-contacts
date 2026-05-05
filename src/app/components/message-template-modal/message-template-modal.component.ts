@@ -1,12 +1,17 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 import {
   normalizeMessageTemplateForEditing,
   renderMessageTemplateEditorHtml,
   renderMessageTemplatePreviewHtml
 } from '../../helpers/message-template.helper';
+import { ManagerLaunchService } from '../../services/manager-launch.service';
 import { MessageTemplateService } from '../../services/message-template.service';
+import { QuickReplyService } from '../../services/quick-reply.service';
 import { MessageTemplateEditorConfig, MessageTemplateSaveResult } from '../../models/message-template.model';
+import { QuickReply } from '../../models/quick-reply.model';
 
 type EditorTab = 'edit' | 'preview';
 
@@ -21,12 +26,15 @@ interface EditorSelectionState {
   end: number;
 }
 
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024);
+
 @Component({
   selector: 'app-message-template-modal',
   templateUrl: './message-template-modal.component.html',
   styleUrls: ['./message-template-modal.component.scss']
 })
-export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
+export class MessageTemplateModalComponent implements OnInit, OnChanges, OnDestroy {
   @ViewChild('templateEditor') templateEditor?: ElementRef<HTMLDivElement>;
   @ViewChild('imageInput') imageInput?: ElementRef<HTMLInputElement>;
 
@@ -35,16 +43,26 @@ export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
   @Input() editorConfig: MessageTemplateEditorConfig | null = null;
   @Input() initialTemplate = '';
   @Input() initialImageDataUrl?: string;
+  @Input() initialImageDataUrls: string[] = [];
+  /**
+   * Modo "bulk": modal abre como passo de uma seleção em massa onde o
+   * usuário pode escolher um template OU prosseguir sem mensagem (cada
+   * contato vai ser respondido individualmente). Muda o label do botão
+   * primário para "Continuar com/sem mensagem" e permite salvar vazio.
+   */
+  @Input() bulkMode = false;
 
   @Output() close = new EventEmitter<void>();
   @Output() save = new EventEmitter<MessageTemplateSaveResult>();
 
   editableTemplate = '';
-  selectedImageDataUrl?: string;
+  selectedImageDataUrls: string[] = [];
   activeTab: EditorTab = 'edit';
   isEmojiPickerExpanded = false;
+  isQuickReplyPickerOpen = false;
   quickAccessEmojis: string[] = [];
   allEmojiOptions: string[] = [];
+  availableQuickReplies: QuickReply[] = [];
   readonly defaultQuickAccessEmojis = ['🎉', '🎁', '✨', '🥳', '🛍️', '⭐', '☺️', '🙏'];
   readonly baseEmojiOptions = [
     '🎉', '🎁', '✨', '🥳', '🛍️', '⭐', '☺️', '🙏', '💖', '🎄', '😍', '🤩', '❤️', '😊', '🌟',
@@ -59,17 +77,99 @@ export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
   private pendingHistoryEntry: TemplateHistoryEntry | null = null;
   private historyCommitTimer: number | null = null;
   private editorSelection: EditorSelectionState = { start: 0, end: 0 };
+  private readonly destroy$ = new Subject<void>();
 
-  constructor(private messageTemplateService: MessageTemplateService) {}
+  constructor(
+    private messageTemplateService: MessageTemplateService,
+    private quickReplyService: QuickReplyService,
+    private managerLaunch: ManagerLaunchService
+  ) {}
+
+  ngOnInit(): void {
+    this.quickReplyService.items$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(items => (this.availableQuickReplies = items));
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['initialTemplate'] || changes['isOpen']) {
+    if (changes['initialTemplate'] || changes['initialImageDataUrl'] || changes['initialImageDataUrls'] || changes['isOpen']) {
       this.resetEditorState();
     }
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     this.clearPendingHistoryCommit();
+  }
+
+  get hasContent(): boolean {
+    return this.editableTemplate.trim().length > 0 || this.selectedImageDataUrls.length > 0;
+  }
+
+  get saveButtonLabel(): string {
+    if (this.bulkMode) {
+      return this.hasContent ? 'Continuar com mensagem' : 'Continuar sem mensagem';
+    }
+    return 'Salvar mensagem';
+  }
+
+  get saveButtonIcon(): string {
+    if (this.bulkMode) {
+      return 'arrow_forward';
+    }
+    return 'save';
+  }
+
+  get isSaveDisabled(): boolean {
+    if (this.isSaving) return true;
+    // Em modo bulk permitimos prosseguir sem mensagem (uma mensagem
+    // diferente será composta pra cada contato durante o envio em massa).
+    if (this.bulkMode) return false;
+    return !this.hasContent;
+  }
+
+  toggleQuickReplyPicker(): void {
+    this.isQuickReplyPickerOpen = !this.isQuickReplyPickerOpen;
+  }
+
+  applyQuickReply(reply: QuickReply): void {
+    this.flushPendingHistorySnapshot();
+    this.editableTemplate = normalizeMessageTemplateForEditing(reply.content || '');
+    if (reply.imageDataUrls?.length) {
+      this.selectedImageDataUrls = [...reply.imageDataUrls];
+    } else {
+      this.selectedImageDataUrls = [];
+    }
+    this.activeTab = 'edit';
+    this.editorSelection = {
+      start: this.editableTemplate.length,
+      end: this.editableTemplate.length
+    };
+    this.pushHistorySnapshot({
+      value: this.editableTemplate,
+      selectionStart: this.editableTemplate.length,
+      selectionEnd: this.editableTemplate.length
+    });
+    this.isQuickReplyPickerOpen = false;
+
+    requestAnimationFrame(() => {
+      this.syncEditorContent(this.editorSelection, true);
+    });
+  }
+
+  trackQuickReplyById(_index: number, item: QuickReply): string {
+    return item.id;
+  }
+
+  /**
+   * Abre o gerenciador de mensagens rápidas em cima do modal atual. Quando
+   * o usuário criar/editar e voltar, a lista no popover já reflete o novo
+   * item porque está bound ao Observable do QuickReplyService.
+   */
+  openQuickReplyManager(): void {
+    this.isQuickReplyPickerOpen = false;
+    this.managerLaunch.openQuickReplyManager();
   }
 
   get canUndo(): boolean {
@@ -287,29 +387,35 @@ export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
   }
 
   onImageSelected(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) {
-      return;
-    }
+    const files = Array.from((event.target as HTMLInputElement).files || []);
+    if (!files.length) return;
 
-    if (file.size > 3 * 1024 * 1024) {
-      window.alert('A imagem deve ter no máximo 3 MB.');
-      return;
+    for (const file of files) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        window.alert(`"${file.name}" deve ter no máximo ${MAX_IMAGE_MB} MB.`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.selectedImageDataUrls = [...this.selectedImageDataUrls, reader.result as string];
+      };
+      reader.readAsDataURL(file);
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.selectedImageDataUrl = reader.result as string;
-    };
-    reader.readAsDataURL(file);
 
     if (this.imageInput?.nativeElement) {
       this.imageInput.nativeElement.value = '';
     }
   }
 
+  removeImage(index: number): void {
+    this.selectedImageDataUrls = this.selectedImageDataUrls.filter((_, i) => i !== index);
+    if (!this.selectedImageDataUrls.length && this.imageInput?.nativeElement) {
+      this.imageInput.nativeElement.value = '';
+    }
+  }
+
   clearImage(): void {
-    this.selectedImageDataUrl = undefined;
+    this.selectedImageDataUrls = [];
     if (this.imageInput?.nativeElement) {
       this.imageInput.nativeElement.value = '';
     }
@@ -320,12 +426,15 @@ export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
   }
 
   saveTemplate(): void {
-    if (this.isSaving) {
+    if (this.isSaveDisabled) {
       return;
     }
 
     this.flushPendingHistorySnapshot();
-    this.save.emit({ text: this.editableTemplate, imageDataUrl: this.selectedImageDataUrl });
+    this.save.emit({
+      text: this.editableTemplate,
+      imageDataUrls: this.selectedImageDataUrls.length ? this.selectedImageDataUrls : undefined
+    });
   }
 
   private wrapSelection(prefix: string, suffix: string): void {
@@ -383,7 +492,11 @@ export class MessageTemplateModalComponent implements OnChanges, OnDestroy {
 
     this.clearPendingHistoryCommit();
     this.editableTemplate = normalizeMessageTemplateForEditing(this.initialTemplate);
-    this.selectedImageDataUrl = this.initialImageDataUrl;
+    this.selectedImageDataUrls = this.initialImageDataUrls.length
+      ? [...this.initialImageDataUrls]
+      : this.initialImageDataUrl
+        ? [this.initialImageDataUrl]
+        : [];
     this.activeTab = 'edit';
     this.isEmojiPickerExpanded = false;
     this.syncAvailableEmojis();

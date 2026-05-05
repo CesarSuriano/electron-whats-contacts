@@ -1,5 +1,5 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { BehaviorSubject, EMPTY, Subject, of, throwError } from 'rxjs';
 
@@ -206,6 +206,22 @@ describe('WhatsappPageComponent', () => {
     });
   });
 
+  describe('shouldShowReconnectButton', () => {
+    it('is true when the session is manually disconnected', () => {
+      component.isCheckingSession = false;
+      component.currentSessionStatus = 'disconnected';
+
+      expect(component.shouldShowReconnectButton).toBeTrue();
+    });
+
+    it('is false while the initial session check is still running', () => {
+      component.isCheckingSession = true;
+      component.currentSessionStatus = 'disconnected';
+
+      expect(component.shouldShowReconnectButton).toBeFalse();
+    });
+  });
+
   describe('shouldShowDisconnectAction', () => {
     it('is true for ready status', () => {
       component.currentSessionStatus = 'ready';
@@ -227,6 +243,24 @@ describe('WhatsappPageComponent', () => {
       expect(component.shouldShowDisconnectAction).toBeFalse();
     });
   });
+
+  it('keeps the console visible during a short transient session downgrade after ready', fakeAsync(() => {
+    (component as any).updateSessionState(makeStatus('ready'));
+
+    expect(component.isSessionReady).toBeTrue();
+
+    (component as any).updateSessionState(makeStatus('initializing'));
+
+    expect(component.isSessionReady).toBeTrue();
+    expect(component.currentSessionStatus).toBe('ready');
+
+    tick(4999);
+    expect(component.isSessionReady).toBeTrue();
+
+    tick(1);
+    expect(component.isSessionReady).toBeFalse();
+    expect(component.currentSessionStatus).toBe('initializing');
+  }));
 
   describe('closeDisconnectModal', () => {
     it('closes the modal when not loading', () => {
@@ -252,6 +286,7 @@ describe('WhatsappPageComponent', () => {
       expect(gatewaySpy.disconnectSession).toHaveBeenCalled();
       expect(component.isDisconnectModalOpen).toBeFalse();
       expect(component.isSessionActionLoading).toBeFalse();
+      expect(component.sessionStatusText).toContain('Gere um novo QR code');
     });
 
     it('sets error message on disconnect failure', () => {
@@ -309,6 +344,27 @@ describe('WhatsappPageComponent', () => {
       expect(gatewaySpy.connectSession).toHaveBeenCalled();
       expect(component.isSessionActionLoading).toBeFalse();
       expect(component.currentSessionStatus).toBe('authenticated');
+    });
+  });
+
+  describe('requestNewQrCode', () => {
+    it('starts a new connection when the session is disconnected', () => {
+      gatewaySpy.connectSession.and.returnValue(of(makeStatus('authenticated')));
+      component.currentSessionStatus = 'disconnected';
+
+      component.requestNewQrCode();
+
+      expect(gatewaySpy.connectSession).toHaveBeenCalled();
+      expect(component.currentSessionStatus).toBe('authenticated');
+      expect(component.isSessionActionLoading).toBeFalse();
+    });
+
+    it('does nothing when the session is not disconnected', () => {
+      component.currentSessionStatus = 'ready';
+
+      component.requestNewQrCode();
+
+      expect(gatewaySpy.connectSession).not.toHaveBeenCalled();
     });
   });
 });

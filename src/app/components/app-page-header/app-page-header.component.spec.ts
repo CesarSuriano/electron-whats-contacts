@@ -68,4 +68,17 @@ describe('AppPageHeaderComponent', () => {
 
     expect(headerComponent.isMenuOpen).toBeFalse();
   });
+
+  it('closes the config menu when a menu item is clicked', () => {
+    const menuButton = fixture.nativeElement.querySelectorAll('.app-page-header__menu-button')[1] as HTMLButtonElement;
+    menuButton.click();
+    fixture.detectChanges();
+
+    const menuItem = fixture.nativeElement.querySelector('.header-config-menu .config-menu-item') as HTMLButtonElement;
+    menuItem.click();
+    fixture.detectChanges();
+
+    expect(headerComponent.isMenuOpen).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.header-config-menu')).toBeFalsy();
+  });
 });

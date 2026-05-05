@@ -16,11 +16,14 @@ function makeStateMock() {
     selectContact: jasmine.createSpy('selectContact'),
     setDraftText: jasmine.createSpy('setDraftText'),
     setDraftTextForJid: jasmine.createSpy('setDraftTextForJid'),
+    setDraftImageDataUrls: jasmine.createSpy('setDraftImageDataUrls'),
+    setDraftImageDataUrlsForJid: jasmine.createSpy('setDraftImageDataUrlsForJid'),
     setDraftImageDataUrl: jasmine.createSpy('setDraftImageDataUrl'),
     setDraftImageDataUrlForJid: jasmine.createSpy('setDraftImageDataUrlForJid'),
     clearDraftTextsForJids: jasmine.createSpy('clearDraftTextsForJids'),
     clearDraftImageDataUrlsForJids: jasmine.createSpy('clearDraftImageDataUrlsForJids'),
     getDraftTextForJid: jasmine.createSpy('getDraftTextForJid').and.returnValue(''),
+    getDraftImageDataUrlsForJid: jasmine.createSpy('getDraftImageDataUrlsForJid').and.returnValue([]),
     getDraftImageDataUrlForJid: jasmine.createSpy('getDraftImageDataUrlForJid').and.returnValue(null),
     sendText: jasmine.createSpy('sendText').and.returnValue(of({})),
     sendMedia: jasmine.createSpy('sendMedia').and.returnValue(of({})),
@@ -70,9 +73,9 @@ describe('BulkSendService', () => {
     expect(service.hasActiveQueue).toBeFalse();
   });
 
-  it('start does nothing with empty template', () => {
+  it('start accepts an empty template so each contact can be filled manually', () => {
     service.start([makeContact('5511@c.us')], '   ');
-    expect(service.hasActiveQueue).toBeFalse();
+    expect(service.hasActiveQueue).toBeTrue();
   });
 
   it('currentItem returns current contact', () => {
@@ -217,6 +220,21 @@ describe('BulkSendService', () => {
     expect(jid).toBe('5511@c.us');
     expect(file).toEqual(jasmine.any(File));
     expect(caption).toBe('Legenda');
+  });
+
+  it('sendCurrent sends every queued image and keeps the caption only on the first file', () => {
+    const imageDataUrls = [
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGElEQVR42mP8z/D/PwMDAwMjI+P/AwMDAB9mBAd2vNh4AAAAAElFTkSuQmCC'
+    ];
+    stateMock.getDraftTextForJid.and.returnValue('Legenda');
+    service.start([makeContact('5511@c.us')], 'msg', imageDataUrls);
+
+    service.sendCurrent();
+
+    expect(stateMock.sendMedia).toHaveBeenCalledTimes(2);
+    expect(stateMock.sendMedia.calls.argsFor(0)[2]).toBe('Legenda');
+    expect(stateMock.sendMedia.calls.argsFor(1)[2]).toBe('');
   });
 
   it('opens and sends using the resolved canonical jid when the queue item jid is synthetic', () => {

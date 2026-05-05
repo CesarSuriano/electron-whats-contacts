@@ -1,0 +1,70 @@
+// Reset mínimo: tailwind preflight está desabilitado pra preservar estilos
+// padrões do browser nos componentes. O reset abaixo cobre só o que é
+// preciso pra Tailwind funcionar (border defaults, box-sizing).
+
+*,
+::before,
+::after {
+	border-style: solid;
+	border-width: 0;
+}
+
+*,
+*::before,
+*::after {
+	@apply box-border;
+}
+
+html,
+body {
+	@apply h-full m-0;
+}
+
+body {
+	@apply overflow-hidden antialiased text-[15px] leading-[1.5] bg-bg text-txt font-ui;
+	font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+app-root {
+	@apply h-full;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
+
+// Scrollbars: por padrão o Chromium usa cinza-claro que fica horrível no
+// tema escuro. Aqui aplicamos uma scrollbar neutra que adapta cores via
+// CSS vars — funciona tanto no Chrome quanto no Firefox.
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: var(--border-strong);
+	border-radius: 8px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--text-subtle);
+	background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}

@@ -35,6 +35,8 @@ export interface WhatsappEventPayload {
   mediaFilename?: string;
   mediaDataUrl?: string | null;
   ack?: number | null;
+  quotedMsgBody?: string | null;
+  quotedMsgFromMe?: boolean | null;
 }
 
 export interface WhatsappEvent {
@@ -131,6 +133,7 @@ export interface RawMessage {
   mediaDataUrl?: string;
   chatId?: RawJid | string;
   chat?: { id?: RawJid | string };
+  hasQuotedMsg?: boolean;
   _data?: {
     mimetype?: string;
     filename?: string;
@@ -138,6 +141,11 @@ export interface RawMessage {
     t?: number;
     from?: RawJid | string;
     to?: RawJid | string;
+    quotedMsg?: {
+      body?: string;
+      fromMe?: boolean;
+      type?: string;
+    };
   };
   downloadMedia?: () => Promise<{ data?: string; mimetype?: string } | null>;
   getContact?: () => Promise<RawContact>;

@@ -51,7 +51,7 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
   @Output() requestGuidedAiSuggestion = new EventEmitter<string>();
   @Output() rateAiSuggestion = new EventEmitter<'up' | 'down'>();
   @Output() sendText = new EventEmitter<string>();
-  @Output() sendMedia = new EventEmitter<{ file: File; caption: string }>();
+  @Output() sendMedia = new EventEmitter<{ files: File[]; caption: string }>();
 
   @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('textarea') textarea?: ElementRef<HTMLTextAreaElement>;
@@ -107,15 +107,32 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.clearBulkPanelClearance();
-    this.clearPreview();
+    this.clearAttachmentInternal();
   }
 
   setAttachmentFromDataUrl(dataUrl: string, filename: string): void {
+    this.setAttachmentsFromDataUrls([dataUrl], filename.replace(/\.[^.]+$/, ''));
+  }
+
+  setAttachmentsFromDataUrls(dataUrls: string[], filenameBase: string): void {
+    this.clearAttachmentInternal();
+
+    dataUrls.forEach((dataUrl, index) => {
+      const ext = this.detectExtensionFromDataUrl(dataUrl);
+      const filename = dataUrls.length === 1
+        ? `${filenameBase}.${ext}`
+        : `${filenameBase}-${index + 1}.${ext}`;
+      this.appendAttachmentFromDataUrl(dataUrl, filename);
+    });
+
+    this.scheduleLayoutSync();
+    this.focus();
+  }
+
+  private appendAttachmentFromDataUrl(dataUrl: string, filename: string): void {
     try {
       const commaIndex = dataUrl.indexOf(',');
-      if (commaIndex === -1) {
-        return;
-      }
+      if (commaIndex === -1) return;
       const header = dataUrl.slice(0, commaIndex);
       const base64Data = dataUrl.slice(commaIndex + 1);
       const mimeMatch = header.match(/:(.*?);/);
@@ -126,11 +143,8 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
         bytes[i] = byteString.charCodeAt(i);
       }
       const blob = new Blob([bytes], { type: mime });
-      this.clearPreview();
-      this.selectedFile = new File([blob], filename, { type: mime });
-      this.filePreviewUrl = dataUrl;
-      this.scheduleLayoutSync();
-      this.focus();
+      this.selectedFiles.push(new File([blob], filename, { type: mime }));
+      this.filePreviewUrls.push(mime.startsWith('image/') ? dataUrl : null);
     } catch {
       // ignore conversion errors
     }
@@ -145,8 +159,8 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   isAttachMenuOpen = false;
-  selectedFile: File | null = null;
-  filePreviewUrl: string | null = null;
+  selectedFiles: File[] = [];
+  filePreviewUrls: (string | null)[] = [];
   attachmentError = '';
 
   onTextChange(value: string): void {
@@ -216,9 +230,16 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.draftText = rendered;
     this.draftTextChange.emit(rendered);
 
-    if (reply.imageDataUrl) {
-      const ext = this.detectExtensionFromDataUrl(reply.imageDataUrl);
-      this.setAttachmentFromDataUrl(reply.imageDataUrl, `mensagem-rapida.${ext}`);
+    if (reply.imageDataUrls?.length) {
+      this.clearAttachmentInternal();
+      reply.imageDataUrls.forEach((url, index) => {
+        const ext = this.detectExtensionFromDataUrl(url);
+        const filename = reply.imageDataUrls!.length === 1
+          ? `mensagem-rapida.${ext}`
+          : `mensagem-rapida-${index + 1}.${ext}`;
+        this.appendAttachmentFromDataUrl(url, filename);
+      });
+      this.scheduleLayoutSync();
     }
 
     this.closeQuickReplyMenu();
@@ -289,10 +310,10 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
 
         event.preventDefault();
         this.attachmentError = '';
-        this.clearPreview();
         const ext = item.type.split('/')[1] || 'png';
-        this.selectedFile = new File([file], `imagem-colada.${ext}`, { type: item.type });
-        this.filePreviewUrl = URL.createObjectURL(file);
+        const namedFile = new File([file], `imagem-colada.${ext}`, { type: item.type });
+        this.selectedFiles.push(namedFile);
+        this.filePreviewUrls.push(URL.createObjectURL(file));
         this.scheduleLayoutSync();
         this.focus();
         return;
@@ -463,6 +484,7 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
     input.accept = kind === 'image'
       ? 'image/*'
       : '.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    input.multiple = true;
     input.value = '';
     input.click();
   }
@@ -473,39 +495,44 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
     }
 
     const target = event.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (!file) {
+    const files = Array.from(target.files || []);
+    if (!files.length) {
       return;
     }
 
     this.attachmentError = '';
 
-    if (file.size > MAX_FILE_BYTES) {
-      this.attachmentError = 'Arquivo excede 50MB.';
-      return;
-    }
+    for (const file of files) {
+      if (file.size > MAX_FILE_BYTES) {
+        this.attachmentError = `"${file.name}" excede 50MB.`;
+        continue;
+      }
 
-    if (!this.isAccepted(file)) {
-      this.attachmentError = 'Tipo de arquivo não suportado.';
-      return;
-    }
+      if (!this.isAccepted(file)) {
+        this.attachmentError = `Tipo de arquivo "${file.name}" não suportado.`;
+        continue;
+      }
 
-    this.clearPreview();
-    this.selectedFile = file;
-
-    if (file.type.startsWith('image/')) {
-      this.filePreviewUrl = URL.createObjectURL(file);
+      this.selectedFiles.push(file);
+      this.filePreviewUrls.push(file.type.startsWith('image/') ? URL.createObjectURL(file) : null);
     }
 
     this.scheduleLayoutSync();
     this.focus();
   }
 
-  clearAttachment(): void {
+  clearAttachment(index: number): void {
     if (this.disabled || this.isSending) {
       return;
     }
-    this.clearAttachmentInternal();
+    const url = this.filePreviewUrls[index];
+    if (url) URL.revokeObjectURL(url);
+    this.selectedFiles.splice(index, 1);
+    this.filePreviewUrls.splice(index, 1);
+    if (!this.selectedFiles.length && this.fileInput?.nativeElement) {
+      this.fileInput.nativeElement.value = '';
+    }
+    this.scheduleLayoutSync();
   }
 
   onSubmit(): void {
@@ -513,10 +540,10 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
       return;
     }
 
-    if (this.selectedFile) {
-      const file = this.selectedFile;
+    if (this.selectedFiles.length) {
+      const files = [...this.selectedFiles];
       const caption = this.draftText.trim();
-      this.sendMedia.emit({ file, caption });
+      this.sendMedia.emit({ files, caption });
       return;
     }
 
@@ -569,20 +596,17 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
     this.focus();
   }
 
-  get hasContent(): boolean {
-    return Boolean(this.selectedFile) || this.draftText.trim().length > 0;
-  }
-
-  get fileSizeLabel(): string {
-    if (!this.selectedFile) {
-      return '';
-    }
-    const mb = this.selectedFile.size / (1024 * 1024);
+  getFileSizeLabel(file: File): string {
+    const mb = file.size / (1024 * 1024);
     if (mb >= 1) {
       return `${mb.toFixed(1)} MB`;
     }
-    const kb = this.selectedFile.size / 1024;
+    const kb = file.size / 1024;
     return `${kb.toFixed(0)} KB`;
+  }
+
+  get hasContent(): boolean {
+    return this.selectedFiles.length > 0 || this.draftText.trim().length > 0;
   }
 
   get canAcceptAiSuggestion(): boolean {
@@ -591,7 +615,7 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
       && this.aiSuggestion.trim()
       && !this.disabled
       && !this.isSending
-      && !this.selectedFile
+      && !this.selectedFiles.length
       && !this.draftText.trim()
     );
   }
@@ -614,7 +638,7 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
       return '';
     }
 
-    return this.selectedFile ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem';
+    return this.selectedFiles.length ? 'Adicionar legenda (opcional)' : 'Digite uma mensagem';
   }
 
   get textareaSizerContent(): string {
@@ -632,20 +656,14 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   private clearAttachmentInternal(): void {
-    this.clearPreview();
-    this.selectedFile = null;
+    this.filePreviewUrls.forEach(url => { if (url) URL.revokeObjectURL(url); });
+    this.selectedFiles = [];
+    this.filePreviewUrls = [];
     this.attachmentError = '';
     if (this.fileInput?.nativeElement) {
       this.fileInput.nativeElement.value = '';
     }
     this.scheduleLayoutSync();
-  }
-
-  private clearPreview(): void {
-    if (this.filePreviewUrl) {
-      URL.revokeObjectURL(this.filePreviewUrl);
-      this.filePreviewUrl = null;
-    }
   }
 
   private closeTransientPopovers(except?: 'emoji' | 'quickReply' | 'attach'): void {

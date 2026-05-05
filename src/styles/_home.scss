@@ -1,0 +1,567 @@
+// Layout/skin da home. Mantido como global porque o template é dividido
+// entre HomeComponent e HomeDashboardSectionComponent (filho), e a
+// encapsulação Emulated do Angular bloquearia estilos do pai chegando no
+// filho. Quando aglutinarmos os dois componentes (ou usarmos
+// ViewEncapsulation.None), esse arquivo pode migrar pra home.component.scss.
+
+.home-shell {
+	@apply flex min-h-screen bg-bg text-txt;
+}
+
+.home-content {
+	@apply flex min-w-0 flex-1 flex-col overflow-hidden;
+}
+
+.home-main {
+	@apply flex-1 overflow-y-auto px-10 py-8;
+}
+
+.home-dashboard,
+.home-settings {
+	@apply mx-auto flex w-full max-w-[1560px] flex-col gap-5;
+}
+
+.home-clients {
+	@apply mx-auto flex w-full max-w-[1680px] flex-col gap-3 flex-1 min-h-0;
+}
+
+.home-greeting {
+	@apply flex flex-col gap-1;
+}
+
+.home-greeting__title {
+	@apply m-0 text-[22px] font-bold tracking-[-0.01em] text-txt;
+}
+
+.home-greeting__emoji {
+	@apply inline-block;
+}
+
+.home-greeting__description {
+	@apply m-0 text-sm text-txt-muted;
+}
+
+.home-metrics {
+	@apply grid gap-[18px];
+}
+
+.home-metric-card {
+	@apply relative flex min-h-[148px] flex-col rounded-[14px] border border-border-strong bg-surface px-6 py-[22px];
+}
+
+.home-metric-card__label {
+	@apply mb-1.5 text-xs font-medium text-txt-muted;
+}
+
+.home-metric-card__value {
+	@apply text-[34px] font-bold leading-none text-txt;
+}
+
+.home-metric-card__trend {
+	@apply mt-2 inline-flex items-center gap-1 text-xs font-medium text-success;
+}
+
+.home-metric-card__trend-icon {
+	@apply text-[13px];
+}
+
+.home-metric-card__icon {
+	@apply absolute right-[22px] top-[22px] grid h-11 w-11 place-items-center rounded-[10px] text-[21px];
+}
+
+.home-metric-card__icon--rose {
+	@apply bg-accent-soft text-accent;
+}
+
+.home-metric-card__icon--amber {
+	@apply bg-warn-soft text-warn;
+}
+
+.home-metric-card__icon--orange {
+	@apply bg-bg-subtle text-txt-muted;
+}
+
+.home-metric-card__icon--green {
+	@apply bg-success-soft text-success;
+}
+
+.home-highlight-grid {
+	@apply grid gap-[18px];
+}
+
+.home-panel,
+.home-table-shell,
+.home-state-card,
+.home-feature-card,
+.home-settings-card,
+.home-clients-toolbar {
+	@apply rounded-[14px] border border-border-strong bg-surface p-[22px];
+}
+
+.home-panel {
+	@apply flex flex-col gap-4;
+}
+
+.home-panel--quick-actions {
+	@apply gap-3 border-0 bg-transparent p-0;
+}
+
+.home-panel__header {
+	@apply mb-[2px] flex items-start justify-between gap-3;
+}
+
+.home-panel__header--compact {
+	@apply mb-0;
+}
+
+.home-panel__heading {
+	@apply flex min-w-0 flex-1 flex-col gap-0.5;
+}
+
+.home-panel__title {
+	@apply inline-flex items-center gap-2 text-[13px] font-semibold text-txt;
+}
+
+.home-panel__title-icon {
+	@apply text-base text-accent;
+}
+
+.home-panel__subtitle {
+	@apply text-xs text-txt-muted;
+}
+
+.home-panel__link {
+	@apply inline-flex appearance-none items-center gap-1 rounded-[6px] border-0 bg-transparent px-2.5 py-1.5 text-[12.5px] font-medium text-txt-muted shadow-none transition-colors;
+}
+
+.home-panel__link:hover {
+	@apply text-accent bg-accent-soft;
+}
+
+.home-panel__link--accent {
+	@apply text-accent;
+}
+
+.home-panel__link-icon {
+	@apply text-[15px];
+}
+
+.home-panel__secondary-action {
+	@apply self-start border-border-strong bg-surface shadow-none;
+}
+
+.home-panel__secondary-action:hover:not(:disabled) {
+	@apply border-border-strong bg-surface-2 shadow-none;
+}
+
+.home-highlight-list,
+.home-schedule-list {
+	@apply flex flex-col gap-0;
+}
+
+.home-highlight-list > :not(:first-child) {
+	@apply border-t border-border;
+}
+
+.home-highlight-card {
+	@apply flex items-center justify-between gap-[18px] bg-transparent px-1 py-[14px];
+}
+
+.home-highlight-card__identity {
+	@apply flex min-w-0 flex-1 items-center gap-3;
+}
+
+.home-highlight-card__initials {
+	@apply inline-flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-accent-soft text-accent;
+}
+
+.home-highlight-card__actions {
+	@apply flex items-center gap-2;
+}
+
+.home-highlight-card__action {
+	@apply px-3 py-[7px] text-[13px];
+}
+
+.home-highlight-card__action-icon {
+	@apply mr-1 text-[15px];
+}
+
+.home-highlight-card__favorite {
+	@apply inline-flex h-8 w-8 appearance-none items-center justify-center rounded-full border border-border-strong bg-surface text-txt-subtle shadow-none transition-colors;
+}
+
+.home-highlight-card__favorite:hover {
+	@apply border-border-strong bg-surface-2 text-warn shadow-none;
+}
+
+.home-highlight-card__copy {
+	@apply min-w-0;
+}
+
+.home-highlight-card__title,
+.home-schedule-card__title {
+	@apply block text-sm font-medium text-txt;
+}
+
+.home-highlight-card__meta,
+.home-schedule-card__template {
+	@apply mt-0.5 text-[12.5px] text-txt-muted;
+}
+
+.home-schedule-card {
+	@apply flex items-start gap-[14px] rounded-[10px] border border-border-strong bg-surface p-4;
+}
+
+.home-schedule-list {
+	@apply gap-[10px];
+}
+
+.home-schedule-card__icon {
+	@apply inline-flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] text-base bg-accent-soft text-accent;
+}
+
+.home-schedule-card__copy {
+	@apply min-w-0 flex-1;
+}
+
+.home-schedule-card__meta {
+	@apply mt-0.5 block text-xs text-txt-muted;
+}
+
+.home-quick-grid,
+.home-settings-grid {
+	@apply grid gap-[18px];
+}
+
+.home-quick-action {
+	@apply flex min-h-[108px] appearance-none flex-col items-start gap-2 rounded-[10px] border border-border-strong bg-surface p-[18px] text-left shadow-none transition-colors;
+}
+
+.home-quick-action:hover {
+	@apply border-border-strong bg-surface-2 shadow-none;
+}
+
+.home-quick-action__icon {
+	@apply text-[22px] text-accent;
+}
+
+.home-quick-action__title {
+	@apply text-[14.5px] font-semibold text-txt;
+}
+
+.home-quick-action__description {
+	@apply text-xs text-txt-muted;
+}
+
+.home-clients-toolbar {
+	@apply p-5;
+	background: rgba(255, 255, 255, 0.85);
+}
+
+.home-clients-toolbar__top,
+.home-clients-toolbar__bottom {
+	@apply flex items-center justify-between gap-4;
+}
+
+.home-clients-toolbar__bottom {
+	@apply mt-4;
+}
+
+.home-search-field {
+	@apply flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-[#ddd0c8] bg-[#fffcfa] px-4 py-3;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.home-search-field__icon {
+	@apply text-[1.1rem] text-[#9b8b83];
+}
+
+.home-search-field__input {
+	@apply min-w-0 flex-1 border-0 bg-transparent text-[0.92rem] outline-none text-txt-strong;
+}
+
+.home-search-field__input::placeholder {
+	@apply text-[#b09f96];
+}
+
+.home-filter-cluster {
+	@apply flex shrink-0 items-center gap-3;
+}
+
+.home-filter-cluster__label {
+	@apply inline-flex items-center gap-1.5 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#9b8b83];
+}
+
+.home-filter-cluster__label-icon {
+	@apply text-[1rem];
+}
+
+.home-filter-group {
+	@apply flex flex-wrap items-center gap-1.5;
+}
+
+.home-filter-pill {
+	@apply inline-flex items-center rounded-full border border-[#e2d4cc] bg-surface px-3.5 py-2 text-[0.8rem] font-semibold text-[#705c55] transition;
+}
+
+.home-filter-pill:hover {
+	@apply border-[#d4c0b7] text-txt;
+	box-shadow: 0 6px 14px rgba(46, 30, 24, 0.06);
+}
+
+.home-filter-pill--active {
+	@apply border-accent bg-accent-soft text-accent;
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85), 0 6px 14px rgba(126, 32, 48, 0.08);
+}
+
+.home-mode-control {
+	@apply flex flex-col gap-2;
+}
+
+.home-mode-control__label {
+	@apply text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#9b8b83];
+}
+
+.home-mode-switch {
+	@apply inline-flex w-fit gap-1 rounded-full bg-[#f4ece6] p-1;
+}
+
+.home-mode-switch__button {
+	@apply rounded-full border-0 px-4 py-2 text-[0.83rem] font-semibold text-accent transition;
+}
+
+.home-mode-switch__button--active {
+	@apply bg-accent text-[#fff9f7];
+}
+
+.home-clients-toolbar__actions {
+	@apply flex flex-wrap items-center justify-end gap-2.5;
+}
+
+.home-status-pill {
+	@apply inline-flex items-center rounded-full bg-[#fff8f2] px-3 py-2 text-[0.77rem] font-semibold text-txt-muted;
+}
+
+.home-toolbar-button {
+	@apply min-w-[9rem];
+}
+
+.home-toolbar-button--upload {
+	background: var(--campaign-birthday);
+	border-color: var(--campaign-birthday);
+	color: var(--campaign-action-text);
+}
+
+.home-toolbar-button--upload:hover:not(:disabled) {
+	background: var(--campaign-birthday-hover);
+	border-color: var(--campaign-birthday-hover);
+	color: var(--campaign-action-text);
+}
+
+.home-bulk-bar {
+	@apply flex flex-wrap items-center gap-3 rounded-[1.25rem] border border-[#f0d3da] bg-[#fff8fa] px-4 py-3;
+}
+
+.home-bulk-bar__count {
+	@apply text-[0.88rem] font-semibold text-[#6f5c55];
+}
+
+.home-bulk-bar__button {
+	@apply min-w-[11rem];
+	box-shadow: 0 10px 22px rgba(28, 25, 23, 0.12);
+}
+
+.home-bulk-bar__button:hover:not(:disabled) {
+	transform: translateY(-1px);
+}
+
+.home-bulk-bar__button--birthday {
+	background: var(--surface);
+	border-color: var(--campaign-birthday);
+	color: var(--campaign-birthday);
+}
+
+.home-bulk-bar__button--birthday:hover:not(:disabled) {
+	background: var(--accent-soft);
+	border-color: var(--campaign-birthday-hover);
+	color: var(--campaign-birthday-hover);
+}
+
+.home-bulk-bar__button--review {
+	background: var(--surface);
+	border-color: var(--campaign-review);
+	color: var(--campaign-review);
+}
+
+.home-bulk-bar__button--review:hover:not(:disabled) {
+	background: var(--success-soft);
+	border-color: var(--campaign-review-hover);
+	color: var(--campaign-review-hover);
+}
+
+.home-bulk-bar__icon {
+	@apply text-[1.1rem];
+}
+
+.home-bulk-bar__cancel {
+	@apply border-0 bg-transparent text-[0.82rem] text-[#8a7269] underline transition disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.home-bulk-bar__cancel:hover {
+	@apply text-accent;
+}
+
+.home-table-shell {
+	@apply min-h-0 flex-1 overflow-auto p-0;
+}
+
+.home-state-card {
+	@apply flex w-full flex-col items-center gap-3 px-6 py-12 text-center;
+}
+
+.home-state-card__text {
+	@apply m-0 text-[0.95rem] text-txt-strong;
+}
+
+.home-center-section {
+	@apply flex min-h-[calc(100vh-12rem)] items-center justify-center;
+}
+
+.home-feature-card {
+	@apply flex w-full max-w-[42rem] flex-col items-center gap-5 rounded-[1.9rem] px-10 py-12 text-center;
+}
+
+.home-feature-card__icon {
+	@apply inline-flex h-14 w-14 items-center justify-center rounded-[1.3rem] bg-[#f7e7eb] text-[1.45rem] text-[#8c394d];
+}
+
+.home-feature-card__title {
+	@apply m-0 text-[1.45rem] font-semibold tracking-[-0.03em] text-txt-strong;
+}
+
+.home-feature-card__description {
+	@apply m-0 max-w-[28rem] text-[0.95rem] text-txt-muted;
+}
+
+.home-feature-card__actions,
+.home-settings-card__actions {
+	@apply flex flex-wrap justify-center gap-2.5;
+}
+
+.home-feature-card__action {
+	@apply min-w-[14rem];
+}
+
+.home-settings-card {
+	@apply flex min-h-[17rem] flex-col gap-3.5;
+}
+
+.home-settings-card__title {
+	@apply m-0 text-base font-semibold text-txt-strong;
+}
+
+.home-settings-card__text {
+	@apply m-0 text-[0.92rem] text-txt-muted;
+}
+
+.home-settings-card__text-strong {
+	@apply text-txt-strong;
+}
+
+.home-settings-card__text-strong--accent {
+	@apply text-accent;
+}
+
+.home-settings-card__meta {
+	@apply text-[0.8rem] text-txt-muted;
+}
+
+.home-settings-card__action {
+	@apply mt-auto;
+}
+
+.home-inline-empty {
+	@apply rounded-[1.1rem] border border-dashed border-[#e7d8cf] bg-[#fcfaf8] px-4 py-4 text-center text-[0.9rem] text-txt-muted;
+}
+
+@media (min-width: 640px) {
+	.home-metrics,
+	.home-quick-grid,
+	.home-settings-grid {
+		@apply grid-cols-2;
+	}
+}
+
+@media (min-width: 1024px) {
+	.home-metrics,
+	.home-quick-grid {
+		@apply grid-cols-4;
+	}
+
+	.home-highlight-grid {
+		grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+	}
+
+	.home-settings-grid {
+		@apply grid-cols-3;
+	}
+}
+
+@media (max-width: 1023px) {
+	.home-clients-toolbar__top,
+	.home-clients-toolbar__bottom {
+		@apply flex-col items-stretch;
+	}
+
+	.home-filter-cluster {
+		@apply flex-col items-stretch gap-2;
+	}
+
+	.home-clients-toolbar__actions {
+		@apply justify-start;
+	}
+}
+
+@media (max-width: 767px) {
+	.home-shell {
+		@apply flex-col;
+	}
+
+	.home-main {
+		@apply px-4 pb-4;
+	}
+
+	.home-greeting__title {
+		@apply text-[1.2rem];
+	}
+
+	.home-highlight-card {
+		@apply flex-col items-start;
+	}
+
+	.home-highlight-card__action,
+	.home-feature-card__action {
+		@apply w-full;
+	}
+
+	.home-mode-switch {
+		@apply w-full;
+	}
+
+	.home-mode-switch__button {
+		@apply flex-1;
+	}
+
+	.home-feature-card {
+		@apply px-6;
+	}
+
+	.home-settings-card__actions {
+		@apply flex-col;
+	}
+
+	.home-settings-card__action {
+		@apply w-full;
+	}
+}

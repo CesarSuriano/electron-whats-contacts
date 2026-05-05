@@ -3,7 +3,8 @@ import { Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleCh
 import { QuickReply } from '../../models/quick-reply.model';
 import { QuickReplyService } from '../../services/quick-reply.service';
 
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024);
 
 const QUICK_REPLY_EMOJIS = [
   '😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂',
@@ -39,7 +40,7 @@ export class QuickReplyManagerModalComponent implements OnChanges {
   draftShortcode = '';
   draftTitle = '';
   draftContent = '';
-  draftImageDataUrl?: string;
+  draftImageDataUrls: string[] = [];
 
   constructor(private quickReplies: QuickReplyService) {
     this.quickReplies.items$.subscribe(items => {
@@ -60,7 +61,7 @@ export class QuickReplyManagerModalComponent implements OnChanges {
     this.draftShortcode = '';
     this.draftTitle = '';
     this.draftContent = '';
-    this.draftImageDataUrl = undefined;
+    this.draftImageDataUrls = [];
     this.isEmojiPickerOpen = false;
   }
 
@@ -71,7 +72,7 @@ export class QuickReplyManagerModalComponent implements OnChanges {
     this.draftShortcode = item.shortcode;
     this.draftTitle = item.title || '';
     this.draftContent = item.content;
-    this.draftImageDataUrl = item.imageDataUrl;
+    this.draftImageDataUrls = item.imageDataUrls ? [...item.imageDataUrls] : [];
     this.isEmojiPickerOpen = false;
   }
 
@@ -115,7 +116,7 @@ export class QuickReplyManagerModalComponent implements OnChanges {
       shortcode,
       title: this.draftTitle.trim() || undefined,
       content,
-      imageDataUrl: this.draftImageDataUrl
+      imageDataUrls: this.draftImageDataUrls.length ? this.draftImageDataUrls : undefined
     };
 
     if (this.editingId) {
@@ -132,27 +133,29 @@ export class QuickReplyManagerModalComponent implements OnChanges {
   }
 
   onImageSelected(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) {
-      return;
+    const files = Array.from((event.target as HTMLInputElement).files || []);
+    if (!files.length) return;
+
+    for (const file of files) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        this.errorMessage = `"${file.name}" deve ter no máximo ${MAX_IMAGE_MB} MB.`;
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.draftImageDataUrls = [...this.draftImageDataUrls, reader.result as string];
+      };
+      reader.readAsDataURL(file);
     }
-    if (file.size > MAX_IMAGE_BYTES) {
-      this.errorMessage = 'A imagem deve ter no máximo 3 MB.';
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.draftImageDataUrl = reader.result as string;
-    };
-    reader.readAsDataURL(file);
+
     if (this.imageInput?.nativeElement) {
       this.imageInput.nativeElement.value = '';
     }
   }
 
-  clearImage(): void {
-    this.draftImageDataUrl = undefined;
-    if (this.imageInput?.nativeElement) {
+  removeImage(index: number): void {
+    this.draftImageDataUrls = this.draftImageDataUrls.filter((_, i) => i !== index);
+    if (!this.draftImageDataUrls.length && this.imageInput?.nativeElement) {
       this.imageInput.nativeElement.value = '';
     }
   }
@@ -201,7 +204,7 @@ export class QuickReplyManagerModalComponent implements OnChanges {
     this.draftShortcode = '';
     this.draftTitle = '';
     this.draftContent = '';
-    this.draftImageDataUrl = undefined;
+    this.draftImageDataUrls = [];
     this.isEmojiPickerOpen = false;
   }
 

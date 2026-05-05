@@ -6,6 +6,11 @@
   @apply flex flex-1 flex-col gap-2 overflow-y-auto bg-wa-chat-bg px-[4%] py-4;
 }
 
+.message-list::before {
+  content: '';
+  margin-top: auto;
+}
+
 .message-list__empty {
   @apply m-auto px-8 py-8 text-center text-[0.9rem] text-txt-muted;
 }
@@ -19,12 +24,31 @@
   @apply self-end bg-wa-sent;
 }
 
+/* Quoted message preview inside bubble */
+.message-list__quoted {
+  @apply flex gap-2 rounded-lg bg-black/5 px-2 py-1.5 mb-1;
+}
+
+.message-list__quoted-bar {
+  @apply w-[3px] shrink-0 rounded-full bg-accent;
+}
+
+.message-list__quoted-text {
+  @apply m-0 line-clamp-2 text-[0.8rem] text-txt-muted;
+}
+
+/* Media */
 .message-list__media {
   @apply flex flex-col gap-1.5;
 }
 
 .message-list__image {
-  @apply max-h-[280px] w-full max-w-[290px] rounded-lg border border-black/10 object-cover;
+  @apply max-h-[280px] w-full max-w-[290px] cursor-zoom-in rounded-lg border border-black/10 object-cover;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.92;
+  }
 }
 
 .message-list__file {
@@ -52,10 +76,12 @@
   @apply text-[0.75rem] text-txt-muted;
 }
 
+/* Text */
 .message-list__text {
   @apply m-0 whitespace-pre-wrap break-words text-[0.92rem] text-txt-strong;
 }
 
+/* Footer */
 .message-list__footer {
   @apply flex items-center justify-end gap-1;
 }
@@ -70,6 +96,99 @@
 
 .message-list__ack--read {
   @apply text-[#2f9bd4];
+}
+
+/* Action toggle button - inside bubble, top-right corner like WhatsApp Web */
+.message-list__actions {
+  @apply absolute right-1 top-1 z-[120];
+}
+
+.message-list__action-toggle {
+  @apply flex h-6 w-6 cursor-pointer items-center justify-center rounded-full transition-opacity;
+  background-color: var(--wa-surface);
+  pointer-events: none;
+  border: none;
+  padding: 0;
+  opacity: 0;
+
+  span {
+    @apply text-[1.1rem] text-txt-muted;
+  }
+
+  &:hover span {
+    @apply text-txt-strong;
+  }
+}
+
+.message-list__bubble:hover .message-list__action-toggle {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+.message-list__bubble--from-me .message-list__action-toggle {
+  background-color: var(--wa-sent);
+}
+
+/* Dropdown menu */
+.message-list__menu {
+  @apply absolute bottom-[calc(100%+0.35rem)] right-0 z-[130] min-w-[150px] rounded-xl bg-wa-surface py-1 shadow-lg;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.message-list__menu-item {
+  @apply flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-[0.87rem] text-txt-strong transition-colors;
+  background: none;
+  border: none;
+
+  span {
+    @apply text-[1.1rem] text-txt-muted;
+  }
+
+  &:hover {
+    @apply bg-black/5;
+  }
+}
+
+.message-list__menu-item--danger {
+  @apply text-red-600;
+
+  span {
+    @apply text-red-500;
+  }
+
+  &:hover {
+    @apply bg-red-50;
+  }
+}
+
+/* Lightbox */
+.message-list__lightbox {
+  @apply fixed inset-0 z-[9999] flex items-center justify-center bg-black/85;
+  animation: lightbox-in 0.15s ease;
+}
+
+@keyframes lightbox-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.message-list__lightbox-close {
+  @apply absolute right-4 top-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white/10 text-white transition-colors;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+
+  span {
+    @apply text-[1.4rem];
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.message-list__lightbox-img {
+  @apply max-h-[90vh] max-w-[90vw] rounded-lg object-contain;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
 }
 
 @media (min-width: 768px) {

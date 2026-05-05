@@ -1,0 +1,62 @@
+// Estilos do .btn e variantes. Hoje são utility classes globais; quando
+// criarem o componente <app-button>, mover essa lógica pra dentro dele e
+// remover este arquivo (ver docs/css-migration-plan.md).
+
+.btn {
+	@apply inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded border border-border-strong bg-surface px-4 py-[9px] text-sm font-medium text-txt transition-colors;
+}
+
+.btn:hover:not(:disabled) {
+	@apply bg-bg-subtle border-txt-subtle;
+}
+
+.btn-primary {
+	@apply bg-accent text-accent-text border-accent;
+}
+
+.btn-primary:hover:not(:disabled) {
+	@apply bg-accent-hover border-accent-hover;
+}
+
+.btn-ghost {
+	@apply border-transparent bg-transparent text-txt-muted;
+}
+
+.btn-ghost:hover:not(:disabled) {
+	@apply border-transparent bg-bg-subtle text-txt;
+}
+
+.btn-outline {
+	@apply bg-surface text-accent border-border-strong;
+}
+
+.btn-outline:hover:not(:disabled) {
+	@apply bg-accent-soft border-accent;
+}
+
+.btn-sm { @apply px-3 py-[7px] text-[13.5px]; }
+.btn-icon { @apply h-9 w-9 gap-0 p-2; }
+
+.btn-danger {
+	@apply border-transparent bg-transparent text-danger;
+}
+.btn-danger:hover:not(:disabled) { @apply bg-danger-soft; }
+
+.btn-icon-symbol {
+	@apply mr-1.5 text-[1.2rem];
+	font-variation-settings: 'wght' 500;
+}
+
+.btn:focus-visible {
+	@apply outline-2 outline-offset-2;
+	outline-color: rgba(126, 32, 48, 0.22);
+}
+
+.btn-primary .loading-spinner {
+	border-color: rgba(255, 255, 255, 0.25);
+	border-top-color: #fff;
+}
+
+.btn:disabled {
+	@apply cursor-not-allowed opacity-60;
+}

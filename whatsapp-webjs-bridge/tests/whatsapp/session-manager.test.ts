@@ -29,7 +29,7 @@ function createManager(clientOverrides: Partial<{
 }
 
 describe('SessionManager.ensureInitialized', () => {
-  it('destroys a stale client before reconnecting from disconnected state', async () => {
+  it('destroys a stale client before reconnecting from disconnected state without clearing LocalAuth', async () => {
     const calls: string[] = [];
     const { sessionManager, sessionState } = createManager({
       logout: async () => {
@@ -48,10 +48,10 @@ describe('SessionManager.ensureInitialized', () => {
 
     await sessionManager.ensureInitialized();
 
-    assert.deepEqual(calls, ['logout', 'destroy', 'initialize']);
+    assert.deepEqual(calls, ['destroy', 'initialize']);
   });
 
-  it('retries once after a retryable init failure and cleans up before the second attempt', async () => {
+  it('retries once after a retryable init failure without logging out LocalAuth', async () => {
     const calls: string[] = [];
     let attempts = 0;
     const { sessionManager } = createManager({
@@ -72,6 +72,22 @@ describe('SessionManager.ensureInitialized', () => {
 
     await sessionManager.ensureInitialized();
 
-    assert.deepEqual(calls, ['initialize:1', 'logout', 'destroy', 'initialize:2']);
+    assert.deepEqual(calls, ['destroy', 'initialize:1', 'destroy', 'initialize:2']);
+  });
+
+  it('logs out only for an explicit manual disconnect', async () => {
+    const calls: string[] = [];
+    const { sessionManager } = createManager({
+      logout: async () => {
+        calls.push('logout');
+      },
+      destroy: async () => {
+        calls.push('destroy');
+      }
+    });
+
+    await sessionManager.disconnect();
+
+    assert.deepEqual(calls, ['logout', 'destroy']);
   });
 });

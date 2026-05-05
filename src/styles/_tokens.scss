@@ -1,0 +1,99 @@
+// Design tokens (CSS vars) — apenas valores theme-aware. Tokens estáticos
+// (paleta brand, font, radius, shadow) vivem em tailwind.config.js.
+
+:root {
+	--bg:           #fafaf9;
+	--bg-subtle:    #f4f3f1;
+	--surface:      #ffffff;
+	--surface-2:    #faf9f7;
+	--border:       #ebe7e3;
+	--border-strong:#d0c8c1;
+	--text:         #1c1917;
+	--text-muted:   #78716c;
+	--text-subtle:  #a8a29e;
+
+	--accent:       #6b1b2e;
+	--accent-hover: #5d1426;
+	--accent-soft:  #f8ecef;
+	--accent-text:  #ffffff;
+
+	--success:      #16a34a;
+	--success-hover:#15803d;
+	--success-soft: #dcfce7;
+	--warn:         #d97706;
+	--warn-soft:    #fef3c7;
+	--danger:       #dc2626;
+	--danger-soft:  #fee2e2;
+	--campaign-birthday:       var(--accent);
+	--campaign-birthday-hover: var(--accent-hover);
+	--campaign-review:         var(--success);
+	--campaign-review-hover:   var(--success-hover);
+	--campaign-review-text:    #f8fff9;
+	--campaign-action-text:    var(--accent-text);
+
+	--wa-bg:        #f0ede4;
+	--wa-sent:      #d9fdd3;
+	--wa-recv:      #ffffff;
+	--wa-header:    #f0f2f5;
+
+	--wa-surface:     #ffffff;
+	--wa-surface-alt: #fffdf9;
+	--wa-hover:       #fff8f2;
+	--wa-chat-bg:     #fbf6f1;
+	--wa-pink:        #fff1f4;
+	--wa-pink-subtle: #fff5f6;
+
+	--radius-sm: 6px;
+	--radius:    10px;
+	--radius-lg: 14px;
+	--radius-xl: 20px;
+
+	--shadow-sm: 0 1px 2px rgba(0,0,0,.04);
+	--shadow:    0 1px 3px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
+	--shadow-lg: 0 10px 30px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04);
+
+	--sidebar-w: 64px;
+	--sidebar-w-expanded: 232px;
+	--topbar-h: 66px;
+
+	/* Aliases preservados para compatibilidade com componentes que ainda
+	   referenciam os nomes antigos. Migre essas referências quando tocar
+	   o componente correspondente, depois remova daqui. */
+	--app-bg:        var(--bg);
+	--surface-muted: var(--surface-2);
+	--surface-soft:  var(--surface-2);
+	--border-soft:   var(--border);
+	--text-strong:   var(--text);
+	--accent-strong: var(--accent-hover);
+	--warning-soft:  var(--warn-soft);
+}
+
+body.theme-dark,
+[data-theme="dark"] {
+	--bg:            #22272e;
+	--bg-subtle:     #2a303a;
+	--surface:       #31363f;
+	--surface-2:     #383e48;
+	--border:        #3d434d;
+	--border-strong: #4a5058;
+	--text:          #e8ebef;
+	--text-muted:    #a0a6b0;
+	--text-subtle:   #6c727c;
+
+	--accent:        #e8a0b0;
+	--accent-hover:  #f0b8c5;
+	--accent-soft:   #3a2f38;
+	--accent-text:   #1a0e11;
+
+	--wa-bg:         #1a1f26;
+	--wa-sent:       #1f5a4a;
+	--wa-recv:       #31363f;
+	--wa-header:     #2a303a;
+
+	--wa-surface:     #31363f;
+	--wa-surface-alt: #31363f;
+	--wa-hover:       #383e48;
+	--wa-chat-bg:     #2a303a;
+	--wa-pink:        #3a2f38;
+	--wa-pink-subtle: #3a2f38;
+}

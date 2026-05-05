@@ -1,7 +1,11 @@
 import { NO_ERRORS_SCHEMA, SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { BehaviorSubject } from 'rxjs';
 
+import { AppLabel } from '../../../../models/app-label.model';
 import { WhatsappContact } from '../../../../models/whatsapp.model';
+import { LabelService } from '../../../../services/label.service';
+import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 import { ChatHeaderComponent } from './chat-header.component';
 
@@ -13,18 +17,35 @@ const makeContact = (overrides: Partial<WhatsappContact> = {}): WhatsappContact 
   ...overrides
 });
 
+const makeAppLabel = (overrides: Partial<AppLabel> = {}): AppLabel => ({
+  id: 'app-1',
+  name: 'Etiqueta',
+  color: '#ef4444',
+  createdAt: new Date().toISOString(),
+  ...overrides
+});
+
 describe('ChatHeaderComponent', () => {
   let fixture: ComponentFixture<ChatHeaderComponent>;
   let component: ChatHeaderComponent;
   let stateSpy: jasmine.SpyObj<WhatsappStateService>;
+  let labelServiceSpy: jasmine.SpyObj<LabelService>;
+  let managerLaunchSpy: jasmine.SpyObj<ManagerLaunchService>;
+  let labelsByJid$: BehaviorSubject<AppLabel[]>;
 
   beforeEach(async () => {
     stateSpy = jasmine.createSpyObj('WhatsappStateService', ['requestPhoto']);
+    labelsByJid$ = new BehaviorSubject<AppLabel[]>([]);
+    labelServiceSpy = jasmine.createSpyObj('LabelService', ['watchLabelsForJid', 'toggleLabelOnJid']);
+    labelServiceSpy.watchLabelsForJid.and.returnValue(labelsByJid$.asObservable());
+    managerLaunchSpy = jasmine.createSpyObj('ManagerLaunchService', ['openLabelManager']);
 
     await TestBed.configureTestingModule({
       declarations: [ChatHeaderComponent],
       providers: [
-        { provide: WhatsappStateService, useValue: stateSpy }
+        { provide: WhatsappStateService, useValue: stateSpy },
+        { provide: LabelService, useValue: labelServiceSpy },
+        { provide: ManagerLaunchService, useValue: managerLaunchSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -82,6 +103,48 @@ describe('ChatHeaderComponent', () => {
     });
 
     expect(stateSpy.requestPhoto).not.toHaveBeenCalled();
+  });
+
+  it('combines app labels with imported WhatsApp labels and keeps only three visible', () => {
+    component.contact = makeContact({ labels: ['VIP WhatsApp'] });
+    component.whatsappLabels = [
+      { id: 'wa-vip', name: 'VIP WhatsApp', hexColor: '#25D366' },
+      { id: 'wa-fidelidade', name: 'Fidelidade', hexColor: '#128c7e', chatJids: ['5511987654321@c.us'] }
+    ];
+    labelsByJid$.next([
+      makeAppLabel({ id: 'app-1', name: 'Cliente quente', color: '#ef4444' }),
+      makeAppLabel({ id: 'app-2', name: 'Orçamento', color: '#f59e0b' })
+    ]);
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    expect(component.visibleLabels.map(label => label.name)).toEqual([
+      'Cliente quente',
+      'Orçamento',
+      'Fidelidade'
+    ]);
+    expect(component.hiddenLabels.map(label => label.name)).toEqual(['VIP WhatsApp']);
+  });
+
+  it('asks for confirmation before removing an app label', () => {
+    component.contact = makeContact();
+    labelsByJid$.next([makeAppLabel({ id: 'app-1', name: 'Cliente quente', color: '#ef4444' })]);
+
+    component.ngOnChanges({
+      contact: new SimpleChange(null, component.contact, true)
+    });
+
+    component.requestRemoveLabel(component.visibleLabels[0]);
+
+    expect(component.pendingRemovalLabel?.name).toBe('Cliente quente');
+    expect(labelServiceSpy.toggleLabelOnJid).not.toHaveBeenCalled();
+
+    component.confirmRemoveLabel();
+
+    expect(labelServiceSpy.toggleLabelOnJid).toHaveBeenCalledWith('5511987654321@c.us', 'app-1');
+    expect(component.pendingRemovalLabel).toBeNull();
   });
 
   describe('phoneFormatted', () => {

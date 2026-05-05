@@ -1,0 +1,27 @@
+// Pieces reutilizadas por todos os modais do app: backdrop, botão de fechar,
+// e o estilo do menu de configurações (config-menu-item) — esse último é
+// projetado dentro do <app-page-header> e usado por home, agent e whatsapp.
+
+.modal-backdrop {
+	@apply fixed inset-0 z-20 bg-[rgba(28,18,15,0.42)] backdrop-blur-sm;
+}
+
+.modal-close {
+	@apply inline-flex cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-1 text-accent;
+}
+
+.modal-close:hover {
+	@apply bg-accent-soft;
+}
+
+.config-menu-item {
+	@apply flex cursor-pointer items-center gap-2 rounded-xl border-none bg-transparent px-3.5 py-3 text-left text-[0.9rem] font-medium text-txt;
+}
+
+.config-menu-icon {
+	@apply text-[1.15rem] text-accent;
+}
+
+.config-menu-item:hover {
+	@apply bg-accent-soft text-accent;
+}

@@ -116,12 +116,46 @@
   @apply bg-danger-soft text-danger;
 }
 
-.chat-header__label-overflow-create {
-  @apply inline-flex items-center gap-2 rounded-xl border-none bg-transparent px-2 py-2 text-left text-[0.8rem] font-semibold text-accent transition;
+.chat-header__confirm-overlay {
+  @apply fixed inset-0 z-[9050] flex items-center justify-center bg-black/35;
 }
 
-.chat-header__label-overflow-create:hover {
-  @apply bg-accent-soft text-accent-hover;
+.chat-header__confirm-dialog {
+  @apply flex w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-wa-surface shadow-2xl;
+}
+
+.chat-header__confirm-header {
+  @apply flex items-center justify-between px-5 py-4;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chat-header__confirm-title {
+  @apply m-0 text-[1rem] font-semibold text-txt-strong;
+}
+
+.chat-header__confirm-close {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-full border-none bg-transparent p-0 text-txt-muted transition;
+}
+
+.chat-header__confirm-close:hover {
+  @apply bg-bg-subtle text-txt-strong;
+}
+
+.chat-header__confirm-text {
+  @apply m-0 px-5 py-4 text-[0.9rem] leading-6 text-txt-muted;
+}
+
+.chat-header__confirm-actions {
+  @apply flex justify-end gap-2 px-5 pb-5;
+}
+
+.chat-header__confirm-button {
+  @apply justify-center bg-danger text-white border-danger;
+}
+
+.chat-header__confirm-button:hover:not(:disabled) {
+  @apply border-danger;
+  background: #b91c1c;
 }
 
 @media (max-width: 959px) {

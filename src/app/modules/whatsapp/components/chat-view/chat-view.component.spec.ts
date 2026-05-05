@@ -35,7 +35,7 @@ describe('ChatViewComponent', () => {
   let queueSubject: BehaviorSubject<any>;
   let jidSubject: BehaviorSubject<string>;
   let draftSubject: BehaviorSubject<string>;
-  let draftImageSubject: BehaviorSubject<string | null>;
+  let draftImageSubject: BehaviorSubject<string[]>;
   let loadingSubject: BehaviorSubject<{ instances: boolean; contacts: boolean; messages: boolean; sending: boolean }>;
   let selectedMessagesSubject: BehaviorSubject<WhatsappMessage[]>;
   let selectedContactSubject: BehaviorSubject<WhatsappContact | null>;
@@ -53,26 +53,28 @@ describe('ChatViewComponent', () => {
       sending: false
     });
     draftSubject = new BehaviorSubject<string>('');
-    draftImageSubject = new BehaviorSubject<string | null>(null);
+    draftImageSubject = new BehaviorSubject<string[]>([]);
     const syncing$ = new BehaviorSubject<boolean>(false);
     selectedMessagesSubject = new BehaviorSubject<WhatsappMessage[]>([]);
     selectedContactSubject = new BehaviorSubject<WhatsappContact | null>(contact);
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'getMessagesFor', 'getDraftTextForJid', 'setDraftText', 'setDraftTextForJid', 'sendText', 'sendMedia', 'resolveConversationJid'
+      'getMessagesFor', 'getDraftTextForJid', 'setDraftText', 'setDraftTextForJid', 'sendText', 'sendMedia', 'deleteMessage', 'forwardMessage', 'resolveConversationJid'
     ], {
       selectedContactJid$: jidSubject.asObservable(),
       contacts$: contacts$.asObservable(),
       messages$: messages$.asObservable(),
       loadingState$: loadingSubject.asObservable(),
       draftText$: draftSubject.asObservable(),
-      draftImageDataUrl$: draftImageSubject.asObservable(),
+      draftImageDataUrls$: draftImageSubject.asObservable(),
       syncing$: syncing$.asObservable(),
       selectedMessages$: selectedMessagesSubject.asObservable(),
       selectedContact$: selectedContactSubject.asObservable()
     });
     stateSpy.getMessagesFor.and.returnValue([]);
     stateSpy.getDraftTextForJid.and.returnValue('');
+    stateSpy.deleteMessage.and.returnValue(of(undefined));
+    stateSpy.forwardMessage.and.returnValue(of(undefined));
     stateSpy.resolveConversationJid.and.callFake((jid: string) => jid);
     return stateSpy;
   };
@@ -82,7 +84,7 @@ describe('ChatViewComponent', () => {
 
     queueSubject = new BehaviorSubject<any>(null);
 
-    bulkSpy = jasmine.createSpyObj('BulkSendService', [], {
+    bulkSpy = jasmine.createSpyObj('BulkSendService', ['trackCurrentSend', 'clearTrackedCurrentSend'], {
       queue$: queueSubject.asObservable(),
       hasActiveQueue: false
     });
@@ -213,6 +215,56 @@ describe('ChatViewComponent', () => {
     component.onSendText('hello');
 
     expect(stateSpy.sendText).toHaveBeenCalledWith('resolved@c.us', 'hello');
+  });
+
+  it('allows sending text while message history is syncing', () => {
+    component.contact = makeContact('a@c.us');
+    component.isSyncingMessages = true;
+    component.disabled = false;
+    stateSpy.resolveConversationJid.and.returnValue('resolved@c.us');
+    stateSpy.sendText.and.returnValue(of(undefined));
+
+    component.onSendText('hello');
+
+    expect(stateSpy.sendText).toHaveBeenCalledWith('resolved@c.us', 'hello');
+  });
+
+  it('asks for confirmation before deleting a message', () => {
+    const event = { messageId: 'msg-1', text: 'Olá', isFromMe: true };
+
+    component.onDeleteSelected(event);
+
+    expect(component.showDeleteDialog).toBeTrue();
+    expect(stateSpy.deleteMessage).not.toHaveBeenCalled();
+
+    component.confirmDelete();
+
+    expect(stateSpy.deleteMessage).toHaveBeenCalledWith('msg-1', true);
+    expect(component.showDeleteDialog).toBeFalse();
+  });
+
+  it('selects multiple recipients before forwarding and sends to each selected contact', () => {
+    component.onForwardSelected({ messageId: 'msg-1', text: 'Olá', isFromMe: true });
+
+    component.toggleForwardRecipient('a@c.us');
+    component.toggleForwardRecipient('b@c.us');
+    component.confirmForward();
+
+    expect(stateSpy.forwardMessage.calls.allArgs()).toEqual([
+      ['msg-1', 'a@c.us'],
+      ['msg-1', 'b@c.us']
+    ]);
+    expect(component.showForwardDialog).toBeFalse();
+  });
+
+  it('blocks forwarding when more than four recipients are selected', () => {
+    component.onForwardSelected({ messageId: 'msg-1', text: 'Olá', isFromMe: true });
+
+    ['1@c.us', '2@c.us', '3@c.us', '4@c.us', '5@c.us'].forEach(jid => component.toggleForwardRecipient(jid));
+    component.confirmForward();
+
+    expect(component.forwardSelectionWarning).toContain('no máximo 4 contatos');
+    expect(stateSpy.forwardMessage).not.toHaveBeenCalled();
   });
 
   it('keeps AI disabled even when agent settings are enabled', fakeAsync(() => {

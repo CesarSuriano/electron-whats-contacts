@@ -24,6 +24,12 @@
   @apply inline-flex items-center gap-2;
 }
 
+// Cluster do "Editar mensagem". Separado por uma divisória pra reforçar
+// que é ação distinta (volta pro modal pra alterar o template).
+.bulk-actions--secondary {
+  @apply ml-2 border-l border-white/30 pl-3;
+}
+
 .btn-link {
   @apply cursor-pointer rounded-md border-none bg-transparent px-2 py-[0.3rem] text-[0.85rem] text-white underline;
 }

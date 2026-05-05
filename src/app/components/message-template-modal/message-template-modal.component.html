@@ -65,23 +65,89 @@
 
 			<span class="message-template-toolbar-separator" aria-hidden="true"></span>
 
-			<input type="file" accept="image/*" #imageInput style="display:none" (change)="onImageSelected($event)">
-			<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="chooseImage()" [attr.aria-label]="selectedImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem'" [attr.title]="selectedImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem'">
+			<input type="file" accept="image/*" multiple #imageInput style="display:none" (change)="onImageSelected($event)">
+			<button class="btn btn-ghost btn-icon message-template-toolbar-btn" type="button" (mousedown)="preserveEditorSelection($event)" (click)="chooseImage()" aria-label="Adicionar imagem(ns)" title="Adicionar imagem(ns)">
 				<span class="material-symbols-outlined toolbar-icon">image</span>
 			</button>
-		</section>
 
-		<div class="message-template-image-inline" *ngIf="selectedImageDataUrl">
-			<div class="template-image-preview">
-				<img [src]="selectedImageDataUrl" alt="Imagem da mensagem" class="template-image-thumb">
-				<div class="message-template-image-inline__meta">
-					<strong>Imagem anexada</strong>
-					<span>Clique no icone da imagem para trocar.</span>
+			<div class="message-template-quick-reply">
+				<button
+					class="btn btn-ghost btn-icon message-template-toolbar-btn"
+					type="button"
+					(click)="toggleQuickReplyPicker()"
+					[class.active]="isQuickReplyPickerOpen"
+					[attr.aria-expanded]="isQuickReplyPickerOpen"
+					aria-label="Usar uma mensagem rápida salva"
+					title="Mensagens rápidas"
+				>
+					<span class="material-symbols-outlined toolbar-icon">bolt</span>
+				</button>
+
+				<div
+					class="message-template-quick-reply__popover"
+					*ngIf="isQuickReplyPickerOpen"
+					role="menu"
+				>
+					<header class="message-template-quick-reply__header">
+						<strong>Mensagens rápidas</strong>
+						<button class="modal-close" type="button" (click)="toggleQuickReplyPicker()" aria-label="Fechar lista">
+							<span class="material-symbols-outlined">close</span>
+						</button>
+					</header>
+
+					<ul class="message-template-quick-reply__list" *ngIf="availableQuickReplies.length; else emptyQuickReplies">
+						<li *ngFor="let reply of availableQuickReplies; trackBy: trackQuickReplyById">
+							<button
+								type="button"
+								class="message-template-quick-reply__item"
+								(click)="applyQuickReply(reply)"
+							>
+								<span class="message-template-quick-reply__shortcode">/{{ reply.shortcode }}</span>
+								<span class="message-template-quick-reply__title" *ngIf="reply.title">{{ reply.title }}</span>
+								<span class="message-template-quick-reply__preview">{{ reply.content }}</span>
+								<span class="message-template-quick-reply__media-hint" *ngIf="reply.imageDataUrls?.length">
+									<span class="material-symbols-outlined">image</span>
+									{{ reply.imageDataUrls?.length }}
+								</span>
+							</button>
+						</li>
+					</ul>
+
+					<ng-template #emptyQuickReplies>
+						<p class="message-template-quick-reply__empty">
+							Você ainda não tem mensagens rápidas salvas.
+						</p>
+					</ng-template>
+
+					<footer class="message-template-quick-reply__footer">
+						<button
+							type="button"
+							class="message-template-quick-reply__create"
+							(click)="openQuickReplyManager()"
+						>
+							<span class="material-symbols-outlined">add</span>
+							Criar nova mensagem rápida
+						</button>
+					</footer>
 				</div>
 			</div>
-			<button type="button" class="template-image-remove" (click)="clearImage()" aria-label="Remover imagem" title="Remover imagem">
-				<span class="material-symbols-outlined">close</span>
-			</button>
+		</section>
+
+		<div class="message-template-image-inline" *ngIf="selectedImageDataUrls.length">
+			<div class="template-image-preview" *ngFor="let url of selectedImageDataUrls; let i = index">
+				<img [src]="url" [alt]="'Imagem ' + (i + 1)" class="template-image-thumb">
+				<div class="message-template-image-inline__meta">
+					<strong>{{ 'Imagem ' + (i + 1) }}</strong>
+					<span class="message-template-image-inline__hint">
+						Clique em
+						<span class="material-symbols-outlined message-template-image-inline__hint-icon" aria-hidden="true">image</span>
+						para adicionar mais imagens.
+					</span>
+				</div>
+				<button type="button" class="template-image-remove" (click)="removeImage(i)" [attr.aria-label]="'Remover imagem ' + (i + 1)" title="Remover imagem">
+					<span class="material-symbols-outlined">close</span>
+				</button>
+			</div>
 		</div>
 
 		<ng-container *ngIf="activeTab === 'edit'; else previewTab">
@@ -148,9 +214,9 @@
 
 		<footer class="upload-modal-footer message-template-modal__footer">
 			<button class="btn btn-outline" type="button" (click)="closeModal()" aria-keyshortcuts="Escape" title="Fechar (Esc)">Cancelar</button>
-			<button class="btn btn-primary message-template-modal__save" type="button" (click)="saveTemplate()" [disabled]="isSaving" aria-keyshortcuts="Control+Enter Meta+Enter" title="Salvar mensagem (Ctrl+Enter)">
-				<span class="material-symbols-outlined btn-icon-symbol">save</span>
-				<span class="btn-label">Salvar mensagem</span>
+			<button class="btn btn-primary message-template-modal__save" type="button" (click)="saveTemplate()" [disabled]="isSaveDisabled" aria-keyshortcuts="Control+Enter Meta+Enter" [title]="saveButtonLabel + ' (Ctrl+Enter)'">
+				<span class="material-symbols-outlined btn-icon-symbol">{{ saveButtonIcon }}</span>
+				<span class="btn-label">{{ saveButtonLabel }}</span>
 			</button>
 		</footer>
 	</section>

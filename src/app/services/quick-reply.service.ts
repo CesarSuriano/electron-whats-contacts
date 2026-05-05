@@ -39,7 +39,7 @@ export class QuickReplyService {
       shortcode: this.normalizeShortcode(draft.shortcode),
       title: draft.title?.trim() || undefined,
       content: draft.content,
-      imageDataUrl: draft.imageDataUrl,
+      imageDataUrls: draft.imageDataUrls?.length ? draft.imageDataUrls : undefined,
       updatedAt: new Date().toISOString()
     };
 
@@ -60,7 +60,7 @@ export class QuickReplyService {
       shortcode: this.normalizeShortcode(draft.shortcode),
       title: draft.title?.trim() || undefined,
       content: draft.content,
-      imageDataUrl: draft.imageDataUrl,
+      imageDataUrls: draft.imageDataUrls?.length ? draft.imageDataUrls : undefined,
       updatedAt: new Date().toISOString()
     };
 
@@ -103,7 +103,14 @@ export class QuickReplyService {
         return [];
       }
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item: QuickReply & { imageDataUrl?: string }) => {
+        if (!item.imageDataUrls && item.imageDataUrl) {
+          const { imageDataUrl, ...rest } = item;
+          return { ...rest, imageDataUrls: [imageDataUrl] };
+        }
+        return item;
+      });
     } catch {
       return [];
     }

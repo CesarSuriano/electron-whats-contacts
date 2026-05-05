@@ -1,0 +1,26 @@
+.app-toast {
+	@apply fixed right-6 bottom-6 z-30 inline-flex items-center gap-2.5 rounded-[14px] bg-[#193a22] px-4 py-3.5 text-white;
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+	animation: toast-enter 0.18s ease-out;
+}
+
+.app-toast-icon {
+	@apply text-[1.1rem] text-[#8ee3a1];
+}
+
+@keyframes toast-enter {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (max-width: 600px) {
+	.app-toast {
+		@apply right-4 bottom-4 left-4;
+	}
+}

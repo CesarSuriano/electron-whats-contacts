@@ -189,7 +189,13 @@ export class HistoryController {
             mediaMimetype,
             mediaFilename,
             mediaDataUrl: inlineImageDataUrl,
-            ack
+            ack,
+            quotedMsgBody: typeof message._data?.quotedMsg?.body === 'string' && message._data.quotedMsg.body.trim()
+              ? message._data.quotedMsg.body.trim()
+              : null,
+            quotedMsgFromMe: typeof message._data?.quotedMsg?.fromMe === 'boolean'
+              ? message._data.quotedMsg.fromMe
+              : null
           }
         } satisfies WhatsappEvent;
       })))

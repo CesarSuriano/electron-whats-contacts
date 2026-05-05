@@ -5,12 +5,14 @@
     [totalVisible]="totalVisible"
     [allSelected]="allSelected"
     [disabled]="isUiBlocked"
+    [canEditBulkMessage]="canEditBulkMessage"
     (selectAll)="onSelectAll()"
     (clearSelection)="onClearSelection()"
     (exitMode)="onExitSelectionMode()"
     (openBulkSend)="onOpenBulkSend()"
     (openSchedule)="onScheduleFromSelection()"
     (openLabels)="onOpenBulkLabels()"
+    (editBulkMessage)="onEditBulkMessage()"
   ></app-bulk-action-bar>
 
   <header class="whatsapp-console__toolbar" *ngIf="!isSelectionMode && instances.length > 1">
@@ -53,7 +55,7 @@
       (scheduleMessage)="onScheduleFromContact($event)"
       (filteredContactsChange)="onFilteredContactsChange($event)"
     ></app-conversation-list>
-    <app-chat-view class="console-chat" [disabled]="isUiBlocked"></app-chat-view>
+    <app-chat-view class="console-chat" [disabled]="isUiBlocked" [whatsappLabels]="whatsappLabels"></app-chat-view>
   </div>
 
   <ng-template #loading>
@@ -75,7 +77,9 @@
   <app-message-template-modal
     [isOpen]="isTemplateModalOpen"
     [editorConfig]="templateEditorConfig"
-    [initialTemplate]="''"
+    [initialTemplate]="lastBulkTemplate"
+    [initialImageDataUrls]="lastBulkImageDataUrls"
+    [bulkMode]="true"
     (close)="onCloseTemplateModal()"
     (save)="onSaveTemplate($event)"
   ></app-message-template-modal>

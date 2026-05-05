@@ -1,0 +1,16 @@
+.loading-state {
+	@apply flex flex-col items-center justify-center gap-3 p-8 text-txt-muted;
+}
+
+.loading-spinner {
+	@apply h-8 w-8 rounded-full;
+	border: 3px solid rgba(0, 0, 0, 0.1);
+	border-top-color: var(--accent);
+	animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+	to {
+		transform: rotate(360deg);
+	}
+}

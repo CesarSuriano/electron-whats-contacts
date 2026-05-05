@@ -178,12 +178,13 @@ describe('ConversationListComponent', () => {
     expect(component.isFlashing('unknown@c.us')).toBeFalse();
   });
 
-  it('clears the flash shortly after a conversation moves up', fakeAsync(() => {
-    const first = makeContact('a@c.us', 'Ana');
-    const second = makeContact('b@c.us', 'Bia');
+  it('clears the flash shortly after a conversation with newer activity moves up', fakeAsync(() => {
+    const first = { ...makeContact('a@c.us', 'Ana'), lastMessageAt: '2026-05-05T09:00:00.000Z' };
+    const second = { ...makeContact('b@c.us', 'Bia'), lastMessageAt: '2026-05-05T08:00:00.000Z' };
+    const movedSecond = { ...second, lastMessageAt: '2026-05-05T10:00:00.000Z' };
 
     (component as any).detectAndFlashMoved([first, second]);
-    (component as any).detectAndFlashMoved([second, first]);
+    (component as any).detectAndFlashMoved([movedSecond, first]);
 
     expect(component.isFlashing('b@c.us')).toBeTrue();
 
@@ -193,6 +194,16 @@ describe('ConversationListComponent', () => {
     tick(1);
     expect(component.isFlashing('b@c.us')).toBeFalse();
   }));
+
+  it('does not flash when a conversation moves up without newer activity', () => {
+    const first = { ...makeContact('a@c.us', 'Ana'), lastMessageAt: '2026-05-05T09:00:00.000Z' };
+    const second = { ...makeContact('b@c.us', 'Bia'), lastMessageAt: '2026-05-05T08:00:00.000Z' };
+
+    (component as any).detectAndFlashMoved([first, second]);
+    (component as any).detectAndFlashMoved([second, first]);
+
+    expect(component.isFlashing('b@c.us')).toBeFalse();
+  });
 
   it('does not flash the currently active conversation row', () => {
     selectedJid$.next('b@c.us');

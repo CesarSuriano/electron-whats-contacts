@@ -1,19 +1,40 @@
 <section class="chat-view" *ngIf="contact; else emptyState">
-  <app-chat-header [contact]="contact"></app-chat-header>
+  <app-chat-header [contact]="contact" [whatsappLabels]="whatsappLabels"></app-chat-header>
+
   <div class="chat-view__sync-bar" *ngIf="isSyncingMessages">
     <span class="material-symbols-outlined chat-view__sync-icon">sync</span>
     <div class="chat-view__sync-copy">
       <strong class="chat-view__sync-title">Carregando mensagens...</strong>
-      <small class="chat-view__sync-text">A conversa fica pronta assim que a sincronização terminar.</small>
+      <small class="chat-view__sync-text">Você já pode responder enquanto o histórico termina de carregar.</small>
     </div>
   </div>
+
+  <div class="chat-view__error-toast" *ngIf="transientErrorMessage">
+    <span class="material-symbols-outlined">error</span>
+    {{ transientErrorMessage }}
+  </div>
+
   <app-message-list
     [messages]="messages"
+    (replySelected)="onReplySelected($event)"
+    (forwardSelected)="onForwardSelected($event)"
+    (deleteSelected)="onDeleteSelected($event)"
   ></app-message-list>
+
+  <div class="chat-view__reply-bar" *ngIf="pendingReply">
+    <div class="chat-view__reply-bar-content">
+      <span class="material-symbols-outlined chat-view__reply-bar-icon">reply</span>
+      <p class="chat-view__reply-bar-text">{{ pendingReply.text || 'Mídia' }}</p>
+    </div>
+    <button class="chat-view__reply-bar-close" (click)="cancelReply()" title="Cancelar resposta">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+
   <app-composer
     [draftText]="draftText"
     [isSending]="isSending"
-    [disabled]="disabled || isSyncingMessages"
+    [disabled]="disabled"
     [aiEnabled]="isSuggestionToggleOn"
     [isAiThinking]="isAiThinking"
     [aiSuggestion]="aiSuggestion"
@@ -38,3 +59,90 @@
     <p class="chat-view__empty-text">Escolha um contato na lista ao lado para ver as mensagens.</p>
   </section>
 </ng-template>
+
+<!-- Forward dialog -->
+<div class="chat-view__overlay" *ngIf="showForwardDialog" (click)="closeForwardDialog()">
+  <div class="chat-view__forward-dialog" (click)="$event.stopPropagation()">
+    <div class="chat-view__forward-header">
+      <div class="chat-view__forward-header-copy">
+        <h3 class="chat-view__forward-title">Encaminhar para</h3>
+        <p class="chat-view__forward-subtitle">Selecione até {{ maxForwardRecipients }} contatos por vez.</p>
+      </div>
+      <button class="chat-view__forward-close" (click)="closeForwardDialog()" [disabled]="isForwardingMessage">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="chat-view__forward-search">
+      <span class="material-symbols-outlined chat-view__forward-search-icon">search</span>
+      <input
+        class="chat-view__forward-search-input"
+        type="text"
+        placeholder="Buscar contato..."
+        [(ngModel)]="forwardSearchQuery"
+        autofocus
+      />
+    </div>
+
+    <ul class="chat-view__forward-list">
+      <li
+        *ngFor="let c of filteredForwardContacts"
+        class="chat-view__forward-item"
+        [class.chat-view__forward-item--selected]="isForwardRecipientSelected(c.jid)"
+        (click)="toggleForwardRecipient(c.jid)"
+      >
+        <app-contact-avatar [name]="c.name" [photoUrl]="c.photoUrl" size="sm"></app-contact-avatar>
+
+        <div class="chat-view__forward-item-copy">
+          <span class="chat-view__forward-item-name">{{ c.name || c.phone || c.jid }}</span>
+          <span class="chat-view__forward-item-phone" *ngIf="c.name && c.phone">{{ c.phone }}</span>
+        </div>
+
+        <span class="material-symbols-outlined chat-view__forward-item-check" *ngIf="isForwardRecipientSelected(c.jid)">check_circle</span>
+      </li>
+      <li class="chat-view__forward-empty" *ngIf="filteredForwardContacts.length === 0">
+        Nenhum contato encontrado.
+      </li>
+    </ul>
+
+    <footer class="chat-view__forward-footer" *ngIf="forwardSelectionCount">
+      <div class="chat-view__forward-footer-copy">
+        <strong class="chat-view__forward-footer-title">{{ forwardSelectionCount }} contato(s) selecionado(s)</strong>
+        <small class="chat-view__forward-footer-warning" *ngIf="forwardSelectionWarning">{{ forwardSelectionWarning }}</small>
+      </div>
+
+      <button
+        class="btn btn-primary chat-view__forward-submit"
+        type="button"
+        (click)="confirmForward()"
+        [disabled]="isForwardingMessage || isForwardLimitExceeded"
+      >
+        <span class="material-symbols-outlined chat-view__forward-submit-icon">send</span>
+        <span>{{ isForwardingMessage ? 'Enviando...' : 'Enviar' }}</span>
+      </button>
+    </footer>
+  </div>
+</div>
+
+<div class="chat-view__overlay" *ngIf="showDeleteDialog" (click)="closeDeleteDialog()">
+  <div class="chat-view__delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-message-title" (click)="$event.stopPropagation()">
+    <div class="chat-view__delete-header">
+      <h3 id="delete-message-title" class="chat-view__delete-title">Apagar mensagem</h3>
+      <button class="chat-view__delete-close" type="button" (click)="closeDeleteDialog()" [disabled]="isDeletingMessage" aria-label="Fechar">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <p class="chat-view__delete-text">{{ deleteConfirmationText }}</p>
+
+    <footer class="chat-view__delete-actions">
+      <button class="btn btn-outline chat-view__delete-button" type="button" (click)="closeDeleteDialog()" [disabled]="isDeletingMessage">
+        Cancelar
+      </button>
+      <button class="btn btn-primary chat-view__delete-button chat-view__delete-button--danger" type="button" (click)="confirmDelete()" [disabled]="isDeletingMessage">
+        <span class="material-symbols-outlined chat-view__delete-button-icon">delete</span>
+        <span>{{ isDeletingMessage ? 'Apagando...' : 'Apagar' }}</span>
+      </button>
+    </footer>
+  </div>
+</div>

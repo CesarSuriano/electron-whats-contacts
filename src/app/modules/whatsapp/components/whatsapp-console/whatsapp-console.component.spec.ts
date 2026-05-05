@@ -277,10 +277,15 @@ describe('WhatsappConsoleComponent', () => {
   });
 
   describe('onSaveTemplate', () => {
-    it('does not start bulk if text is empty', () => {
+    it('starts bulk even when the text is empty so each contact can be filled manually', () => {
+      const contact = makeContact('5511@c.us');
+      component.allContacts = [contact];
+      (component as any).selectedJidSet = new Set([contact.jid]);
       const result: MessageTemplateSaveResult = { text: '   ' };
+
       component.onSaveTemplate(result);
-      expect(bulkSpy.start).not.toHaveBeenCalled();
+
+      expect(bulkSpy.start).toHaveBeenCalledWith([contact], '', []);
     });
 
     it('does not start bulk if no contacts selected', () => {
@@ -288,6 +293,23 @@ describe('WhatsappConsoleComponent', () => {
       const result: MessageTemplateSaveResult = { text: 'Hello {nome}' };
       component.onSaveTemplate(result);
       expect(bulkSpy.start).not.toHaveBeenCalled();
+    });
+
+    it('passes all selected imageDataUrls to bulk send', () => {
+      const contact = makeContact('5511@c.us');
+      component.allContacts = [contact];
+      (component as any).selectedJidSet = new Set([contact.jid]);
+
+      component.onSaveTemplate({
+        text: 'Hello {nome}',
+        imageDataUrls: ['data:image/png;base64,aaa', 'data:image/png;base64,bbb']
+      });
+
+      expect(bulkSpy.start).toHaveBeenCalledWith(
+        [contact],
+        'Hello {nome}',
+        ['data:image/png;base64,aaa', 'data:image/png;base64,bbb']
+      );
     });
   });
 

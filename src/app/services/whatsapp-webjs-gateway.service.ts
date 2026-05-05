@@ -137,6 +137,29 @@ export class WhatsappWebjsGatewayService {
     }).pipe(map(response => response.result));
   }
 
+  replyMessage(instanceName: string, to: string, text: string, quotedMessageId: string): Observable<unknown> {
+    return this.http.post<SendResponse>(`${this.baseUrl}/messages/reply`, {
+      instanceName,
+      to,
+      text,
+      quotedMessageId
+    }).pipe(map(response => response.result));
+  }
+
+  deleteMessage(messageId: string, forEveryone = true): Observable<void> {
+    const encoded = encodeURIComponent(messageId);
+    return this.http.delete<{ ok: boolean }>(
+      `${this.baseUrl}/messages/${encoded}?everyone=${forEveryone ? 'true' : 'false'}`
+    ).pipe(map(() => undefined));
+  }
+
+  forwardMessage(to: string, messageId: string): Observable<void> {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/messages/forward`, {
+      to,
+      messageId
+    }).pipe(map(() => undefined));
+  }
+
   markChatSeen(jid: string): Observable<void> {
     const encoded = encodeURIComponent(jid);
     return this.http.post<SeenResponse>(`${this.baseUrl}/chats/${encoded}/seen`, {}).pipe(

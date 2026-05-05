@@ -198,6 +198,14 @@ export class IngestionService {
     displacedCanonicals.forEach(displacedCanonical => {
       this.mergeAliasContactIntoCanonical(canonicalJid, displacedCanonical);
     });
+
+    // Sempre tenta absorver eventual entry stale no contactStore que foi
+    // criada antes de aprendermos esse mapeamento. Se a entry não existir
+    // (caso comum quando aprendemos o LID antes de receber inbound), o
+    // método é no-op. Sem essa chamada, refreshContactsFromChats podia
+    // recriar o contato LID indefinidamente — causa raiz da duplicação
+    // de contatos reportada pelo usuário (Vanessa).
+    this.mergeAliasContactIntoCanonical(canonicalJid, lidJid);
   }
 
   private mergeAliasContactIntoCanonical(canonicalJid: string, aliasJid: string): void {
@@ -315,6 +323,13 @@ export class IngestionService {
       }
     }
 
+    const quotedMsgBody = typeof message._data?.quotedMsg?.body === 'string' && message._data.quotedMsg.body.trim()
+      ? message._data.quotedMsg.body.trim()
+      : null;
+    const quotedMsgFromMe = typeof message._data?.quotedMsg?.fromMe === 'boolean'
+      ? message._data.quotedMsg.fromMe
+      : null;
+
     this.eventStore.pushEvent({
       id: messageId,
       source,
@@ -329,7 +344,9 @@ export class IngestionService {
         hasMedia: Boolean(message.hasMedia),
         mediaMimetype,
         mediaFilename,
-        mediaDataUrl
+        mediaDataUrl,
+        quotedMsgBody,
+        quotedMsgFromMe
       }
     });
 
@@ -413,6 +430,13 @@ export class IngestionService {
 
     console.log('[whatsapp-webjs-bridge] outbound externo captado:', { source, chatJid });
 
+    const quotedBody = typeof message._data?.quotedMsg?.body === 'string' && message._data.quotedMsg.body.trim()
+      ? message._data.quotedMsg.body.trim()
+      : null;
+    const quotedFromMe = typeof message._data?.quotedMsg?.fromMe === 'boolean'
+      ? message._data.quotedMsg.fromMe
+      : null;
+
     this.eventStore.pushEvent({
       id: messageId,
       source,
@@ -427,7 +451,9 @@ export class IngestionService {
         hasMedia: Boolean(message.hasMedia),
         mediaMimetype: typeof message?._data?.mimetype === 'string' ? message._data.mimetype : '',
         mediaFilename: typeof message?._data?.filename === 'string' ? message._data.filename : '',
-        ack: typeof message.ack === 'number' ? message.ack : 0
+        ack: typeof message.ack === 'number' ? message.ack : 0,
+        quotedMsgBody: quotedBody,
+        quotedMsgFromMe: quotedFromMe
       }
     });
 

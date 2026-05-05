@@ -39,124 +39,218 @@ describe('MessageListComponent', () => {
     expect(component.trackById(0, msg)).toBe('xyz');
   });
 
-  describe('isMediaMessage', () => {
-    it('returns false for plain text message', () => {
-      expect(component.isMediaMessage(makeMsg({ payload: { hasMedia: false } }))).toBeFalse();
+  describe('media detection via viewMessages', () => {
+    it('no media for plain text message', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: false } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media).toBeNull();
     });
 
-    it('returns true when hasMedia is true', () => {
-      expect(component.isMediaMessage(makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg' } }))).toBeTrue();
+    it('has media when hasMedia is true', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media).not.toBeNull();
     });
 
-    it('returns true when mediaMimetype is non-empty', () => {
-      expect(component.isMediaMessage(makeMsg({ payload: { mediaMimetype: 'application/pdf' } }))).toBeTrue();
+    it('has media when mediaMimetype is non-empty', () => {
+      component.messages = [makeMsg({ payload: { mediaMimetype: 'application/pdf' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media).not.toBeNull();
     });
 
-    it('returns true when mediaDataUrl is present', () => {
-      expect(component.isMediaMessage(makeMsg({ payload: { mediaDataUrl: 'data:image/jpeg;base64,abc' } }))).toBeTrue();
-    });
-  });
-
-  describe('isImageMessage', () => {
-    it('returns false for non-image media', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } });
-      expect(component.isImageMessage(msg)).toBeFalse();
-    });
-
-    it('returns true for image with dataUrl', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,abc' } });
-      expect(component.isImageMessage(msg)).toBeTrue();
+    it('has media when mediaDataUrl is present', () => {
+      component.messages = [makeMsg({ payload: { mediaDataUrl: 'data:image/jpeg;base64,abc' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media).not.toBeNull();
     });
   });
 
-  describe('mediaLabel', () => {
-    it('returns empty for non-media', () => {
-      expect(component.mediaLabel(makeMsg())).toBe('');
+  describe('image detection via viewMessages', () => {
+    it('kind is document for PDF', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.kind).toBe('document');
     });
 
-    it('returns Imagem for image', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,x' } });
-      expect(component.mediaLabel(msg)).toBe('Imagem');
-    });
-
-    it('returns Audio for audio', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'audio/ogg', type: 'audio' } });
-      expect(component.mediaLabel(msg)).toBe('Audio');
-    });
-
-    it('returns Documento for unknown media', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } });
-      expect(component.mediaLabel(msg)).toBe('Documento');
+    it('kind is image for image with dataUrl', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,abc' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.kind).toBe('image');
     });
   });
 
-  describe('mediaFilename', () => {
+  describe('media label via viewMessages', () => {
+    it('returns null media for non-media', () => {
+      component.messages = [makeMsg()];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media).toBeNull();
+    });
+
+    it('label is Imagem for image', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,x' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.label).toBe('Imagem');
+    });
+
+    it('label is Audio for audio', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'audio/ogg', type: 'audio' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.label).toBe('Audio');
+    });
+
+    it('label is Documento for unknown media', () => {
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.label).toBe('Documento');
+    });
+  });
+
+  describe('media filename via viewMessages', () => {
     it('returns default label when no filename', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } });
-      expect(component.mediaFilename(msg)).toBe('Arquivo anexado');
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.filename).toBe('Arquivo anexado');
     });
 
     it('returns actual filename when set', () => {
-      const msg = makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf', mediaFilename: 'doc.pdf' } });
-      expect(component.mediaFilename(msg)).toBe('doc.pdf');
+      component.messages = [makeMsg({ payload: { hasMedia: true, mediaMimetype: 'application/pdf', mediaFilename: 'doc.pdf' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].media?.filename).toBe('doc.pdf');
     });
   });
 
-  describe('messageText', () => {
-    it('returns empty for media messages whose text is a data URL', () => {
-      const msg = makeMsg({
+  describe('message text via viewMessages', () => {
+    it('returns empty text for media messages whose text is a data URL', () => {
+      component.messages = [makeMsg({
         text: 'data:image/jpeg;base64,abc',
         payload: { hasMedia: true, mediaMimetype: 'image/jpeg', mediaDataUrl: 'data:image/jpeg;base64,abc' }
-      });
-
-      expect(component.messageText(msg)).toBe('');
+      })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].text).toBe('');
     });
 
     it('returns empty for raw JPEG base64 text', () => {
-      const msg = makeMsg({
+      component.messages = [makeMsg({
         text: '/9j/' + 'A'.repeat(320),
         payload: { hasMedia: true, mediaMimetype: 'image/jpeg' }
-      });
-
-      expect(component.messageText(msg)).toBe('');
+      })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].text).toBe('');
     });
 
     it('returns original text for regular text messages', () => {
-      const msg = makeMsg({ text: 'Olá com legenda', payload: { hasMedia: true, mediaMimetype: 'image/jpeg' } });
-
-      expect(component.messageText(msg)).toBe('Olá com legenda');
+      component.messages = [makeMsg({ text: 'Olá com legenda', payload: { hasMedia: true, mediaMimetype: 'image/jpeg' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].text).toBe('Olá com legenda');
     });
 
     it('returns a placeholder for location messages without text', () => {
-      const msg = makeMsg({
-        text: '',
-        payload: { type: 'location' }
-      });
-
-      expect(component.messageText(msg)).toBe('Localização');
+      component.messages = [makeMsg({ text: '', payload: { type: 'location' } })];
+      component.ngOnChanges();
+      expect(component.viewMessages[0].text).toBe('Localização');
     });
   });
 
   it('converts raw mediaDataUrl base64 into image preview URL', () => {
     const rawJpegBase64 = '/9j/' + 'A'.repeat(320);
-    const msg = makeMsg({
+    component.messages = [makeMsg({
       payload: {
         hasMedia: true,
         mediaMimetype: 'image/jpeg',
         mediaDataUrl: rawJpegBase64
       }
-    });
-
-    expect(component.isImageMessage(msg)).toBeTrue();
-    expect(component.imagePreviewUrl(msg)).toContain('data:image/jpeg;base64,/9j/');
+    })];
+    component.ngOnChanges();
+    const media = component.viewMessages[0].media;
+    expect(media?.kind).toBe('image');
+    expect(media?.previewUrl).toContain('data:image/jpeg;base64,/9j/');
   });
 
   it('precomputes the rendered messages list when the input changes', () => {
     component.messages = [makeMsg({ id: 'msg-1' }), makeMsg({ id: 'msg-2', isFromMe: true })];
-
     component.ngOnChanges();
-
     expect(component.viewMessages.length).toBe(2);
     expect(component.viewMessages[1].ackIcon).toBe('done');
+  });
+
+  it('does not force scroll to bottom when a message is deleted from the same conversation', () => {
+    const scrollElement = { scrollTop: 0, scrollHeight: 500 };
+    component.scrollContainer = {
+      nativeElement: scrollElement
+    } as any;
+
+    component.messages = [
+      makeMsg({ id: 'msg-1', contactJid: 'a@c.us' }),
+      makeMsg({ id: 'msg-2', contactJid: 'a@c.us' })
+    ];
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    scrollElement.scrollTop = 123;
+    scrollElement.scrollHeight = 420;
+    component.messages = [makeMsg({ id: 'msg-2', contactJid: 'a@c.us' })];
+
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    expect(scrollElement.scrollTop).toBe(123);
+  });
+
+  it('scrolls to bottom when switching to another conversation', () => {
+    const scrollElement = { scrollTop: 0, scrollHeight: 500 };
+    component.scrollContainer = {
+      nativeElement: scrollElement
+    } as any;
+
+    component.messages = [
+      makeMsg({ id: 'msg-1', contactJid: 'a@c.us' }),
+      makeMsg({ id: 'msg-2', contactJid: 'a@c.us' })
+    ];
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    scrollElement.scrollTop = 25;
+    scrollElement.scrollHeight = 760;
+    component.messages = [makeMsg({ id: 'msg-3', contactJid: 'b@c.us' })];
+
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    expect(scrollElement.scrollTop).toBe(760);
+  });
+
+  it('keeps the list pinned to the footer when media finishes loading', () => {
+    const scrollElement = { scrollTop: 0, scrollHeight: 500, clientHeight: 100 };
+    component.scrollContainer = {
+      nativeElement: scrollElement
+    } as any;
+
+    component.messages = [makeMsg({ id: 'msg-1', contactJid: 'a@c.us' })];
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    scrollElement.scrollHeight = 640;
+    component.onMediaLoad();
+
+    expect(scrollElement.scrollTop).toBe(640);
+  });
+
+  it('does not jump back to the footer on media load after the user scrolls up', () => {
+    const scrollElement = { scrollTop: 0, scrollHeight: 500, clientHeight: 100 };
+    component.scrollContainer = {
+      nativeElement: scrollElement
+    } as any;
+
+    component.messages = [makeMsg({ id: 'msg-1', contactJid: 'a@c.us' })];
+    component.ngOnChanges();
+    component.ngAfterViewChecked();
+
+    scrollElement.scrollTop = 120;
+    component.onScroll();
+
+    scrollElement.scrollHeight = 640;
+    component.onMediaLoad();
+
+    expect(scrollElement.scrollTop).toBe(120);
   });
 });

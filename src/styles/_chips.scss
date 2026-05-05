@@ -1,0 +1,27 @@
+// .badge, .pill, .seg — chips/pills reutilizáveis usados em várias telas.
+
+.badge {
+	@apply inline-flex items-center gap-[5px] rounded-full bg-bg-subtle px-2 py-0.5 text-[11px] font-semibold text-txt-muted;
+}
+.badge-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
+.badge-success { @apply bg-success-soft text-success; }
+.badge-warn { @apply bg-warn-soft text-warn; }
+.badge-accent { @apply bg-accent-soft text-accent; }
+
+.pill {
+	@apply cursor-pointer rounded-full border border-border-strong bg-transparent px-3.5 py-1.5 text-[12.5px] font-medium text-txt-muted transition-all;
+}
+.pill:hover { @apply border-txt-subtle text-txt; }
+.pill.active {
+	@apply bg-accent text-accent-text border-accent;
+}
+
+.seg {
+	@apply inline-flex gap-0.5 rounded-[7px] bg-bg-subtle p-0.5;
+}
+.seg button {
+	@apply cursor-pointer rounded-[5px] border-none bg-transparent px-2.5 py-1 text-[11.5px] font-medium text-txt-muted;
+}
+.seg button.active {
+	@apply bg-surface text-txt shadow-sm;
+}

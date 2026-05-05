@@ -25,6 +25,12 @@ interface ConversationWhatsappLabel {
   chatJids: string[];
 }
 
+interface PreviousContactFlashSnapshot {
+  index: number;
+  activityTimestamp: number;
+  unreadCount: number;
+}
+
 const MOVE_FLASH_DURATION_MS = 650;
 const PHOTO_VISIBLE_OVERSCAN = 6;
 const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
@@ -81,7 +87,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   private static readonly EMPTY_WHATSAPP_LABELS: ConversationWhatsappLabel[] = [];
 
   private readonly destroy$ = new Subject<void>();
-  private prevOrderMap = new Map<string, number>();
+  private prevContactSnapshotMap = new Map<string, PreviousContactFlashSnapshot>();
   private scrollContainer?: ElementRef<HTMLDivElement>;
   private visiblePhotoTimer: number | null = null;
 
@@ -182,8 +188,14 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   private detectAndFlashMoved(newContacts: WhatsappContact[]): void {
     const movedUp: string[] = [];
     newContacts.forEach((contact, newIndex) => {
-      const prevIndex = this.prevOrderMap.get(contact.jid);
-      if (prevIndex !== undefined && newIndex < prevIndex) {
+      const previous = this.prevContactSnapshotMap.get(contact.jid);
+      if (!previous || newIndex >= previous.index) {
+        return;
+      }
+
+      const nextActivityTimestamp = this.resolveContactActivityTimestamp(contact);
+      const nextUnreadCount = this.resolveContactUnreadCount(contact);
+      if (nextActivityTimestamp > previous.activityTimestamp || nextUnreadCount > previous.unreadCount) {
         movedUp.push(contact.jid);
       }
     });
@@ -196,10 +208,29 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       }, MOVE_FLASH_DURATION_MS);
     }
 
-    this.prevOrderMap.clear();
+    this.prevContactSnapshotMap.clear();
     newContacts.forEach((contact, index) => {
-      this.prevOrderMap.set(contact.jid, index);
+      this.prevContactSnapshotMap.set(contact.jid, {
+        index,
+        activityTimestamp: this.resolveContactActivityTimestamp(contact),
+        unreadCount: this.resolveContactUnreadCount(contact)
+      });
     });
+  }
+
+  private resolveContactActivityTimestamp(contact: WhatsappContact): number {
+    const getChatsTimestampMs = Number(contact.getChatsTimestampMs ?? 0);
+    if (Number.isFinite(getChatsTimestampMs) && getChatsTimestampMs > 0) {
+      return getChatsTimestampMs;
+    }
+
+    const lastMessageTimestamp = Date.parse(contact.lastMessageAt || '');
+    return Number.isFinite(lastMessageTimestamp) && lastMessageTimestamp > 0 ? lastMessageTimestamp : 0;
+  }
+
+  private resolveContactUnreadCount(contact: WhatsappContact): number {
+    const unreadCount = Number(contact.unreadCount ?? 0);
+    return Number.isFinite(unreadCount) && unreadCount > 0 ? unreadCount : 0;
   }
 
   onSearchChange(value: string): void {

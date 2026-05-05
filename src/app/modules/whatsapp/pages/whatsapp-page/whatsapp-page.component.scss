@@ -56,6 +56,14 @@
   @apply flex flex-col items-center gap-3;
 }
 
+.whatsapp-page__reconnect-btn {
+  @apply inline-flex items-center gap-2;
+}
+
+.whatsapp-page__reconnect-btn-icon {
+  @apply text-[1rem];
+}
+
 .whatsapp-page__qr-image {
   @apply w-full max-w-[17.5rem] rounded-[1.3rem] border border-border-strong bg-white p-3;
 }

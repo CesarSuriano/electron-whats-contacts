@@ -161,8 +161,8 @@
   @apply bg-bg-subtle;
 }
 
-.quick-reply-manager-modal__image-row {
-  @apply flex items-center gap-3;
+.quick-reply-manager-modal__image-list {
+  @apply mb-2 flex flex-wrap gap-2;
 }
 
 .quick-reply-manager-modal__image-preview {

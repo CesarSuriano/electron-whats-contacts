@@ -4,9 +4,10 @@ import { switchMap, takeUntil } from 'rxjs/operators';
 import { Observable, of } from 'rxjs';
 
 import { AppLabel } from '../../../../models/app-label.model';
-import { WhatsappContact } from '../../../../models/whatsapp.model';
+import { WhatsappContact, WhatsappLabel } from '../../../../models/whatsapp.model';
 import { LabelService } from '../../../../services/label.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
+import { ContactLabelDisplayItem, resolveCombinedContactLabelDisplayItems } from '../../helpers/contact-label-display.helper';
 import { formatBrazilianPhone, resolveDisplayedPhoneSource } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
@@ -17,12 +18,14 @@ import { WhatsappStateService } from '../../services/whatsapp-state.service';
 })
 export class ChatHeaderComponent implements OnChanges, OnDestroy {
   @Input() contact: WhatsappContact | null = null;
+  @Input() whatsappLabels: WhatsappLabel[] = [];
 
-  readonly maxVisibleLabels = 2;
+  readonly maxVisibleLabels = 3;
 
   appLabels: AppLabel[] = [];
   isLabelPickerOpen = false;
   isOverflowMenuOpen = false;
+  pendingRemovalLabel: ContactLabelDisplayItem | null = null;
 
   private readonly destroy$ = new Subject<void>();
   private readonly contactJid$ = new Subject<string | null>();
@@ -51,6 +54,7 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
       this.contactJid$.next(contact?.jid || null);
       this.isLabelPickerOpen = false;
       this.isOverflowMenuOpen = false;
+      this.pendingRemovalLabel = null;
     }
   }
 
@@ -68,12 +72,16 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
     return formatBrazilianPhone(phoneSource);
   }
 
-  get visibleLabels(): AppLabel[] {
-    return this.appLabels.slice(0, this.maxVisibleLabels);
+  get displayedLabels(): ContactLabelDisplayItem[] {
+    return resolveCombinedContactLabelDisplayItems(this.contact, this.appLabels, this.whatsappLabels);
   }
 
-  get hiddenLabels(): AppLabel[] {
-    return this.appLabels.slice(this.maxVisibleLabels);
+  get visibleLabels(): ContactLabelDisplayItem[] {
+    return this.displayedLabels.slice(0, this.maxVisibleLabels);
+  }
+
+  get hiddenLabels(): ContactLabelDisplayItem[] {
+    return this.displayedLabels.slice(this.maxVisibleLabels);
   }
 
   toggleLabelPicker(): void {
@@ -108,11 +116,35 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
     this.isOverflowMenuOpen = false;
   }
 
-  removeLabel(label: AppLabel): void {
-    if (!this.contact) {
+  requestRemoveLabel(label: ContactLabelDisplayItem): void {
+    if (!label.removable || !this.contact) {
       return;
     }
-    this.labelService.toggleLabelOnJid(this.contact.jid, label.id);
+
+    this.isOverflowMenuOpen = false;
+    this.pendingRemovalLabel = label;
+  }
+
+  closeRemoveLabelDialog(): void {
+    this.pendingRemovalLabel = null;
+  }
+
+  confirmRemoveLabel(): void {
+    if (!this.contact || !this.pendingRemovalLabel?.appLabelId) {
+      this.pendingRemovalLabel = null;
+      return;
+    }
+
+    this.labelService.toggleLabelOnJid(this.contact.jid, this.pendingRemovalLabel.appLabelId);
+    this.pendingRemovalLabel = null;
+  }
+
+  get removeLabelConfirmationText(): string {
+    if (!this.pendingRemovalLabel) {
+      return '';
+    }
+
+    return `Tem certeza que deseja remover a etiqueta ${this.pendingRemovalLabel.name} deste contato?`;
   }
 
   onManageRequested(): void {
@@ -143,5 +175,6 @@ export class ChatHeaderComponent implements OnChanges, OnDestroy {
   @HostListener('document:keydown.escape')
   onEscape(): void {
     this.isOverflowMenuOpen = false;
+    this.pendingRemovalLabel = null;
   }
 }

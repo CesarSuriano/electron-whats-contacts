@@ -202,8 +202,9 @@ describe('HomeComponent', () => {
     expect(component.selectedClienteIds).toEqual(new Set([1, 2]));
   });
 
-  it('renders upload as outline and bulk actions as filled buttons', () => {
+  it('keeps upload as primary and renders bulk actions with the table action variants', () => {
     component.activeSection = 'clients';
+    component.selectedClienteIds = new Set([1]);
     fixture.detectChanges();
 
     const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
@@ -211,12 +212,40 @@ describe('HomeComponent', () => {
     const birthdayButton = buttons.find(button => button.textContent?.includes('Enviar Parabéns'));
     const reviewButton = buttons.find(button => button.textContent?.includes('Enviar Avaliação'));
 
-    expect(uploadButton?.classList.contains('btn-outline')).toBeTrue();
-    expect(uploadButton?.classList.contains('btn-primary')).toBeFalse();
-    expect(birthdayButton?.classList.contains('btn-primary')).toBeTrue();
-    expect(reviewButton?.classList.contains('btn-primary')).toBeTrue();
-    expect(birthdayButton?.classList.contains('btn-outline')).toBeFalse();
-    expect(reviewButton?.classList.contains('btn-outline')).toBeFalse();
+    expect(uploadButton?.classList.contains('btn-primary')).toBeTrue();
+    expect(uploadButton?.classList.contains('btn-outline')).toBeFalse();
+    expect(birthdayButton?.classList.contains('btn-primary')).toBeFalse();
+    expect(reviewButton?.classList.contains('btn-primary')).toBeFalse();
+    expect(birthdayButton?.classList.contains('home-bulk-bar__button--birthday')).toBeTrue();
+    expect(reviewButton?.classList.contains('home-bulk-bar__button--review')).toBeTrue();
+  });
+
+  it('keeps the empty selection label visible and only shows bulk send actions after selection', () => {
+    component.activeSection = 'clients';
+    component.selectedClienteIds = new Set();
+    fixture.detectChanges();
+
+    const bulkBarBeforeSelection = fixture.nativeElement.querySelector('.home-bulk-bar') as HTMLElement;
+
+    expect(bulkBarBeforeSelection?.textContent).toContain('Nenhum cliente selecionado');
+    expect(fixture.nativeElement.textContent).not.toContain('Enviar Parabéns');
+    expect(fixture.nativeElement.textContent).not.toContain('Enviar Avaliação');
+
+    component.selectedClienteIds = new Set([1]);
+    fixture.detectChanges();
+
+    const bulkBarAfterSelection = fixture.nativeElement.querySelector('.home-bulk-bar') as HTMLElement;
+
+    expect(bulkBarAfterSelection?.textContent).toContain('1 cliente selecionado');
+    expect(fixture.nativeElement.textContent).toContain('Enviar Parabéns');
+    expect(fixture.nativeElement.textContent).toContain('Enviar Avaliação');
+  });
+
+  it('hides the app version item from the clients header menu', () => {
+    component.activeSection = 'clients';
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Ver versão do app');
   });
 
   it('renders the send mode toggle on the top row and the search plus filters below it', () => {
@@ -226,8 +255,7 @@ describe('HomeComponent', () => {
     const toolbarTop = fixture.nativeElement.querySelector('.home-clients-toolbar__top') as HTMLElement;
     const toolbarBottom = fixture.nativeElement.querySelector('.home-clients-toolbar__bottom') as HTMLElement;
     const topModeControl = toolbarTop.querySelector('.home-mode-control') as HTMLElement;
-    const topEditButton = toolbarTop.querySelector('.home-clients-toolbar__actions button:nth-of-type(1)') as HTMLButtonElement;
-    const topUploadButton = toolbarTop.querySelector('.home-clients-toolbar__actions button:nth-of-type(2)') as HTMLButtonElement;
+    const topUploadButton = toolbarTop.querySelector('.home-clients-toolbar__actions button:nth-of-type(1)') as HTMLButtonElement;
     const topStatus = toolbarTop.querySelector('.home-status-pill') as HTMLElement;
     const bottomSearchField = toolbarBottom.querySelector('.home-search-field') as HTMLElement;
     const bottomFilterGroup = toolbarBottom.querySelector('.home-filter-group') as HTMLElement;
@@ -235,7 +263,6 @@ describe('HomeComponent', () => {
 
     expect(topModeControl).toBeTruthy();
     expect(topStatus?.textContent).toContain('Última sincronização');
-    expect(topEditButton?.textContent).toContain('Editar mensagens');
     expect(topUploadButton?.textContent).toContain('Enviar arquivo');
     expect(bottomSearchField).toBeTruthy();
     expect(bottomFilterGroup).toBeTruthy();

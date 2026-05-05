@@ -18,7 +18,7 @@
       <div class="quick-reply-menu__item-row">
         <span class="quick-reply-menu__item-shortcode">/{{ item.shortcode }}</span>
         <span class="quick-reply-menu__item-title" *ngIf="item.title">{{ item.title }}</span>
-        <span class="quick-reply-menu__item-image-tag" *ngIf="item.imageDataUrl">
+        <span class="quick-reply-menu__item-image-tag" *ngIf="item.imageDataUrls?.length">
           <span class="material-symbols-outlined">image</span>
         </span>
       </div>

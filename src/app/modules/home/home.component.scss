@@ -7,10 +7,12 @@
 }
 
 .home-content {
-  @apply flex min-w-0 flex-1 flex-col;
-  background:
-    radial-gradient(circle at top right, rgba(154, 54, 81, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(250, 250, 249, 0));
+  @apply flex min-w-0 flex-1 flex-col bg-bg;
+  // Toque sutil de cor da marca no canto superior. Usa accent-soft (que muda
+  // de tom no dark mode) em vez de gradiente branco — antes ficava cinza
+  // horrível no tema escuro.
+  background-image: radial-gradient(circle at top right, var(--accent-soft) 0%, transparent 28%);
+  background-attachment: fixed;
 }
 
 .home-main {

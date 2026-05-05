@@ -1,10 +1,12 @@
 import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, forkJoin, of } from 'rxjs';
+import { catchError, map, takeUntil } from 'rxjs/operators';
+
+import { MessageActionEvent } from '../message-list/message-list.component';
 
 import { AgentService } from '../../../../services/agent.service';
 import { splitAssistantSuggestionIntoMessages } from '../../../../helpers/assistant-suggestion.helper';
-import { WhatsappContact, WhatsappMessage } from '../../../../models/whatsapp.model';
+import { WhatsappContact, WhatsappLabel, WhatsappMessage } from '../../../../models/whatsapp.model';
 import { BulkSendService } from '../../services/bulk-send.service';
 import { AssistantFeedbackService } from '../../services/assistant-feedback.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
@@ -21,7 +23,10 @@ const DRAFT_SYNC_DEBOUNCE_MS = 40;
   styleUrls: ['./chat-view.component.scss']
 })
 export class ChatViewComponent implements OnInit, OnDestroy {
+  readonly maxForwardRecipients = 4;
+
   @Input() disabled = false;
+  @Input() whatsappLabels: WhatsappLabel[] = [];
   @ViewChild(ComposerComponent) composer?: ComposerComponent;
 
   contact: WhatsappContact | null = null;
@@ -38,7 +43,19 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   aiFeedbackMessage = '';
   readonly isAiFeatureEnabled = WHATSAPP_AI_FEATURE_ENABLED;
 
-  private bulkImageWasSet = false;
+  pendingReply: MessageActionEvent | null = null;
+  pendingForward: MessageActionEvent | null = null;
+  pendingDelete: MessageActionEvent | null = null;
+  selectedForwardJids = new Set<string>();
+  showForwardDialog = false;
+  showDeleteDialog = false;
+  forwardSearchQuery = '';
+  transientErrorMessage = '';
+  isDeletingMessage = false;
+  isForwardingMessage = false;
+
+  private transientErrorTimer: number | null = null;
+  private bulkImagesWereSet = false;
   private lastRequestedAiContextKey = '';
   private suggestionTimerId: number | null = null;
   private queuedAiSuggestionParts: string[] = [];
@@ -144,12 +161,13 @@ export class ChatViewComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.state.draftImageDataUrl$.pipe(takeUntil(this.destroy$)).subscribe(dataUrl => {
-      if (dataUrl) {
-        this.bulkImageWasSet = true;
-        setTimeout(() => this.composer?.setAttachmentFromDataUrl(dataUrl, 'imagem-template.jpg'), 0);
-      } else if (this.bulkImageWasSet) {
-        this.bulkImageWasSet = false;
+    this.state.draftImageDataUrls$.pipe(takeUntil(this.destroy$)).subscribe(dataUrls => {
+      if (dataUrls.length) {
+        this.bulkImagesWereSet = true;
+        const nextDataUrls = [...dataUrls];
+        setTimeout(() => this.composer?.setAttachmentsFromDataUrls(nextDataUrls, 'imagem-template'), 0);
+      } else if (this.bulkImagesWereSet) {
+        this.bulkImagesWereSet = false;
         setTimeout(() => this.composer?.forceResetAttachment(), 0);
       }
     });
@@ -178,6 +196,10 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.suggestionTimerId !== null) {
       window.clearTimeout(this.suggestionTimerId);
+    }
+
+    if (this.transientErrorTimer !== null) {
+      window.clearTimeout(this.transientErrorTimer);
     }
 
     this.flushPendingDraftSync();
@@ -258,18 +280,29 @@ export class ChatViewComponent implements OnInit, OnDestroy {
   }
 
   onSendText(text: string): void {
-    if (!this.contact || this.disabled || this.isSyncingMessages) {
+    if (!this.contact || this.disabled) {
       return;
     }
 
     const contactJid = this.resolveActiveContactJid();
+    const quotedReply = this.pendingReply;
 
     const shouldPromoteQueuedSuggestion = this.shouldPromoteQueuedSuggestionAfterSend(text);
     if (!shouldPromoteQueuedSuggestion) {
       this.discardCurrentSuggestionSequence();
     }
 
-    this.state.sendText(contactJid, text).subscribe({
+    const send$ = quotedReply
+      ? this.state.sendReply(contactJid, text, quotedReply.messageId, quotedReply.text, quotedReply.isFromMe)
+      : this.state.sendText(contactJid, text);
+
+    if (this.bulkSend.hasActiveQueue) {
+      this.bulkSend.trackCurrentSend(contactJid, 1);
+    }
+
+    this.pendingReply = null;
+
+    send$.subscribe({
       next: () => {
         if (!this.bulkSend.hasActiveQueue) {
           this.clearPendingDraftSync();
@@ -287,12 +320,16 @@ export class ChatViewComponent implements OnInit, OnDestroy {
           this.acceptedAiSuggestionDraft = '';
         }
       },
-      error: () => {}
+      error: () => {
+        if (this.bulkSend.hasActiveQueue) {
+          this.bulkSend.clearTrackedCurrentSend(contactJid);
+        }
+      }
     });
   }
 
-  onSendMedia(payload: { file: File; caption: string }): void {
-    if (!this.contact || this.disabled || this.isSyncingMessages) {
+  onSendMedia(payload: { files: File[]; caption: string }): void {
+    if (!this.contact || this.disabled || !payload.files.length) {
       return;
     }
 
@@ -302,20 +339,227 @@ export class ChatViewComponent implements OnInit, OnDestroy {
     this.pendingAiSuggestionPromotion = false;
     this.acceptedAiSuggestionDraft = '';
 
-    this.state.sendMedia(contactJid, payload.file, payload.caption).subscribe({
-      next: () => {
-        if (!this.bulkSend.hasActiveQueue) {
-          this.clearPendingDraftSync();
-          this.composer?.resetAfterSend();
-          this.draftText = '';
-          this.state.setDraftTextForJid(contactJid, '');
-          this.clearSuggestionProviders();
+    const total = payload.files.length;
+    const isBulkQueueActive = this.bulkSend.hasActiveQueue;
+    let remaining = total;
+    let okCount = 0;
+    let errorCount = 0;
 
-          this.lastRequestedAiContextKey = '';
+    if (isBulkQueueActive) {
+      this.bulkSend.trackCurrentSend(contactJid, total);
+    }
+
+    const onFileDone = (success: boolean) => {
+      if (success) okCount++; else errorCount++;
+      remaining--;
+      if (remaining > 0) return;
+
+      if (errorCount > 0) {
+        if (isBulkQueueActive) {
+          this.bulkSend.clearTrackedCurrentSend(contactJid);
         }
-      },
-      error: () => {}
+
+        const partial = okCount > 0
+          ? `Enviei ${okCount} de ${total} arquivos. ${errorCount} falhou${errorCount > 1 ? 'ram' : ''}.`
+          : `Não foi possível enviar ${errorCount > 1 ? 'os arquivos' : 'o arquivo'}.`;
+        this.showTransientError(partial);
+      }
+
+      // Só reseta o composer se ao menos um arquivo foi enviado, pra preservar
+      // anexos/legenda quando todos falharem (usuário pode reenviar).
+      if (okCount > 0 && !this.bulkSend.hasActiveQueue) {
+        this.clearPendingDraftSync();
+        this.composer?.resetAfterSend();
+        this.draftText = '';
+        this.state.setDraftTextForJid(contactJid, '');
+        this.clearSuggestionProviders();
+        this.lastRequestedAiContextKey = '';
+      }
+    };
+
+    payload.files.forEach((file, index) => {
+      this.state.sendMedia(contactJid, file, index === 0 ? payload.caption : '').subscribe({
+        next: () => onFileDone(true),
+        error: () => onFileDone(false)
+      });
     });
+  }
+
+  onReplySelected(event: MessageActionEvent): void {
+    this.pendingReply = event;
+    setTimeout(() => this.composer?.focus(), 0);
+  }
+
+  cancelReply(): void {
+    this.pendingReply = null;
+  }
+
+  onForwardSelected(event: MessageActionEvent): void {
+    this.pendingForward = event;
+    this.selectedForwardJids = new Set<string>();
+    this.forwardSearchQuery = '';
+    this.showForwardDialog = true;
+  }
+
+  closeForwardDialog(): void {
+    if (this.isForwardingMessage) {
+      return;
+    }
+
+    this.pendingForward = null;
+    this.selectedForwardJids = new Set<string>();
+    this.showForwardDialog = false;
+    this.forwardSearchQuery = '';
+  }
+
+  toggleForwardRecipient(jid: string): void {
+    if (!jid || this.isForwardingMessage) {
+      return;
+    }
+
+    const next = new Set(this.selectedForwardJids);
+    if (next.has(jid)) {
+      next.delete(jid);
+    } else {
+      next.add(jid);
+    }
+
+    this.selectedForwardJids = next;
+  }
+
+  isForwardRecipientSelected(jid: string): boolean {
+    return this.selectedForwardJids.has(jid);
+  }
+
+  confirmForward(): void {
+    if (!this.pendingForward || this.isForwardingMessage || !this.forwardSelectionCount || this.isForwardLimitExceeded) {
+      return;
+    }
+
+    const messageId = this.pendingForward.messageId;
+    const recipientJids = Array.from(this.selectedForwardJids);
+    this.isForwardingMessage = true;
+
+    // Encaminhar é irreversível — não usamos forkJoin direto porque ele falha
+    // o conjunto inteiro se UM destinatário falhar, o que esconderia os que
+    // já foram entregues e levaria o usuário a duplicar o envio. Captura
+    // erro por destinatário e relata o resultado consolidado.
+    const perRecipient$ = recipientJids.map(jid =>
+      this.state.forwardMessage(messageId, jid).pipe(
+        map(() => ({ jid, ok: true })),
+        catchError(() => of({ jid, ok: false }))
+      )
+    );
+
+    forkJoin(perRecipient$).subscribe(results => {
+      this.isForwardingMessage = false;
+
+      const okCount = results.filter(r => r.ok).length;
+      const errorCount = results.length - okCount;
+
+      if (errorCount === 0) {
+        this.pendingForward = null;
+        this.selectedForwardJids = new Set<string>();
+        this.showForwardDialog = false;
+        this.forwardSearchQuery = '';
+        return;
+      }
+
+      if (okCount === 0) {
+        this.showTransientError('Não foi possível encaminhar a mensagem.');
+        return;
+      }
+
+      // Sucesso parcial: mantém o diálogo aberto e desmarca quem já recebeu,
+      // pra usuário poder retentar somente os que falharam sem duplicar.
+      const failedJids = new Set(results.filter(r => !r.ok).map(r => r.jid));
+      this.selectedForwardJids = new Set(Array.from(this.selectedForwardJids).filter(jid => failedJids.has(jid)));
+      this.showTransientError(`Encaminhei para ${okCount} de ${results.length} contatos. ${errorCount} falhou${errorCount > 1 ? 'ram' : ''} — tente novamente.`);
+    });
+  }
+
+  get forwardSelectionCount(): number {
+    return this.selectedForwardJids.size;
+  }
+
+  get isForwardLimitExceeded(): boolean {
+    return this.forwardSelectionCount > this.maxForwardRecipients;
+  }
+
+  get forwardSelectionWarning(): string {
+    if (!this.isForwardLimitExceeded) {
+      return '';
+    }
+
+    return `Você pode encaminhar para no máximo ${this.maxForwardRecipients} contatos por vez.`;
+  }
+
+  get filteredForwardContacts(): WhatsappContact[] {
+    const query = this.forwardSearchQuery.trim().toLowerCase();
+    return this.state.contacts.filter(c => {
+      if (!query) return true;
+      return (c.name || '').toLowerCase().includes(query)
+        || (c.phone || '').includes(query);
+    });
+  }
+
+  onDeleteSelected(event: MessageActionEvent): void {
+    this.pendingDelete = event;
+    this.showDeleteDialog = true;
+  }
+
+  closeDeleteDialog(): void {
+    if (this.isDeletingMessage) {
+      return;
+    }
+
+    this.pendingDelete = null;
+    this.showDeleteDialog = false;
+  }
+
+  confirmDelete(): void {
+    if (!this.pendingDelete || this.isDeletingMessage) {
+      return;
+    }
+
+    const event = this.pendingDelete;
+    this.isDeletingMessage = true;
+
+    this.state.deleteMessage(event.messageId, event.isFromMe).subscribe({
+      next: () => {
+        this.isDeletingMessage = false;
+        this.pendingDelete = null;
+        this.showDeleteDialog = false;
+      },
+      error: err => {
+        this.isDeletingMessage = false;
+        this.pendingDelete = null;
+        this.showDeleteDialog = false;
+        const details = (err?.error?.details as string) || (err?.message as string) || '';
+        this.showTransientError(details
+          ? `Não foi possível apagar: ${details}`
+          : 'Não foi possível apagar a mensagem. O tempo limite pode ter expirado.');
+      }
+    });
+  }
+
+  get deleteConfirmationText(): string {
+    if (this.pendingDelete?.isFromMe) {
+      return 'Essa mensagem será apagada para todos quando o WhatsApp ainda permitir a ação.';
+    }
+
+    return 'Essa mensagem será removida desta conversa no app.';
+  }
+
+  private showTransientError(message: string): void {
+    this.transientErrorMessage = message;
+    if (this.transientErrorTimer !== null) {
+      window.clearTimeout(this.transientErrorTimer);
+    }
+    this.transientErrorTimer = window.setTimeout(() => {
+      this.transientErrorMessage = '';
+      this.transientErrorTimer = null;
+    }, 6000);
   }
 
   get aiStatusMessage(): string {

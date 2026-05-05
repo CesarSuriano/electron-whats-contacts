@@ -102,20 +102,20 @@
           </div>
 
           <div class="quick-reply-manager-modal__field">
-            <label>Imagem (opcional)</label>
-            <input type="file" accept="image/*" #imageInput hidden (change)="onImageSelected($event)" />
-            <div class="quick-reply-manager-modal__image-row">
-              <div class="quick-reply-manager-modal__image-preview" *ngIf="draftImageDataUrl">
-                <img [src]="draftImageDataUrl" alt="Pré-visualização" />
-                <button type="button" class="quick-reply-manager-modal__image-remove" (click)="clearImage()" aria-label="Remover imagem">
+            <label>Imagens (opcional)</label>
+            <input type="file" accept="image/*" multiple #imageInput hidden (change)="onImageSelected($event)" />
+            <div class="quick-reply-manager-modal__image-list" *ngIf="draftImageDataUrls.length">
+              <div class="quick-reply-manager-modal__image-preview" *ngFor="let url of draftImageDataUrls; let i = index">
+                <img [src]="url" [alt]="'Imagem ' + (i + 1)" />
+                <button type="button" class="quick-reply-manager-modal__image-remove" (click)="removeImage(i)" [attr.aria-label]="'Remover imagem ' + (i + 1)">
                   <span class="material-symbols-outlined">close</span>
                 </button>
               </div>
-              <button type="button" class="btn btn-outline" (click)="chooseImage()">
-                <span class="material-symbols-outlined">image</span>
-                {{ draftImageDataUrl ? 'Trocar imagem' : 'Adicionar imagem' }}
-              </button>
             </div>
+            <button type="button" class="btn btn-outline" (click)="chooseImage()">
+              <span class="material-symbols-outlined">image</span>
+              Adicionar imagem(ns)
+            </button>
           </div>
 
           <p class="quick-reply-manager-modal__error" *ngIf="errorMessage">{{ errorMessage }}</p>

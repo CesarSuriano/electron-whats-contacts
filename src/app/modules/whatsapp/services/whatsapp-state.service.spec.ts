@@ -1,5 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { EMPTY, of, throwError } from 'rxjs';
+import { EMPTY, Subject, of, throwError } from 'rxjs';
 
 import { WhatsappStateService } from './whatsapp-state.service';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
@@ -41,6 +41,8 @@ function makeGatewayStub(): jasmine.SpyObj<WhatsappWebjsGatewayService> {
 describe('WhatsappStateService', () => {
   let service: WhatsappStateService;
   let gateway: jasmine.SpyObj<WhatsappWebjsGatewayService>;
+  let ws: jasmine.SpyObj<WhatsappWsService>;
+  let wsEventStreams: Record<string, Subject<unknown>>;
 
   beforeEach(() => {
     const stub = makeGatewayStub();
@@ -64,8 +66,12 @@ describe('WhatsappStateService', () => {
       ]
     });
 
-    const ws = TestBed.inject(WhatsappWsService) as jasmine.SpyObj<WhatsappWsService>;
-    ws.on.and.returnValue(EMPTY);
+    ws = TestBed.inject(WhatsappWsService) as jasmine.SpyObj<WhatsappWsService>;
+    wsEventStreams = {};
+    ws.on.and.callFake(<T = unknown>(type: string) => {
+      wsEventStreams[type] ??= new Subject<unknown>();
+      return wsEventStreams[type].asObservable() as Subject<T>;
+    });
 
     service = TestBed.inject(WhatsappStateService);
     gateway = TestBed.inject(WhatsappWebjsGatewayService) as jasmine.SpyObj<WhatsappWebjsGatewayService>;
@@ -276,6 +282,59 @@ describe('WhatsappStateService', () => {
 
       const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
       expect(calledJids).toContain(unreadTailContact.jid);
+    }));
+
+    it('hydrates contacts from contacts_updated after an empty bootstrap response', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(of([]));
+
+      let contacts: WhatsappContact[] = [];
+      let selectedJid = '';
+      service.contacts$.subscribe(value => (contacts = value));
+      service.selectedContactJid$.subscribe(value => (selectedJid = value));
+
+      service.loadInstances();
+      tick(10_100);
+
+      expect(contacts).toEqual([]);
+      expect(gateway.loadChatMessages).not.toHaveBeenCalled();
+
+      (wsEventStreams['contacts_updated'] as Subject<{ contacts: WhatsappContact[] }>).next({
+        contacts: [{
+          ...mockContact,
+          lastMessagePreview: 'oi',
+          getChatsTimestampMs: 2_000,
+          fromGetChats: true
+        }]
+      });
+      tick();
+
+      expect(contacts).toEqual([jasmine.objectContaining({ jid: mockContact.jid })]);
+      expect(selectedJid).toBe(mockContact.jid);
+      expect(gateway.loadChatMessages).toHaveBeenCalledWith(mockInstance.name, mockContact.jid, 10, false);
+    }));
+
+    it('clears a stale contacts load error when contacts arrive later via contacts_updated', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(throwError(() => new Error('timeout')));
+
+      let errorMessage = '';
+      service.errorMessage$.subscribe(value => (errorMessage = value));
+
+      service.loadInstances();
+      tick();
+
+      expect(errorMessage).toBe('Não foi possível carregar os contatos.');
+
+      (wsEventStreams['contacts_updated'] as Subject<{ contacts: WhatsappContact[] }>).next({
+        contacts: [{
+          ...mockContact,
+          lastMessagePreview: 'oi',
+          getChatsTimestampMs: 2_000,
+          fromGetChats: true
+        }]
+      });
+      tick();
+
+      expect(errorMessage).toBe('');
     }));
 
     it('sets error message on gateway failure', () => {
@@ -717,6 +776,33 @@ describe('WhatsappStateService', () => {
       tick(151);
 
       expect(gateway.loadContactPhoto).not.toHaveBeenCalled();
+    }));
+
+    it('keeps an existing photo when a refresh fails', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        { ...mockContact, photoUrl: 'data:image/jpeg;base64,abc' }
+      ]);
+      (service as unknown as { photoRetryUntil: Map<string, number> }).photoRetryUntil.clear();
+      gateway.loadContactPhoto.and.returnValue(of(null));
+
+      (service as unknown as { setContactPhoto(jid: string, url: string | null): void }).setContactPhoto(mockContact.jid, null);
+
+      const contacts = (service as unknown as { contactsSubject: { value: WhatsappContact[] } }).contactsSubject.value;
+      expect(contacts[0].photoUrl).toBe('data:image/jpeg;base64,abc');
+    }));
+
+    it('uses a fresh snapshot photo when the current contact has no photo', fakeAsync(() => {
+      (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
+        { ...mockContact, photoUrl: null }
+      ]);
+
+      (wsEventStreams['contacts_updated'] as Subject<{ contacts: WhatsappContact[] }>).next({
+        contacts: [{ ...mockContact, photoUrl: 'data:image/jpeg;base64,new' }]
+      });
+      tick();
+
+      const contacts = (service as unknown as { contactsSubject: { value: WhatsappContact[] } }).contactsSubject.value;
+      expect(contacts[0].photoUrl).toBe('data:image/jpeg;base64,new');
     }));
   });
 

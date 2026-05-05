@@ -1,5 +1,242 @@
+// =============================================================
+// Estrutura do modal — migrado de styles.scss para escopo do
+// componente (encapsulation: Emulated). Classes só fazem efeito
+// dentro deste template.
+// =============================================================
+
+.message-template-modal {
+  @apply fixed left-1/2 top-1/2 z-[21] flex max-h-[calc(100vh-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-auto rounded-[22px] border border-border bg-surface p-6;
+  width: min(760px, calc(100vw - 2rem));
+  box-shadow: 0 24px 80px rgba(35, 24, 20, 0.24);
+}
+
+// Estas classes (.upload-modal-header, .upload-modal-footer) foram
+// migradas para upload-xml-modal.component.scss no refactor de CSS, mas
+// também são usadas aqui no template do modal. Como a encapsulação
+// Emulated do Angular escopa essas regras, redeclaramos as essenciais
+// aqui pra preservar o layout (close à direita, descrição discreta,
+// botões alinhados à direita).
+.upload-modal-header {
+  @apply flex items-start justify-between gap-4;
+}
+
+.upload-modal-header h2 {
+  @apply m-0 text-[1.2rem] text-accent;
+}
+
+.upload-modal-header p {
+  @apply mt-1.5 mb-0 text-[0.92rem] text-txt-muted;
+}
+
+.upload-modal-footer {
+  @apply flex justify-end gap-3;
+}
+
+.message-template-modal-loading {
+  @apply absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-white/90 text-center text-txt-muted;
+}
+
+.message-template-modal__footer {
+  @apply items-center;
+}
+
+.message-template-modal__save {
+  @apply min-w-[12rem];
+}
+
+// =============================================================
+// Toolbar (undo/redo, formato, modo edição/preview)
+// =============================================================
+
+.message-template-toolbar {
+  @apply flex flex-wrap items-center gap-3 rounded-[18px] border border-[rgba(117,16,19,0.14)] bg-surface px-3 py-2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.toolbar-icon {
+  @apply text-[1rem];
+  font-variation-settings: 'wght' 500;
+}
+
+.message-template-mode-toggle {
+  @apply inline-flex items-center rounded-[12px] bg-bg-subtle p-1;
+}
+
+.message-template-mode-toggle__button {
+  @apply cursor-pointer rounded-[10px] border-none bg-transparent px-3 py-2 text-[0.9rem] font-medium text-txt-muted transition-colors;
+  font: inherit;
+}
+
+.message-template-mode-toggle__button.active {
+  @apply bg-surface text-accent;
+  box-shadow: 0 1px 3px rgba(35, 24, 20, 0.08);
+}
+
+.message-template-toolbar-separator {
+  @apply h-7 w-px self-center bg-border-strong;
+}
+
+.message-template-toolbar-actions {
+  @apply flex flex-wrap items-center gap-1;
+}
+
+.message-template-toolbar-btn {
+  @apply h-9 w-9 rounded-[10px] border-transparent text-txt-muted;
+}
+
+.message-template-toolbar-btn:hover:not(:disabled) {
+  @apply bg-accent-soft text-accent;
+}
+
+.message-template-toolbar-btn .toolbar-icon {
+  @apply text-[1.1rem];
+}
+
+// =============================================================
+// Tabs (editor/preview)
+// =============================================================
+
+.message-template-tabs {
+  @apply inline-flex w-fit items-center gap-2 rounded-full bg-bg-subtle p-[0.3rem];
+}
+
+.message-template-tab {
+  @apply cursor-pointer rounded-full border-none bg-transparent px-4 py-2 text-accent;
+  font: inherit;
+  font-weight: 600;
+}
+
+.message-template-tab.active {
+  @apply bg-accent text-accent-text;
+}
+
+// =============================================================
+// Painel de emojis
+// =============================================================
+
+.message-template-emojis {
+  @apply flex flex-col gap-4 rounded-[18px] bg-bg-subtle p-4;
+}
+
+.message-template-emojis-header {
+  @apply flex flex-wrap items-center justify-between gap-4;
+}
+
+.message-template-emoji-grid {
+  @apply flex flex-wrap gap-3;
+}
+
+.message-template-emoji-grid.expanded {
+  @apply border-t border-[rgba(117,16,19,0.08)] pt-3;
+}
+
+.emoji-btn {
+  @apply cursor-pointer rounded-[12px] border-none bg-surface px-3 py-2.5 text-[1.35rem];
+  box-shadow: inset 0 0 0 1px rgba(117, 16, 19, 0.12);
+}
+
+.emoji-btn-add {
+  @apply min-w-[3rem] text-[1.1rem] font-bold text-accent;
+}
+
+.emoji-btn:hover {
+  @apply bg-accent-soft;
+}
+
+// =============================================================
+// Editor (contenteditable) e preview
+// =============================================================
+
+.message-template-editor-shell,
+.message-template-preview-shell {
+  @apply overflow-hidden rounded-[18px] border border-[rgba(117,16,19,0.16)] bg-[rgba(255,255,255,0.82)];
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.message-template-editor-shell {
+  background: linear-gradient(180deg, rgba(255, 250, 247, 0.96), rgba(255, 255, 255, 0.88));
+}
+
+// Dark mode: gradiente branco vira preto/grafite, alinhado ao tema do app.
+:host-context(body.theme-dark) .message-template-editor-shell,
+:host-context([data-theme="dark"]) .message-template-editor-shell {
+  background: var(--surface-2);
+}
+
+.message-template-editor-shell:focus-within {
+  @apply border-accent;
+  box-shadow: 0 0 0 3px rgba(117, 16, 19, 0.1);
+}
+
+.message-template-editor {
+  @apply w-full min-h-[360px] p-5 text-txt outline-none;
+  font: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  caret-color: var(--accent);
+  background:
+    radial-gradient(circle at top right, rgba(117, 16, 19, 0.04), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 252, 249, 0.92));
+}
+
+:host-context(body.theme-dark) .message-template-editor,
+:host-context([data-theme="dark"]) .message-template-editor {
+  background: transparent;
+}
+
+.message-template-editor:empty::before {
+  content: attr(data-placeholder);
+  @apply text-txt-subtle;
+}
+
+.message-template-format-marker {
+  @apply text-[0.92em] font-semibold text-txt-subtle;
+}
+
+.message-template-format-strong {
+  font-weight: 700;
+}
+
+.message-template-format-italic {
+  font-style: italic;
+}
+
+.message-template-token,
+.message-template-preview-personalization {
+  @apply inline-flex rounded-full px-2 py-0.5 font-semibold;
+  background: rgba(117, 16, 19, 0.08);
+  color: var(--accent);
+}
+
+.message-template-preview {
+  @apply min-h-[360px] rounded-[14px] bg-surface p-5 leading-[1.55] text-txt;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background:
+    radial-gradient(circle at top right, rgba(22, 163, 74, 0.05), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 252, 248, 0.94));
+}
+
+:host-context(body.theme-dark) .message-template-preview,
+:host-context([data-theme="dark"]) .message-template-preview {
+  background: var(--surface-2);
+}
+
+.message-template-preview:empty::before {
+  content: 'O preview da mensagem aparecerá aqui.';
+  @apply text-txt-subtle;
+}
+
+// =============================================================
+// Imagem do template (já existia neste arquivo)
+// =============================================================
+
 .template-image-preview {
-  @apply relative flex items-center gap-2.5;
+  // Layout: thumb à esquerda, meta colado à imagem, X empurrado pra direita
+  // via ml-auto. Antes usava justify-between, que abria um vão grande entre
+  // o título e a imagem.
+  @apply relative flex items-center gap-3;
 }
 
 .template-image-thumb {
@@ -16,7 +253,7 @@
 }
 
 .template-image-remove {
-  @apply inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border-strong bg-bg-subtle p-0 text-txt-muted;
+  @apply ml-auto inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-border-strong bg-bg-subtle p-0 text-txt-muted;
 }
 
 .template-image-remove:hover {
@@ -28,7 +265,16 @@
 }
 
 .message-template-image-inline {
-  @apply flex items-center justify-between gap-3 rounded-[16px] border border-border bg-bg-subtle px-3 py-2;
+  @apply flex flex-col gap-2 rounded-[16px] border border-border bg-bg-subtle px-3 py-2;
+}
+
+.message-template-image-inline__hint {
+  @apply inline-flex flex-wrap items-center gap-1;
+}
+
+.message-template-image-inline__hint-icon {
+  @apply text-[1rem] align-middle text-txt-muted;
+  font-variation-settings: 'wght' 500;
 }
 
 .message-template-image-inline__meta {
@@ -39,10 +285,113 @@
   @apply text-txt;
 }
 
-.message-template-modal__footer {
-  @apply items-center;
+// =============================================================
+// Responsivo
+// =============================================================
+
+@media (max-width: 600px) {
+  .message-template-modal {
+    @apply p-4;
+  }
+
+  .message-template-toolbar,
+  .message-template-emojis {
+    @apply justify-center;
+  }
+
+  .message-template-mode-toggle {
+    @apply w-full justify-center;
+  }
+
+  .message-template-mode-toggle__button {
+    @apply flex-1;
+  }
+
+  .message-template-toolbar-actions {
+    @apply flex-1 justify-center;
+  }
+
+  .message-template-toolbar-separator {
+    @apply hidden;
+  }
+
+  .message-template-emojis-header {
+    @apply justify-center;
+  }
 }
 
-.message-template-modal__save {
-  @apply min-w-[12rem];
+// =============================================================
+// Picker de mensagens rápidas (acessado via raio na toolbar)
+// =============================================================
+
+.message-template-quick-reply {
+  @apply relative;
+}
+
+.message-template-quick-reply__popover {
+  @apply absolute right-0 top-[calc(100%+0.45rem)] z-30 flex max-h-[320px] w-[320px] flex-col overflow-hidden rounded-2xl border border-border bg-surface;
+  box-shadow: 0 18px 40px rgba(28, 18, 15, 0.2);
+}
+
+.message-template-quick-reply__header {
+  @apply flex items-center justify-between gap-2 border-b border-border bg-bg-subtle px-3 py-2 text-[0.85rem] text-txt;
+}
+
+.message-template-quick-reply__list {
+  @apply m-0 flex-1 list-none overflow-y-auto p-1;
+}
+
+.message-template-quick-reply__list li {
+  @apply m-0 list-none;
+}
+
+.message-template-quick-reply__item {
+  @apply flex w-full cursor-pointer flex-col items-stretch gap-0.5 rounded-xl border-none bg-transparent px-3 py-2 text-left transition-colors;
+}
+
+.message-template-quick-reply__item:hover {
+  @apply bg-accent-soft;
+}
+
+.message-template-quick-reply__shortcode {
+  @apply text-[0.78rem] font-semibold text-accent;
+}
+
+.message-template-quick-reply__title {
+  @apply text-[0.82rem] font-medium text-txt;
+}
+
+.message-template-quick-reply__preview {
+  @apply line-clamp-2 overflow-hidden text-[0.76rem] text-txt-muted;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.message-template-quick-reply__media-hint {
+  @apply mt-0.5 inline-flex items-center gap-1 text-[0.72rem] text-txt-muted;
+
+  .material-symbols-outlined {
+    @apply text-[0.85rem];
+  }
+}
+
+.message-template-quick-reply__empty {
+  @apply m-0 flex-1 px-4 py-6 text-center text-[0.82rem] text-txt-muted;
+}
+
+.message-template-quick-reply__footer {
+  @apply border-t border-border bg-bg-subtle p-1;
+}
+
+.message-template-quick-reply__create {
+  @apply inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-none bg-transparent px-3 py-2 text-[0.85rem] font-semibold text-accent transition-colors;
+
+  .material-symbols-outlined {
+    @apply text-[1rem];
+  }
+}
+
+.message-template-quick-reply__create:hover {
+  @apply bg-accent-soft;
 }

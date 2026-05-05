@@ -19,11 +19,24 @@
     <li
       *ngFor="let label of filteredLabels"
       class="label-picker__item"
-      (click)="toggleLabel(label)"
+      [class.label-picker__item--selected]="label.selected"
+      [class.label-picker__item--readonly]="!label.interactive"
+      (click)="onLabelClick(label)"
     >
       <span class="label-picker__color-dot" [style.background]="label.color"></span>
       <span class="label-picker__item-name">{{ label.name }}</span>
-      <span class="material-symbols-outlined label-picker__check" *ngIf="isSelected(label)">check</span>
+
+      <span class="label-picker__item-badge" *ngIf="label.source === 'whatsapp'">WhatsApp</span>
+
+      <button
+        *ngIf="label.source === 'app' && label.selected"
+        type="button"
+        class="label-picker__remove"
+        (click)="requestRemoveLabel(label, $event)"
+        [attr.aria-label]="'Remover etiqueta ' + label.name"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
     </li>
 
     <li class="label-picker__empty" *ngIf="!filteredLabels.length">
@@ -66,6 +79,24 @@
       <button type="button" class="btn btn-primary btn-sm" (click)="confirmCreate()" [disabled]="!newLabelName.trim()">
         Criar e aplicar
       </button>
+    </div>
+  </div>
+
+  <div class="label-picker__confirm-overlay" *ngIf="pendingRemovalLabel" (click)="closeRemoveDialog()">
+    <div class="label-picker__confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="label-picker-remove-title" (click)="$event.stopPropagation()">
+      <div class="label-picker__confirm-header">
+        <h3 id="label-picker-remove-title" class="label-picker__confirm-title">Remover etiqueta</h3>
+        <button type="button" class="label-picker__confirm-close" (click)="closeRemoveDialog()" aria-label="Fechar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <p class="label-picker__confirm-text">{{ removeConfirmationText }}</p>
+
+      <footer class="label-picker__confirm-actions">
+        <button type="button" class="btn btn-outline btn-sm" (click)="closeRemoveDialog()">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm label-picker__confirm-button" (click)="confirmRemoveLabel()">Remover</button>
+      </footer>
     </div>
   </div>
 </div>

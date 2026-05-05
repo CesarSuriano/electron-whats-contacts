@@ -348,6 +348,11 @@ export class ContactsService {
     displacedCanonicals.forEach(displacedCanonical => {
       this.mergeAliasContactIntoCanonical(canonicalJid, displacedCanonical);
     });
+
+    // Mesmo motivo da chamada paralela em IngestionService: garante que
+    // qualquer entry LID stale no contactStore é absorvida no canonical
+    // assim que aprendemos o mapeamento, evitando contatos duplicados.
+    this.mergeAliasContactIntoCanonical(canonicalJid, lidJid);
   }
 
   private extractCanonicalJidFromContact(contact: RawContact | null | undefined, fallbackJid = ''): string {

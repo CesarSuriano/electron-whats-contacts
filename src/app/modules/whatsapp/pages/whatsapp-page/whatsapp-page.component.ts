@@ -17,8 +17,10 @@ import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
 const BRIDGE_STARTUP_GRACE_PERIOD_MS = 10_000;
 const SESSION_STATUS_RETRY_INTERVAL_MS = 1_000;
 const SESSION_CONNECT_RETRY_INTERVAL_MS = 1_500;
+const SESSION_DOWNGRADE_GRACE_MS = 5_000;
 const WHATSAPP_LABELS_RETRY_INTERVAL_MS = 2_500;
 const WHATSAPP_LABELS_MAX_ATTEMPTS = 8;
+const TRANSIENT_SESSION_DOWNGRADE_STATUSES = new Set(['initializing', 'authenticated', 'disconnected', 'init_error']);
 
 @Component({
   selector: 'app-whatsapp-page',
@@ -49,6 +51,9 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
 
   private sessionStatusRetryTimerId: number | null = null;
   private connectRetryTimerId: number | null = null;
+  private sessionDowngradeTimerId: number | null = null;
+  private pendingSessionDowngradeStatus: WhatsappSessionStatus | null = null;
+  private hasReachedReadySession = false;
   private labelsRetryTimerId: number | null = null;
   private labelsLoadSubscription: Subscription | null = null;
   private hasLoadedLabelsAfterReady = false;
@@ -113,6 +118,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
     this.stopSessionStatusRetry();
     this.stopConnectRetry();
+    this.cancelSessionDowngrade();
     this.cancelWhatsappLabelsLoad();
     this.stopWhatsappLabelsRetry();
   }
@@ -206,6 +212,10 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.isLabelManagerOpen = false;
   }
 
+  get shouldShowReconnectButton(): boolean {
+    return !this.isCheckingSession && this.currentSessionStatus === 'disconnected';
+  }
+
   get connectActionLabel(): string {
     return this.shouldShowDisconnectAction ? 'Desconectar do WhatsApp' : 'Conectar ao WhatsApp';
   }
@@ -260,9 +270,18 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.startInitialSessionCheck();
   }
 
+  requestNewQrCode(): void {
+    if (this.isSessionActionLoading || this.currentSessionStatus !== 'disconnected') {
+      return;
+    }
+
+    this.connectSession();
+  }
+
   private startInitialSessionCheck(): void {
     this.stopSessionStatusRetry();
     this.stopConnectRetry();
+    this.cancelSessionDowngrade();
     this.isCheckingSession = true;
     this.sessionErrorMessage = '';
     this.sessionStatusText = 'Verificando sessão do WhatsApp...';
@@ -314,7 +333,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
         this.stopSessionStatusRetry();
         this.isCheckingSession = false;
         this.sessionErrorMessage = '';
-        this.updateSessionState(status);
+        this.updateSessionState(status, { immediate: true });
       },
       error: () => {
         if (Date.now() < this.sessionStatusErrorGraceUntil) {
@@ -347,7 +366,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.whatsappGatewayService.connectSession().subscribe({
       next: status => {
         this.isSessionActionLoading = false;
-        this.updateSessionState(status);
+        this.updateSessionState(status, { immediate: true });
       },
       error: () => {
         this.isSessionActionLoading = false;
@@ -357,7 +376,24 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     });
   }
 
-  private updateSessionState(status: WhatsappSessionStatus): void {
+  private updateSessionState(status: WhatsappSessionStatus, options: { immediate?: boolean } = {}): void {
+    if (status.status === 'ready') {
+      this.cancelSessionDowngrade();
+      this.hasReachedReadySession = true;
+      this.applySessionState(status);
+      return;
+    }
+
+    if (!options.immediate && this.shouldDeferSessionDowngrade(status)) {
+      this.deferSessionDowngrade(status);
+      return;
+    }
+
+    this.cancelSessionDowngrade();
+    this.applySessionState(status);
+  }
+
+  private applySessionState(status: WhatsappSessionStatus): void {
     this.currentSessionStatus = status.status;
     this.isSessionReady = status.status === 'ready';
     this.syncLabelsLoadWithSessionState(status.status);
@@ -384,7 +420,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     }
 
     if (status.status === 'disconnected') {
-      this.sessionStatusText = 'WhatsApp desconectado. Aguardando novo QR code...';
+      this.sessionStatusText = 'WhatsApp desconectado. Gere um novo QR code para reconectar.';
       this.qrCodeDataUrl = '';
       this.stopConnectRetry();
       return;
@@ -407,6 +443,41 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     this.sessionStatusText = 'Inicializando sessão do WhatsApp...';
     this.qrCodeDataUrl = '';
     this.scheduleSessionStatusRetry();
+  }
+
+  private shouldDeferSessionDowngrade(status: WhatsappSessionStatus): boolean {
+    return this.hasReachedReadySession
+      && this.isSessionReady
+      && TRANSIENT_SESSION_DOWNGRADE_STATUSES.has(status.status);
+  }
+
+  private deferSessionDowngrade(status: WhatsappSessionStatus): void {
+    this.pendingSessionDowngradeStatus = status;
+    this.isCheckingSession = false;
+    this.sessionErrorMessage = '';
+    this.qrCodeDataUrl = '';
+
+    if (this.sessionDowngradeTimerId !== null) {
+      return;
+    }
+
+    this.sessionDowngradeTimerId = window.setTimeout(() => {
+      const pending = this.pendingSessionDowngradeStatus;
+      this.sessionDowngradeTimerId = null;
+      this.pendingSessionDowngradeStatus = null;
+
+      if (pending) {
+        this.applySessionState(pending);
+      }
+    }, SESSION_DOWNGRADE_GRACE_MS);
+  }
+
+  private cancelSessionDowngrade(): void {
+    this.pendingSessionDowngradeStatus = null;
+    if (this.sessionDowngradeTimerId !== null) {
+      window.clearTimeout(this.sessionDowngradeTimerId);
+      this.sessionDowngradeTimerId = null;
+    }
   }
 
   private async updateQrCode(qrText: string): Promise<void> {

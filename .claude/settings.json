@@ -13,7 +13,10 @@
       "Bash(gunzip -k bundle.gz)",
       "Bash(mkdir -p extracted)",
       "Bash(tar -xf bundle -C extracted)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -n \"setupWebSocket\\\\|messages\\\\$\\\\|on<\" /d/uniq/uniq-system/src/app/modules/whatsapp/services/whatsapp-state.service.ts)",
+      "Bash(grep -rln \"class=\\\\\"[^\\\\\"]*\\\\\\\\bconfig-menu-item\\\\\\\\b\" src/ --include=\"*.html\")",
+      "Bash(grep -rln \"class=\\\\\"[^\\\\\"]*\\\\\\\\bhome-\\\\|class=\\\\\"[^\\\\\"]*\\\\\\\\blegend\\\\\\\\b\" src/ --include=\"*.html\")"
     ]
   }
 }

@@ -7,6 +7,7 @@ import { ContactStore } from '../state/ContactStore.js';
 import { LidMap } from '../state/LidMap.js';
 import { SelfJidResolver } from './SelfJidResolver.js';
 import { isGroupJid, isLinkedId, isPersonalJid, isValidPersonalJid, normalizeJid } from '../utils/jid.js';
+import { brazilianAlternativeJid } from '../utils/phone.js';
 import { toIsoFromUnixTimestamp, withTimeout } from '../utils/time.js';
 import { readMessageInlineImageDataUrl } from '../utils/media.js';
 import { isIgnoredWhatsappMessage } from '../utils/message.js';
@@ -34,9 +35,14 @@ export interface DestinationError {
 
 export type DestinationValidation = ValidatedDestination | DestinationError;
 
+type WebJsMessageExtended = Message & {
+  delete?: (everyone?: boolean) => Promise<void>;
+  forward?: (chat: unknown) => Promise<void>;
+};
+
 type WebJsClientWithMessaging = WebJsClient & {
   sendMessage: (chatId: string, content: string | InstanceType<typeof MessageMedia>, options?: Record<string, unknown>) => Promise<Message>;
-  getMessageById: (id: string) => Promise<Message | null | undefined>;
+  getMessageById: (id: string) => Promise<WebJsMessageExtended | null | undefined>;
   getChatById: (id: string) => Promise<{ sendSeen?: () => Promise<unknown> } | null | undefined>;
 };
 
@@ -58,7 +64,7 @@ export class MessageService {
   }
 
   validateDestination(to: string): DestinationValidation {
-    const chatId = normalizeJid(to);
+    let chatId = normalizeJid(to);
     if (!chatId) {
       return { ok: false, error: 'Invalid destination number' };
     }
@@ -66,6 +72,8 @@ export class MessageService {
     if (!isGroupJid(chatId) && !isValidPersonalJid(chatId) && !isLinkedId(chatId)) {
       return { ok: false, error: 'Invalid destination number' };
     }
+
+    chatId = this.resolvePreferredPersonalDestination(chatId);
 
     if (this.selfJidResolver.isSelfJid(chatId)) {
       return {
@@ -80,23 +88,25 @@ export class MessageService {
 
   async sendText(chatId: string, text: string): Promise<SendTextResult> {
     const clientWithSend = this.client as WebJsClientWithMessaging;
-    const sent = await clientWithSend.sendMessage(chatId, text) as Message & {
+    const delivery = await this.sendWithBrazilianAlternative(chatId, candidate => clientWithSend.sendMessage(candidate, text) as Promise<Message & {
       id?: { _serialized?: string; remote?: { _serialized?: string } | string };
       timestamp?: number;
       to?: string;
       ack?: number;
-    };
+    }>);
+    const sent = delivery.sent;
+    const deliveredChatId = delivery.chatId;
 
     const sentIdSerialized = sent.id?._serialized || '';
     const receivedAt = toIsoFromUnixTimestamp(sent.timestamp);
 
-    this.registerLidFromSentMessage(chatId, sent);
+    this.registerLidFromSentMessage(deliveredChatId, sent);
 
     this.eventStore.pushEvent({
       id: sentIdSerialized,
       source: 'send-api',
       isFromMe: true,
-      chatJid: chatId,
+      chatJid: deliveredChatId,
       text,
       receivedAt,
       payload: {
@@ -107,7 +117,7 @@ export class MessageService {
     });
 
     this.contactStore.upsertOnOutbound({
-      jid: chatId,
+      jid: deliveredChatId,
       preview: text,
       receivedAt,
       type: 'chat'
@@ -115,7 +125,7 @@ export class MessageService {
 
     return {
       id: sentIdSerialized,
-      to: sent.to || chatId,
+      to: sent.to || deliveredChatId,
       timestamp: sent.timestamp || 0
     };
   }
@@ -140,12 +150,14 @@ export class MessageService {
       sendMediaAsDocument: !isImage
     };
 
-    const sent = await clientWithSend.sendMessage(chatId, media, options) as Message & {
+    const delivery = await this.sendWithBrazilianAlternative(chatId, candidate => clientWithSend.sendMessage(candidate, media, options) as Promise<Message & {
       id?: { _serialized?: string; remote?: { _serialized?: string } | string };
       timestamp?: number;
       to?: string;
       ack?: number;
-    };
+    }>);
+    const sent = delivery.sent;
+    const deliveredChatId = delivery.chatId;
 
     const sentIdSerialized = sent.id?._serialized || '';
     const receivedAt = toIsoFromUnixTimestamp(sent.timestamp);
@@ -153,13 +165,13 @@ export class MessageService {
       ? `data:${mimetype};base64,${buffer.toString('base64')}`
       : null;
 
-    this.registerLidFromSentMessage(chatId, sent);
+    this.registerLidFromSentMessage(deliveredChatId, sent);
 
     this.eventStore.pushEvent({
       id: sentIdSerialized,
       source: 'send-media-api',
       isFromMe: true,
-      chatJid: chatId,
+      chatJid: deliveredChatId,
       text: caption,
       receivedAt,
       payload: {
@@ -174,7 +186,7 @@ export class MessageService {
     });
 
     this.contactStore.upsertOnOutbound({
-      jid: chatId,
+      jid: deliveredChatId,
       preview: caption,
       receivedAt,
       type: isImage ? 'image' : 'document',
@@ -184,9 +196,151 @@ export class MessageService {
 
     return {
       id: sentIdSerialized,
-      to: sent.to || chatId,
+      to: sent.to || deliveredChatId,
       timestamp: sent.timestamp || 0
     };
+  }
+
+  private async sendWithBrazilianAlternative<T>(
+    chatId: string,
+    send: (candidateChatId: string) => Promise<T>
+  ): Promise<{ chatId: string; sent: T }> {
+    const candidates = this.buildSendCandidates(chatId);
+    let lastError: unknown = null;
+
+    for (const candidate of candidates) {
+      try {
+        return { chatId: candidate, sent: await send(candidate) };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    // Última tentativa: pergunta ao próprio WhatsApp Web qual é o JID
+    // canônico daquele número (resolve o caso "número está cadastrado, mas
+    // nem com nem sem 9º dígito bate com o que tentamos"). Best-effort:
+    // se a chamada falhar ou não devolver JID, propaga o erro original.
+    const lookupJid = await this.lookupCanonicalJid(chatId);
+    if (lookupJid && !candidates.includes(lookupJid)) {
+      try {
+        return { chatId: lookupJid, sent: await send(lookupJid) };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error('No send candidates produced for ' + chatId);
+  }
+
+  /**
+   * Lista de variantes a tentar para um JID. Para números brasileiros
+   * personal, sempre tentamos as DUAS formas (com e sem 9º dígito), em
+   * ordem de preferência baseada em quem está no contactStore.
+   *
+   * Antes a função `resolveBrazilianFallbackDestination` tinha um bug:
+   * quando `resolvePreferredPersonalDestination` escolhia o variante como
+   * preferido (porque era o conhecido), o fallback recomputava o mesmo
+   * variante e abortava. Resultado: mensagem nunca tentava o JID original.
+   */
+  private buildSendCandidates(chatId: string): string[] {
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+    const push = (jid: string | null | undefined): void => {
+      if (!jid || seen.has(jid)) return;
+      if (this.selfJidResolver.isSelfJid(jid)) return;
+      candidates.push(jid);
+      seen.add(jid);
+    };
+
+    const preferred = this.resolvePreferredPersonalDestination(chatId);
+    push(preferred);
+    push(chatId);
+
+    if (isPersonalJid(chatId) && isValidPersonalJid(chatId)) {
+      push(brazilianAlternativeJid(chatId));
+    }
+
+    return candidates;
+  }
+
+  private async lookupCanonicalJid(chatId: string): Promise<string | null> {
+    if (!isPersonalJid(chatId) || !isValidPersonalJid(chatId)) {
+      return null;
+    }
+
+    const clientWithLookup = this.client as WebJsClient & {
+      getNumberId?: (phone: string) => Promise<{ _serialized?: string } | null | undefined>;
+    };
+
+    if (typeof clientWithLookup.getNumberId !== 'function') {
+      return null;
+    }
+
+    try {
+      const phone = chatId.replace('@c.us', '');
+      const result = await withTimeout(
+        clientWithLookup.getNumberId(phone),
+        8000,
+        `getNumberId(${phone})`
+      );
+      const serialized = result?._serialized;
+      if (typeof serialized === 'string' && isPersonalJid(serialized)) {
+        return serialized;
+      }
+    } catch {
+      // best-effort
+    }
+    return null;
+  }
+
+  private resolvePreferredPersonalDestination(chatId: string): string {
+    if (!isPersonalJid(chatId) || !isValidPersonalJid(chatId)) {
+      return chatId;
+    }
+
+    const alternativeJid = brazilianAlternativeJid(chatId);
+    if (!alternativeJid) {
+      return chatId;
+    }
+
+    const current = this.contactStore.get(chatId);
+    const alternative = this.contactStore.get(alternativeJid);
+
+    if (!alternative) {
+      return chatId;
+    }
+
+    if (!current || this.scoreKnownDestination(alternative) > this.scoreKnownDestination(current)) {
+      return alternativeJid;
+    }
+
+    return chatId;
+  }
+
+  private scoreKnownDestination(contact: { found?: boolean; fromGetChats?: boolean; getChatsTimestampMs?: number; lastMessageAt?: string | null; lastMessagePreview?: string }): number {
+    let score = 0;
+
+    if (contact.found) {
+      score += 4;
+    }
+
+    if (contact.fromGetChats) {
+      score += 8;
+    }
+
+    if ((contact.getChatsTimestampMs || 0) > 0) {
+      score += 4;
+    }
+
+    if (contact.lastMessageAt) {
+      score += 2;
+    }
+
+    if (contact.lastMessagePreview) {
+      score += 1;
+    }
+
+    return score;
   }
 
   private registerLidFromSentMessage(
@@ -226,6 +380,88 @@ export class MessageService {
         return;
       }
     }
+  }
+
+  async sendReply(chatId: string, text: string, quotedMessageId: string): Promise<SendTextResult> {
+    const clientWithSend = this.client as WebJsClientWithMessaging;
+    const delivery = await this.sendWithBrazilianAlternative(chatId, candidate => clientWithSend.sendMessage(candidate, text, { quotedMessageId }) as Promise<Message & {
+      id?: { _serialized?: string; remote?: { _serialized?: string } | string };
+      timestamp?: number;
+      to?: string;
+      ack?: number;
+    }>);
+    const sent = delivery.sent;
+    const deliveredChatId = delivery.chatId;
+
+    const sentIdSerialized = sent.id?._serialized || '';
+    const receivedAt = toIsoFromUnixTimestamp(sent.timestamp);
+
+    this.registerLidFromSentMessage(deliveredChatId, sent);
+
+    this.eventStore.pushEvent({
+      id: sentIdSerialized,
+      source: 'send-api',
+      isFromMe: true,
+      chatJid: deliveredChatId,
+      text,
+      receivedAt,
+      payload: {
+        id: sentIdSerialized,
+        timestamp: sent.timestamp || 0,
+        ack: sent.ack || 0,
+        quotedMsgBody: text,
+        quotedMsgFromMe: false
+      }
+    });
+
+    this.contactStore.upsertOnOutbound({
+      jid: deliveredChatId,
+      preview: text,
+      receivedAt,
+      type: 'chat'
+    });
+
+    return {
+      id: sentIdSerialized,
+      to: sent.to || deliveredChatId,
+      timestamp: sent.timestamp || 0
+    };
+  }
+
+  async deleteMessage(messageId: string, deleteForEveryone = true): Promise<void> {
+    const clientWithMessages = this.client as WebJsClientWithMessaging;
+    const message = await clientWithMessages.getMessageById(messageId);
+
+    if (!message) {
+      throw new Error('Mensagem não encontrada ou já expirou do cache');
+    }
+
+    if (typeof message.delete !== 'function') {
+      throw new Error('Operação de apagar não suportada para esta mensagem');
+    }
+
+    await message.delete(deleteForEveryone);
+    this.eventStore.removeEvent(messageId);
+  }
+
+  async forwardMessage(chatId: string, messageId: string): Promise<void> {
+    const clientWithMessages = this.client as WebJsClientWithMessaging;
+    const message = await clientWithMessages.getMessageById(messageId);
+
+    if (!message) {
+      throw new Error('Mensagem não encontrada ou já expirou do cache');
+    }
+
+    if (typeof message.forward !== 'function') {
+      throw new Error('Operação de encaminhar não suportada para esta mensagem');
+    }
+
+    const chat = await clientWithMessages.getChatById(chatId);
+    if (!chat) {
+      throw new Error('Conversa de destino não encontrada');
+    }
+
+    await message.forward(chat);
   }
 
   async markAsSeen(jid: string): Promise<void> {

@@ -373,7 +373,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     try {
       const type = this.activeTemplateEditorConfig.type;
       this.messageTemplates = this.messageTemplateService.saveTemplate(type, result.text);
-      this.messageTemplateService.saveTemplateImage(type, result.imageDataUrl);
+      this.messageTemplateService.saveTemplateImage(type, result.imageDataUrls?.[0]);
       this.closeTemplateEditor();
       this.showSuccessToast('Mensagem atualizada com sucesso.');
     } catch (error) {

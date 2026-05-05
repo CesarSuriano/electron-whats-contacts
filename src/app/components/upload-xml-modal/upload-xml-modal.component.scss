@@ -1,1 +1,84 @@
+// Estilos do modal de upload XML — migrados de styles.scss para escopo
+// emulado do componente.
 
+.upload-modal {
+	@apply fixed left-1/2 top-1/2 z-[21] flex -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-hidden rounded-[22px] border border-border bg-surface p-6;
+	width: min(560px, calc(100vw - 2rem));
+	box-shadow: 0 24px 80px rgba(35, 24, 20, 0.24);
+}
+
+.upload-modal-loading {
+	@apply absolute inset-0 z-[2] flex flex-col items-center justify-center gap-3 bg-white/90 text-center text-txt-muted;
+}
+
+.upload-modal-header {
+	@apply flex items-start justify-between gap-4;
+}
+
+.upload-modal-header h2 {
+	@apply m-0 text-[1.2rem] text-accent;
+}
+
+.upload-modal-header p {
+	@apply mt-1.5 mb-0 text-[0.92rem] text-txt-muted;
+}
+
+.upload-dropzone {
+	@apply flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-[rgba(117,16,19,0.3)] p-8 text-center transition-all;
+	background: linear-gradient(180deg, rgba(117, 16, 19, 0.03), rgba(117, 16, 19, 0.01));
+}
+
+:host-context(body.theme-dark) .upload-dropzone,
+:host-context([data-theme="dark"]) .upload-dropzone {
+	background: var(--surface-2);
+	border-color: var(--border-strong);
+}
+
+.upload-dropzone.dragging {
+	@apply scale-[1.01] border-accent bg-accent-soft;
+}
+
+.upload-dropzone-icon {
+	@apply text-[2.25rem] text-accent;
+}
+
+.hidden-file-input {
+	@apply hidden;
+}
+
+.upload-summary {
+	@apply flex flex-col gap-[0.35rem] rounded-xl bg-bg-subtle px-4 py-3.5 text-txt;
+}
+
+.upload-summary p {
+	@apply m-0;
+}
+
+.upload-error {
+	@apply m-0 text-[0.92rem] text-danger;
+}
+
+.upload-modal-footer {
+	@apply flex justify-end gap-3;
+}
+
+// Botões dentro do footer perdem a borda externa pra parecerem "chumbados"
+// no painel — visualmente alinhado ao .whatsapp-page__disconnect-actions.
+.upload-modal-footer .btn,
+.upload-modal-footer .btn:hover:not(:disabled) {
+	border-color: transparent;
+}
+
+@media (max-width: 600px) {
+	.upload-modal {
+		@apply p-4;
+	}
+
+	.upload-modal-footer {
+		@apply flex-col-reverse;
+	}
+
+	.upload-modal-footer .btn {
+		@apply w-full;
+	}
+}

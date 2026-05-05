@@ -56,9 +56,17 @@ describe('ComposerComponent', () => {
     it('creates a File from valid data URL', () => {
       const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
       component.setAttachmentFromDataUrl(dataUrl, 'test.png');
-      expect(component.selectedFile).toBeTruthy();
-      expect(component.selectedFile!.name).toBe('test.png');
-      expect(component.filePreviewUrl).toBe(dataUrl);
+      expect(component.selectedFiles.length).toBe(1);
+      expect(component.selectedFiles[0].name).toBe('test.png');
+      expect(component.filePreviewUrls[0]).toBe(dataUrl);
+    });
+
+    it('replaces existing files when called again', () => {
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      component.setAttachmentFromDataUrl(dataUrl, 'first.png');
+      component.setAttachmentFromDataUrl(dataUrl, 'second.png');
+      expect(component.selectedFiles.length).toBe(1);
+      expect(component.selectedFiles[0].name).toBe('second.png');
     });
 
     it('focuses the textarea after applying a data URL attachment', () => {
@@ -70,9 +78,9 @@ describe('ComposerComponent', () => {
       expect(component.focus).toHaveBeenCalled();
     });
 
-    it('does not throw on malformed data URL (no comma)', () => {
+    it('does not add a file on malformed data URL (no comma)', () => {
       expect(() => component.setAttachmentFromDataUrl('invalidstring', 'x.jpg')).not.toThrow();
-      expect(component.selectedFile).toBeNull();
+      expect(component.selectedFiles.length).toBe(0);
     });
   });
 
@@ -83,8 +91,17 @@ describe('ComposerComponent', () => {
 
       component.onFileSelected({ target: { files: [file] } } as unknown as Event);
 
-      expect(component.selectedFile).toBe(file);
+      expect(component.selectedFiles[0]).toBe(file);
       expect(component.focus).toHaveBeenCalled();
+    });
+
+    it('accepts multiple files at once', () => {
+      const f1 = new File(['data'], 'a.jpg', { type: 'image/jpeg' });
+      const f2 = new File(['data'], 'b.jpg', { type: 'image/jpeg' });
+
+      component.onFileSelected({ target: { files: [f1, f2] } } as unknown as Event);
+
+      expect(component.selectedFiles.length).toBe(2);
     });
   });
 

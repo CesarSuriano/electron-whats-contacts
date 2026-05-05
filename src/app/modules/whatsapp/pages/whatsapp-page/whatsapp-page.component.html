@@ -61,6 +61,17 @@
           <div class="loading-spinner"></div>
         </div>
 
+        <button
+          *ngIf="shouldShowReconnectButton"
+          type="button"
+          class="btn btn-primary btn-sm whatsapp-page__reconnect-btn"
+          (click)="requestNewQrCode()"
+          [disabled]="isSessionActionLoading"
+        >
+          <span class="material-symbols-outlined whatsapp-page__reconnect-btn-icon">qr_code_2</span>
+          <span>{{ isSessionActionLoading ? 'Gerando novo QR code...' : 'Gerar novo QR code' }}</span>
+        </button>
+
         <div class="whatsapp-page__qr" *ngIf="!isCheckingSession && qrCodeDataUrl">
           <img class="whatsapp-page__qr-image" [src]="qrCodeDataUrl" alt="QR code para conectar WhatsApp" />
           <p class="whatsapp-page__qr-text">Abra o WhatsApp no celular e escaneie este código para continuar.</p>

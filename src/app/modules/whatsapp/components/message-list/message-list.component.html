@@ -1,4 +1,4 @@
-<div class="message-list" #scrollContainer>
+<div class="message-list" #scrollContainer (scroll)="onScroll()">
   <div class="message-list__empty" *ngIf="!messages.length">
     Ainda não há mensagens nesta conversa.
   </div>
@@ -8,8 +8,21 @@
     class="message-list__bubble"
     [class.message-list__bubble--from-me]="message.isFromMe"
   >
+    <div class="message-list__quoted" *ngIf="message.quotedMsgBody">
+      <div class="message-list__quoted-bar"></div>
+      <p class="message-list__quoted-text">{{ message.quotedMsgBody }}</p>
+    </div>
+
     <div class="message-list__media" *ngIf="message.media as media">
-      <img class="message-list__image" *ngIf="media.kind === 'image' && media.previewUrl" [src]="media.previewUrl" alt="Imagem anexada" />
+      <img
+        class="message-list__image"
+        *ngIf="media.kind === 'image' && media.previewUrl"
+        [src]="media.previewUrl"
+        alt="Imagem anexada"
+        (load)="onMediaLoad()"
+        (click)="openLightbox(media.previewUrl!)"
+        title="Clique para ampliar"
+      />
 
       <div class="message-list__file" *ngIf="media.kind !== 'image' || !media.previewUrl">
         <span class="material-symbols-outlined message-list__file-icon">description</span>
@@ -21,6 +34,7 @@
     </div>
 
     <p class="message-list__text" *ngIf="message.text as text">{{ text }}</p>
+
     <div class="message-list__footer">
       <time class="message-list__time">{{ message.sentAt | date:'dd/MM HH:mm' }}</time>
       <span
@@ -29,5 +43,38 @@
         [class.message-list__ack--read]="message.ackRead"
       >{{ message.ackIcon }}</span>
     </div>
+
+    <div class="message-list__actions">
+      <button class="message-list__action-toggle" (click)="toggleMenu(message.id, $event)" title="Ações">
+        <span class="material-symbols-outlined">expand_more</span>
+      </button>
+
+      <div class="message-list__menu" *ngIf="openMenuId === message.id" (click)="$event.stopPropagation()">
+        <button class="message-list__menu-item" (click)="onReply(message, $event)">
+          <span class="material-symbols-outlined">reply</span>
+          Responder
+        </button>
+        <button class="message-list__menu-item" (click)="onForward(message, $event)">
+          <span class="material-symbols-outlined">forward</span>
+          Encaminhar
+        </button>
+        <button class="message-list__menu-item message-list__menu-item--danger" (click)="onDelete(message, $event)">
+          <span class="material-symbols-outlined">delete</span>
+          Apagar
+        </button>
+      </div>
+    </div>
   </article>
+</div>
+
+<div class="message-list__lightbox" *ngIf="lightboxUrl" (click)="closeLightbox()">
+  <button class="message-list__lightbox-close" (click)="closeLightbox()" title="Fechar">
+    <span class="material-symbols-outlined">close</span>
+  </button>
+  <img
+    class="message-list__lightbox-img"
+    [src]="lightboxUrl"
+    alt="Imagem em tela cheia"
+    (click)="$event.stopPropagation()"
+  />
 </div>

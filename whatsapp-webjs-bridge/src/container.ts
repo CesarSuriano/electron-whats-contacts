@@ -6,6 +6,7 @@ import { SessionState } from './state/SessionState.js';
 import { EventStore } from './state/EventStore.js';
 import { ContactStore } from './state/ContactStore.js';
 import { LidMap } from './state/LidMap.js';
+import { RecoveryBudget } from './whatsapp/RecoveryBudget.js';
 import { SelfJidResolver } from './whatsapp/SelfJidResolver.js';
 import { SessionManager } from './whatsapp/SessionManager.js';
 import { ContactsService } from './whatsapp/ContactsService.js';
@@ -38,6 +39,7 @@ export interface Container {
   messageService: MessageService;
   ingestionService: IngestionService;
   broadcaster: WebSocketBroadcaster;
+  recoveryBudget: RecoveryBudget;
   controllers: {
     health: HealthController;
     session: SessionController;
@@ -106,10 +108,11 @@ export function buildContainer(config: BridgeConfig): Container {
   );
 
   const broadcaster = new WebSocketBroadcaster();
+  const recoveryBudget = new RecoveryBudget();
 
   const controllers = {
     health: new HealthController(),
-    session: new SessionController(sessionManager, sessionState),
+    session: new SessionController(sessionManager, sessionState, recoveryBudget),
     contacts: new ContactsController(contactsService, contactStore, messageService, config.instanceName),
     labels: new LabelsController(contactsService, sessionState, config.instanceName),
     events: new EventsController(eventStore, historyService, ingestionService, config.instanceName, {
@@ -139,6 +142,7 @@ export function buildContainer(config: BridgeConfig): Container {
     messageService,
     ingestionService,
     broadcaster,
+    recoveryBudget,
     controllers
   };
 }
@@ -154,11 +158,22 @@ export function bindClientEvents(container: Container): void {
     messageService,
     sessionManager,
     broadcaster,
+    recoveryBudget,
     selfJidResolver
   } = container;
 
+  const LABELS_POLL_INTERVAL_MS = 30000;
+  const LABELS_READY_LINK_RESOLUTION_LIMIT = 60;
+  const DISCONNECTED_RECOVERY_DELAY_MS = 1200;
+  let lastLabelsJson = '';
+  let labelsPollTimer: ReturnType<typeof setInterval> | null = null;
+  let labelsWarmupRunId = 0;
+  let disconnectRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  let readyBootstrapInFlight = false;
+
   client.on('qr', qr => {
     stopDisconnectRecovery();
+    readyBootstrapInFlight = false;
     sessionState.status = 'qr_required';
     sessionState.qr = qr;
     sessionState.lastError = '';
@@ -169,6 +184,7 @@ export function bindClientEvents(container: Container): void {
 
   client.on('authenticated', () => {
     stopDisconnectRecovery();
+    readyBootstrapInFlight = false;
     sessionState.status = 'authenticated';
     sessionState.qr = null;
     sessionState.lastError = '';
@@ -183,14 +199,6 @@ export function bindClientEvents(container: Container): void {
   client.on('change_state', (state: string) => {
     console.log(`[whatsapp-webjs-bridge] change_state: ${state}`);
   });
-
-  const LABELS_POLL_INTERVAL_MS = 30000;
-  const LABELS_READY_LINK_RESOLUTION_LIMIT = 60;
-  const DISCONNECTED_RECOVERY_DELAY_MS = 1200;
-  let lastLabelsJson = '';
-  let labelsPollTimer: ReturnType<typeof setInterval> | null = null;
-  let labelsWarmupRunId = 0;
-  let disconnectRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
   const refreshLabelsAndBroadcast = async (
     reason: string,
@@ -285,9 +293,18 @@ export function bindClientEvents(container: Container): void {
 
   client.on('ready', async () => {
     stopDisconnectRecovery();
+    recoveryBudget.reset();
+    const duplicateReadyWhileBootstrapping = sessionState.status === 'ready' && readyBootstrapInFlight;
     sessionState.status = 'ready';
     sessionState.qr = null;
     sessionState.lastError = '';
+    if (duplicateReadyWhileBootstrapping) {
+      console.log('[whatsapp-webjs-bridge] Cliente pronto (evento duplicado ignorado).');
+      broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+      return;
+    }
+
+    readyBootstrapInFlight = true;
     console.log('[whatsapp-webjs-bridge] Cliente pronto.');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
     startLabelsWarmup();
@@ -299,11 +316,14 @@ export function bindClientEvents(container: Container): void {
       await ingestionService.seedEventsFromRecentChats(chats);
     } catch (error) {
       console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', (error as { message?: string } | null)?.message || String(error));
+    } finally {
+      readyBootstrapInFlight = false;
     }
   });
 
   client.on('auth_failure', (message: string) => {
     stopDisconnectRecovery();
+    readyBootstrapInFlight = false;
     sessionState.status = 'auth_failure';
     sessionState.lastError = String(message || 'Authentication failure');
     console.error('[whatsapp-webjs-bridge] Falha de autenticacao:', message);
@@ -311,16 +331,42 @@ export function bindClientEvents(container: Container): void {
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
   });
 
+  // Razões "terminais" do whatsapp-web.js — quando recebemos uma dessas, a
+  // sessão foi removida do servidor (ou pelo phone "deslinkando", ou por
+  // bloqueio TOS, ou por LOGOUT explícito). Reconectar automaticamente é
+  // inútil porque a sessão LocalAuth já não bate mais com o que o WhatsApp
+  // tem registrado — só vai gerar QR. Pior: as tentativas em loop podem
+  // causar "logout fantasma" no celular oficial. Deixa em 'disconnected' e
+  // espera o usuário clicar em "Gerar novo QR".
+  const TERMINAL_DISCONNECT_REASONS = /\b(LOGOUT|TOS_BLOCK|BAN|UNPAIRED|CONFLICT)\b/i;
+
   client.on('disconnected', (reason: string) => {
+    readyBootstrapInFlight = false;
     sessionState.status = 'disconnected';
     sessionState.qr = null;
     const reasonText = String(reason || 'Disconnected');
     sessionState.lastError = reasonText;
-    console.warn('[whatsapp-webjs-bridge] Cliente desconectado:', reasonText);
+    console.warn('[whatsapp-webjs-bridge] Cliente desconectado. Reason:', JSON.stringify(reasonText));
     clearLabelsSnapshot('disconnected');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
 
     if (sessionManager.isManualDisconnectInProgress() || disconnectRecoveryTimer) {
+      return;
+    }
+
+    if (TERMINAL_DISCONNECT_REASONS.test(reasonText)) {
+      console.warn(
+        '[whatsapp-webjs-bridge] Razão terminal detectada — sessão removida no servidor. '
+        + 'Não vou tentar reconectar; usuário precisa clicar em "Gerar novo QR".'
+      );
+      return;
+    }
+
+    if (!recoveryBudget.tryConsume()) {
+      sessionState.status = 'init_error';
+      sessionState.lastError = `Sessao do WhatsApp nao respondeu apos ${recoveryBudget.attemptsInWindow}/${recoveryBudget.maxAttemptsAllowed} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
+      console.error('[whatsapp-webjs-bridge] Limite de auto-recuperacao excedido apos desconexao transitória.');
+      broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
       return;
     }
 

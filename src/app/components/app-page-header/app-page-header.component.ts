@@ -33,6 +33,17 @@ export class AppPageHeaderComponent {
     this.isMenuOpen = false;
   }
 
+  onMenuContentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+
+    if (target.closest('.config-menu-item')) {
+      this.closeMenu();
+    }
+  }
+
   toggleTheme(): void {
     this.themeService.toggle();
   }

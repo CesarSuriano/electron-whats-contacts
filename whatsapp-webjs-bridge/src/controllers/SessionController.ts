@@ -1,11 +1,13 @@
 import type { Request, Response } from 'express';
 import { SessionManager } from '../whatsapp/SessionManager.js';
 import { SessionState } from '../state/SessionState.js';
+import { RecoveryBudget } from '../whatsapp/RecoveryBudget.js';
 
 export class SessionController {
   constructor(
     private readonly sessionManager: SessionManager,
-    private readonly sessionState: SessionState
+    private readonly sessionState: SessionState,
+    private readonly recoveryBudget: RecoveryBudget
   ) {}
 
   getSession = (_req: Request, res: Response): void => {
@@ -14,6 +16,8 @@ export class SessionController {
 
   connect = async (_req: Request, res: Response): Promise<void> => {
     try {
+      this.recoveryBudget.reset();
+
       const status = this.sessionState.status;
       if (status === 'ready' || status === 'authenticated' || status === 'qr_required') {
         res.json(this.sessionManager.getSessionSnapshot());

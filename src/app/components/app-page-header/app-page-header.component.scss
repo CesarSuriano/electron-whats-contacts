@@ -44,6 +44,15 @@
   @apply text-[20px];
 }
 
+.header-config-wrapper {
+  @apply relative z-[60];
+}
+
+.header-config-menu {
+  @apply absolute right-0 top-[calc(100%+0.5rem)] z-[70] flex min-w-[240px] flex-col gap-1 rounded-[18px] border border-border bg-surface p-[0.35rem];
+  box-shadow: 0 18px 40px rgba(35, 24, 20, 0.14);
+}
+
 @media (max-width: 767px) {
   .app-page-header {
     @apply px-4;
