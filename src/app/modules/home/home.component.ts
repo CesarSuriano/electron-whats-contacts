@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, HostListener, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -68,6 +68,36 @@ export class HomeComponent implements OnInit, OnDestroy {
   readonly appWhatsNew = APP_WHATS_NEW;
 
   private readonly destroy$ = new Subject<void>();
+  private displayedCount = 50;
+  private tableShellScrollCleanup?: () => void;
+
+  @ViewChild('tableShell')
+  set tableShellRef(el: ElementRef<HTMLElement> | undefined) {
+    this.tableShellScrollCleanup?.();
+    this.tableShellScrollCleanup = undefined;
+    if (el) {
+      const scrollEl = el.nativeElement;
+      const handler = () => {
+        if (scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 300) {
+          this.ngZone.run(() => this.loadMoreClientes());
+        }
+      };
+      this.ngZone.runOutsideAngular(() => {
+        scrollEl.addEventListener('scroll', handler, { passive: true });
+      });
+      this.tableShellScrollCleanup = () => scrollEl.removeEventListener('scroll', handler);
+    }
+  }
+
+  get displayedClientes(): Cliente[] {
+    return this.filteredClientes.slice(0, this.displayedCount);
+  }
+
+  private loadMoreClientes(): void {
+    if (this.displayedCount < this.filteredClientes.length) {
+      this.displayedCount = Math.min(this.displayedCount + 50, this.filteredClientes.length);
+    }
+  }
 
   constructor(
     private clientesDataService: ClientesDataService,
@@ -76,7 +106,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     private scheduleListLauncher: ScheduleListLauncherService,
     private scheduledMessageService: ScheduledMessageService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private ngZone: NgZone
   ) {
     this.messageTemplates = this.messageTemplateService.getTemplates();
   }
@@ -95,6 +126,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.tableShellScrollCleanup?.();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -572,6 +604,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private updateDerivedState(): void {
+    this.displayedCount = 50;
     const sorted = [...this.clientes].sort((a, b) =>
       compareClientes(a, b, this.displayedSortedColumn, this.displayedSortDirection)
     );

@@ -121,9 +121,9 @@
             </ng-container>
           </div>
 
-          <section class="home-table-shell" *ngIf="filteredClientes.length; else clientsLoadingOrEmpty">
+          <section class="home-table-shell" #tableShell *ngIf="filteredClientes.length; else clientsLoadingOrEmpty">
             <app-clientes-table
-              [clientes]="filteredClientes"
+              [clientes]="displayedClientes"
               [sortedColumn]="displayedSortedColumn"
               [sortDirection]="displayedSortDirection"
               [selectionMode]="useInternalWhatsapp"
