@@ -11,7 +11,6 @@ if (!app.isPackaged) {
 }
 
 let bridgeProcess = null;
-let bridgeLogStream = null;
 let agentWindow = null;
 let agentWindowPartition = '';
 let isAppQuitting = false;
@@ -30,61 +29,6 @@ const AGENT_IGNORED_RESPONSE_PATTERNS = [
   /^compartilhar gem\.?$/i
 ];
 
-function getErrorLogDir() {
-  // Tenta primeiro a raiz da pasta de instalação (pedido do usuário).
-  // Se o Windows bloquear a escrita (Program Files, por ex.), cai para userData,
-  // que é sempre gravável. Deixa uma pista em ambos os lados para o usuário achar.
-  const candidates = [];
-
-  if (app.isPackaged) {
-    candidates.push(path.join(path.dirname(process.execPath), 'error'));
-  } else {
-    candidates.push(path.join(__dirname, 'error'));
-  }
-
-  candidates.push(path.join(app.getPath('userData'), 'error'));
-
-  for (const dir of candidates) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const probe = path.join(dir, '.write-test');
-      fs.writeFileSync(probe, '');
-      fs.unlinkSync(probe);
-      return dir;
-    } catch { /* tenta proximo */ }
-  }
-
-  return null;
-}
-
-function openBridgeLog() {
-  const logDir = getErrorLogDir();
-  if (!logDir) {
-    bridgeLogStream = null;
-    return;
-  }
-
-  try {
-    const date = new Date().toISOString().slice(0, 10);
-    const logFile = path.join(logDir, `bridge-${date}.log`);
-    bridgeLogStream = fs.createWriteStream(logFile, { flags: 'a' });
-
-    // Breadcrumb: escreve o caminho do log na pasta de instalação quando possível,
-    // para o usuário achar facilmente mesmo se o log real foi para userData.
-    if (app.isPackaged) {
-      try {
-        const installRoot = path.dirname(process.execPath);
-        fs.writeFileSync(
-          path.join(installRoot, 'onde-estao-os-logs.txt'),
-          `Logs da bridge em: ${logFile}\n`
-        );
-      } catch { /* sem permissao: ignora */ }
-    }
-  } catch {
-    bridgeLogStream = null;
-  }
-}
-
 function findSystemChromium() {
   const env = process.env;
   const pf = env['PROGRAMFILES'] || 'C:\\Program Files';
@@ -101,19 +45,6 @@ function findSystemChromium() {
   ];
 
   return candidates.find(p => p && fs.existsSync(p)) || null;
-}
-
-function writeBridgeLog(text) {
-  if (!bridgeLogStream) return;
-  try {
-    bridgeLogStream.write(`[${new Date().toISOString()}] ${text}`);
-  } catch { /* silent */ }
-}
-
-function closeBridgeLog() {
-  if (!bridgeLogStream) return;
-  try { bridgeLogStream.end(); } catch { /* silent */ }
-  bridgeLogStream = null;
 }
 
 function buildAgentPartition(googleAccountId) {
@@ -235,19 +166,13 @@ function startWhatsappBridge() {
   const bridgeDir = path.join(bridgeBase, 'whatsapp-webjs-bridge');
   const bridgeEntry = path.join(bridgeDir, 'dist', 'server.js');
 
-  openBridgeLog();
-
   const systemBrowser = findSystemChromium();
   if (!systemBrowser) {
     const msg = 'Nao foi possivel localizar Microsoft Edge nem Google Chrome no sistema. '
       + 'Instale o Edge (padrao no Windows 10/11) ou o Chrome e tente novamente.\n';
     console.error(`[electron] ${msg}`);
-    writeBridgeLog(`[electron] ERRO: ${msg}`);
-    closeBridgeLog();
     return;
   }
-
-  writeBridgeLog(`[electron] usando navegador: ${systemBrowser}\n`);
 
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
     cwd: bridgeDir,
@@ -270,28 +195,22 @@ function startWhatsappBridge() {
   bridgeProcess.stdout.on('data', (data) => {
     const text = String(data);
     process.stdout.write(text);
-    writeBridgeLog(text);
   });
 
   bridgeProcess.stderr.on('data', (data) => {
     const text = String(data);
     process.stderr.write(text);
-    writeBridgeLog('[ERR] ' + text);
   });
 
   bridgeProcess.on('exit', (code) => {
     const msg = `whatsapp-webjs bridge finalizada (code=${code ?? 'null'})\n`;
     console.log(`[electron] ${msg}`);
-    writeBridgeLog(`[electron] ${msg}`);
-    closeBridgeLog();
     bridgeProcess = null;
   });
 
   bridgeProcess.on('error', (error) => {
     const msg = `falha ao iniciar bridge: ${error.message}\n`;
     console.error(`[electron] ${msg}`);
-    writeBridgeLog(`[electron] ERRO: ${msg}`);
-    closeBridgeLog();
     bridgeProcess = null;
   });
 }

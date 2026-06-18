@@ -169,4 +169,27 @@ describe('bindClientEvents disconnected recovery', () => {
     assert.equal(getRecoveryBudgetResetCalls(), 1);
     client.emit('auth_failure', 'test cleanup');
   });
+
+  it('recovers when authenticated never reaches ready', async () => {
+    const previousTimeout = process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS;
+    process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS = '20';
+
+    try {
+      const { client, sessionState, getEnsureInitializedCalls } = createContainer();
+
+      client.emit('authenticated');
+
+      await wait(60);
+
+      assert.equal(getEnsureInitializedCalls(), 1);
+      assert.equal(sessionState.status, 'init_error');
+      assert.match(sessionState.lastError, /nao ficou pronto/i);
+    } finally {
+      if (previousTimeout === undefined) {
+        delete process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS;
+      } else {
+        process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS = previousTimeout;
+      }
+    }
+  });
 });

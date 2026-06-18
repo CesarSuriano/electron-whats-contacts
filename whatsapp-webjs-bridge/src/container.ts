@@ -24,6 +24,12 @@ import { MessagesController } from './controllers/MessagesController.js';
 
 const { Client, LocalAuth } = pkg;
 const CLIENT_AUTH_TIMEOUT_MS = 60000;
+const DEFAULT_AUTHENTICATED_READY_TIMEOUT_MS = 90_000;
+
+function getAuthenticatedReadyTimeoutMs(): number {
+  const raw = Number(process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_AUTHENTICATED_READY_TIMEOUT_MS;
+}
 
 export interface Container {
   config: BridgeConfig;
@@ -169,10 +175,62 @@ export function bindClientEvents(container: Container): void {
   let labelsPollTimer: ReturnType<typeof setInterval> | null = null;
   let labelsWarmupRunId = 0;
   let disconnectRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  let authenticatedReadyTimer: ReturnType<typeof setTimeout> | null = null;
   let readyBootstrapInFlight = false;
+
+  const stopAuthenticatedReadyWatchdog = (): void => {
+    if (authenticatedReadyTimer) {
+      clearTimeout(authenticatedReadyTimer);
+      authenticatedReadyTimer = null;
+    }
+  };
+
+  const startAuthenticatedReadyWatchdog = (): void => {
+    stopAuthenticatedReadyWatchdog();
+    const timeoutMs = getAuthenticatedReadyTimeoutMs();
+
+    authenticatedReadyTimer = setTimeout(() => {
+      authenticatedReadyTimer = null;
+
+      if (sessionState.status !== 'authenticated') {
+        return;
+      }
+
+      if (!recoveryBudget.tryConsume()) {
+        sessionState.status = 'init_error';
+        sessionState.qr = null;
+        sessionState.lastError = `WhatsApp autenticou, mas nao ficou pronto apos ${recoveryBudget.attemptsInWindow}/${recoveryBudget.maxAttemptsAllowed} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
+        console.error('[whatsapp-webjs-bridge] Limite de auto-recuperacao excedido enquanto aguardava ready apos authenticated.');
+        broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+        return;
+      }
+
+      const attempt = recoveryBudget.attemptsInWindow;
+      const maxAttempts = recoveryBudget.maxAttemptsAllowed;
+      sessionState.status = 'init_error';
+      sessionState.qr = null;
+      sessionState.lastError = `WhatsApp autenticou, mas nao ficou pronto em ${Math.round(timeoutMs / 1000)}s. Tentando reiniciar a sessao (${attempt}/${maxAttempts})...`;
+      console.error('[whatsapp-webjs-bridge] Timeout aguardando ready apos authenticated. Reiniciando sessao.');
+      broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+
+      void sessionManager.ensureInitialized().catch(error => {
+        sessionState.status = 'init_error';
+        sessionState.qr = null;
+        sessionState.lastError = (error as { message?: string } | null)?.message || String(error);
+        console.error(
+          '[whatsapp-webjs-bridge] Falha ao recuperar sessao apos timeout authenticated->ready:',
+          (error as { message?: string } | null)?.message || String(error)
+        );
+        broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+      });
+    }, timeoutMs);
+
+    authenticatedReadyTimer.unref?.();
+  };
 
   client.on('qr', qr => {
     stopDisconnectRecovery();
+    stopAuthenticatedReadyWatchdog();
     readyBootstrapInFlight = false;
     sessionState.status = 'qr_required';
     sessionState.qr = qr;
@@ -184,6 +242,7 @@ export function bindClientEvents(container: Container): void {
 
   client.on('authenticated', () => {
     stopDisconnectRecovery();
+    startAuthenticatedReadyWatchdog();
     readyBootstrapInFlight = false;
     sessionState.status = 'authenticated';
     sessionState.qr = null;
@@ -293,6 +352,7 @@ export function bindClientEvents(container: Container): void {
 
   client.on('ready', async () => {
     stopDisconnectRecovery();
+    stopAuthenticatedReadyWatchdog();
     recoveryBudget.reset();
     const duplicateReadyWhileBootstrapping = sessionState.status === 'ready' && readyBootstrapInFlight;
     sessionState.status = 'ready';
@@ -323,6 +383,7 @@ export function bindClientEvents(container: Container): void {
 
   client.on('auth_failure', (message: string) => {
     stopDisconnectRecovery();
+    stopAuthenticatedReadyWatchdog();
     readyBootstrapInFlight = false;
     sessionState.status = 'auth_failure';
     sessionState.lastError = String(message || 'Authentication failure');
@@ -341,6 +402,7 @@ export function bindClientEvents(container: Container): void {
   const TERMINAL_DISCONNECT_REASONS = /\b(LOGOUT|TOS_BLOCK|BAN|UNPAIRED|CONFLICT)\b/i;
 
   client.on('disconnected', (reason: string) => {
+    stopAuthenticatedReadyWatchdog();
     readyBootstrapInFlight = false;
     sessionState.status = 'disconnected';
     sessionState.qr = null;
