@@ -400,6 +400,18 @@
 	color: var(--campaign-review-hover);
 }
 
+.home-bulk-bar__button--custom {
+	background: var(--surface);
+	border-color: #d97706;
+	color: #d97706;
+}
+
+.home-bulk-bar__button--custom:hover:not(:disabled) {
+	background: #fef3c7;
+	border-color: #b45309;
+	color: #b45309;
+}
+
 .home-bulk-bar__icon {
 	@apply text-[1.1rem];
 }

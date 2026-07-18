@@ -49,6 +49,15 @@ describe('WhatsappWebjsGatewayService', () => {
     expect(result).toEqual(mockStatus);
   });
 
+  it('restartSession – POST /session/restart', () => {
+    let result: WhatsappSessionStatus | undefined;
+    service.restartSession().subscribe(r => (result = r));
+    const req = httpMock.expectOne(`${BASE}/session/restart`);
+    expect(req.request.method).toBe('POST');
+    req.flush(mockStatus);
+    expect(result).toEqual(mockStatus);
+  });
+
   it('loadInstances – extracts instances array', () => {
     let result: WhatsappInstance[] | undefined;
     service.loadInstances().subscribe(r => (result = r));

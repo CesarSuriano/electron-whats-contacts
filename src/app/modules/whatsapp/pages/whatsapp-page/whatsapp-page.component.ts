@@ -59,6 +59,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   private hasLoadedLabelsAfterReady = false;
   private labelsAttemptsSinceReady = 0;
   private sessionStatusErrorGraceUntil = 0;
+  private qrRenderVersion = 0;
   private readonly destroy$ = new Subject<void>();
 
   constructor(
@@ -213,7 +214,8 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   get shouldShowReconnectButton(): boolean {
-    return !this.isCheckingSession && this.currentSessionStatus === 'disconnected';
+    return !this.isCheckingSession
+      && (this.currentSessionStatus === 'disconnected' || this.currentSessionStatus === 'qr_required');
   }
 
   get connectActionLabel(): string {
@@ -271,11 +273,25 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   requestNewQrCode(): void {
-    if (this.isSessionActionLoading || this.currentSessionStatus !== 'disconnected') {
+    if (this.isSessionActionLoading || !this.shouldShowReconnectButton) {
       return;
     }
 
-    this.connectSession();
+    this.isSessionActionLoading = true;
+    this.sessionErrorMessage = '';
+    this.qrCodeDataUrl = '';
+    this.sessionStatusText = 'Gerando novo QR code...';
+
+    this.whatsappGatewayService.restartSession().subscribe({
+      next: status => {
+        this.isSessionActionLoading = false;
+        this.updateSessionState(status, { immediate: true });
+      },
+      error: () => {
+        this.isSessionActionLoading = false;
+        this.sessionErrorMessage = 'Não foi possível gerar um novo QR code.';
+      }
+    });
   }
 
   private startInitialSessionCheck(): void {
@@ -481,18 +497,25 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   private async updateQrCode(qrText: string): Promise<void> {
+    const renderVersion = ++this.qrRenderVersion;
     try {
-      this.qrCodeDataUrl = await QRCode.toDataURL(qrText, {
+      const dataUrl = await QRCode.toDataURL(qrText, {
         errorCorrectionLevel: 'M',
         margin: 1,
         width: 280
       });
+      if (renderVersion !== this.qrRenderVersion || this.currentSessionStatus !== 'qr_required') {
+        return;
+      }
+      this.qrCodeDataUrl = dataUrl;
     } catch {
+      if (renderVersion !== this.qrRenderVersion || this.currentSessionStatus !== 'qr_required') {
+        return;
+      }
       this.qrCodeDataUrl = '';
       this.sessionErrorMessage = 'Não foi possível renderizar o QR code. Use o QR do terminal.';
     }
   }
-
   private syncLabelsLoadWithSessionState(status: string): void {
     if (status === 'disconnected' || status === 'auth_failure' || status === 'init_error') {
       this.hasLoadedLabelsAfterReady = false;

@@ -6,15 +6,23 @@ import { bindClientEvents } from '../../src/container.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { wait } from '../../src/utils/time.js';
 
-function createContainer(options: { manualDisconnect?: boolean; allowRecovery?: boolean } = {}) {
+process.env.WA_READY_CHATS_TIMEOUT_MS = '0';
+
+function createContainer(options: {
+  manualDisconnect?: boolean;
+  allowRecovery?: boolean;
+  initializeInFlight?: boolean;
+  getChats?: () => Promise<unknown[]>;
+} = {}) {
   const client = new EventEmitter();
   Object.assign(client, {
-    getChats: async () => []
+    getChats: options.getChats ?? (async () => [])
   });
   const sessionState = new SessionState('local-webjs', () => '');
   const broadcasts: Array<{ type: string; payload: unknown }> = [];
   let ensureInitializedCalls = 0;
   let triggerRefreshCalls = 0;
+  let lastPreloadedChatsCount = -1;
   let recoveryBudgetResetCalls = 0;
   let recoveryBudgetTryConsumeCalls = 0;
 
@@ -28,11 +36,13 @@ function createContainer(options: { manualDisconnect?: boolean; allowRecovery?: 
     contactStore: {},
     contactsService: {
       loadLabels: async () => [{ id: 'label' }],
-      triggerRefresh: async () => {
+      triggerRefresh: async (opts?: { preloadedChats?: unknown[] | null }) => {
         triggerRefreshCalls += 1;
+        lastPreloadedChatsCount = Array.isArray(opts?.preloadedChats) ? opts!.preloadedChats!.length : -1;
         await wait(20);
       },
-      setOnContactsUpdated: () => undefined
+      setOnContactsUpdated: () => undefined,
+      setInitialContactsWarmup: () => undefined
     },
     ingestionService: {
       seedEventsFromRecentChats: async () => undefined,
@@ -50,6 +60,7 @@ function createContainer(options: { manualDisconnect?: boolean; allowRecovery?: 
         ensureInitializedCalls += 1;
       },
       isManualDisconnectInProgress: () => Boolean(options.manualDisconnect),
+      isInitializeInFlight: () => Boolean(options.initializeInFlight),
       getSessionSnapshot: () => sessionState.snapshot()
     },
     broadcaster: {
@@ -87,6 +98,7 @@ function createContainer(options: { manualDisconnect?: boolean; allowRecovery?: 
     broadcasts,
     getEnsureInitializedCalls: () => ensureInitializedCalls,
     getTriggerRefreshCalls: () => triggerRefreshCalls,
+    getLastPreloadedChatsCount: () => lastPreloadedChatsCount,
     getRecoveryBudgetResetCalls: () => recoveryBudgetResetCalls
   };
 }
@@ -103,6 +115,54 @@ describe('bindClientEvents disconnected recovery', () => {
     await wait(1300);
 
     assert.equal(getEnsureInitializedCalls(), 1);
+  });
+
+  it('ignores a late disconnected event while an initialization is in flight', async () => {
+    const { client, sessionState, getEnsureInitializedCalls } = createContainer({ initializeInFlight: true });
+
+    sessionState.status = 'initializing';
+    client.emit('disconnected', 'NAVIGATION');
+
+    await wait(1300);
+
+    assert.equal(getEnsureInitializedCalls(), 0);
+    assert.equal(sessionState.status, 'initializing');
+  });
+
+  it('processes a terminal LOGOUT even while an initialization is in flight', async () => {
+    const { client, sessionState, getEnsureInitializedCalls } = createContainer({ initializeInFlight: true });
+
+    sessionState.status = 'initializing';
+    client.emit('disconnected', 'LOGOUT');
+
+    await wait(1300);
+
+    assert.equal(sessionState.status, 'disconnected');
+    assert.equal(getEnsureInitializedCalls(), 0);
+  });
+
+  it('recovers the session when hydration keeps failing after ready', async () => {
+    process.env.WA_READY_CHATS_TIMEOUT_MS = '5000';
+    process.env.WA_READY_CHATS_POLL_MS = '5';
+
+    try {
+      const { client, sessionState, getEnsureInitializedCalls } = createContainer({
+        getChats: async () => {
+          throw new Error('Cannot read properties of undefined (reading \'getChats\')');
+        }
+      });
+
+      client.emit('ready');
+      await wait(600);
+
+      assert.equal(getEnsureInitializedCalls(), 1);
+      assert.equal(sessionState.status, 'init_error');
+      assert.match(sessionState.lastError, /Reiniciando a sessao/i);
+      client.emit('auth_failure', 'test cleanup');
+    } finally {
+      process.env.WA_READY_CHATS_TIMEOUT_MS = '0';
+      delete process.env.WA_READY_CHATS_POLL_MS;
+    }
   });
 
   it('does not auto-recover after a manual disconnect', async () => {
@@ -168,6 +228,29 @@ describe('bindClientEvents disconnected recovery', () => {
 
     assert.equal(getRecoveryBudgetResetCalls(), 1);
     client.emit('auth_failure', 'test cleanup');
+  });
+
+  it('waits for the chat list to hydrate before the initial refresh', async () => {
+    process.env.WA_READY_CHATS_TIMEOUT_MS = '2000';
+    process.env.WA_READY_CHATS_POLL_MS = '10';
+
+    try {
+      const counts = [1, 3, 5, 5, 5, 5];
+      let call = 0;
+      const { client, getTriggerRefreshCalls, getLastPreloadedChatsCount } = createContainer({
+        getChats: async () => new Array(counts[Math.min(call++, counts.length - 1)]).fill({ id: { _serialized: 'x@c.us' } })
+      });
+
+      client.emit('ready');
+      await wait(400);
+
+      assert.equal(getTriggerRefreshCalls(), 1);
+      assert.equal(getLastPreloadedChatsCount(), 5, 'refresh deveria receber a lista estabilizada');
+      client.emit('auth_failure', 'test cleanup');
+    } finally {
+      process.env.WA_READY_CHATS_TIMEOUT_MS = '0';
+      delete process.env.WA_READY_CHATS_POLL_MS;
+    }
   });
 
   it('recovers when authenticated never reaches ready', async () => {

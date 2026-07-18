@@ -1,7 +1,14 @@
 <table class="clientes-table">
 	<thead class="clientes-table__head">
 		<tr>
-			<th class="clientes-table__head-cell clientes-table__head-cell--checkbox" *ngIf="selectionMode"></th>
+			<th
+				class="clientes-table__head-cell clientes-table__head-cell--checkbox"
+				*ngIf="selectionMode"
+				title="Selecionar todos"
+				(click)="selectAllToggle.emit()"
+			>
+				<span class="material-symbols-outlined clientes-table__checkbox-icon" [class.clientes-table__checkbox-icon--selected]="allSelected">{{ allSelected ? 'check_box' : 'check_box_outline_blank' }}</span>
+			</th>
 			<th class="clientes-table__head-cell" (click)="requestSort('nome')">
 				Nome
 				<span class="clientes-table__sort-arrow">{{ getSortArrow('nome') }}</span>

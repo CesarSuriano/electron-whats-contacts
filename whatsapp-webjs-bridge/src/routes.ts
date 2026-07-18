@@ -15,6 +15,7 @@ export function buildRoutes(container: Container): Router {
 
   router.get('/api/whatsapp/session', controllers.session.getSession);
   router.post('/api/whatsapp/session/connect', controllers.session.connect);
+  router.post('/api/whatsapp/session/restart', controllers.session.restart);
   router.post('/api/whatsapp/session/disconnect', controllers.session.disconnect);
   router.get('/api/whatsapp/instances', controllers.session.getInstances);
 

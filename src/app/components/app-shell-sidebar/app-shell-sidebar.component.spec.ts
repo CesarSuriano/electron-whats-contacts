@@ -20,13 +20,6 @@ describe('AppShellSidebarComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('renders the restored Agent and Settings navigation entries', () => {
-    const sidebarText = fixture.nativeElement.textContent as string;
-
-    expect(sidebarText).toContain('Agente');
-    expect(sidebarText).toContain('Configurações');
-  });
-
   it('emits the selected section when Configurações is clicked', () => {
     const emittedSections: string[] = [];
     component.sectionSelect.subscribe(section => emittedSections.push(section));

@@ -147,7 +147,7 @@ export interface RawMessage {
       type?: string;
     };
   };
-  downloadMedia?: () => Promise<{ data?: string; mimetype?: string } | null>;
+  downloadMedia?: () => Promise<{ data?: string; mimetype?: string } | null | undefined>;
   getContact?: () => Promise<RawContact>;
 }
 

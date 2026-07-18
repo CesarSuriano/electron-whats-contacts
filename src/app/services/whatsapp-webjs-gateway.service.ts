@@ -67,6 +67,10 @@ export class WhatsappWebjsGatewayService {
     return this.http.post<WhatsappSessionStatus>(`${this.baseUrl}/session/disconnect`, {});
   }
 
+  restartSession(): Observable<WhatsappSessionStatus> {
+    return this.http.post<WhatsappSessionStatus>(`${this.baseUrl}/session/restart`, {});
+  }
+
   loadInstances(): Observable<WhatsappInstance[]> {
     return this.http.get<InstancesResponse>(`${this.baseUrl}/instances`).pipe(
       map(response => response.instances)

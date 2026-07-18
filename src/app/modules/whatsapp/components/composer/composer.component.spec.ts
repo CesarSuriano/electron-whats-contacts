@@ -331,7 +331,7 @@ describe('ComposerComponent', () => {
     expect(labels).toEqual(['Emojis', 'Anexar arquivo', 'Mensagens rápidas']);
   });
 
-  it('grows the textarea up to eight lines and updates the bulk panel clearance', () => {
+  it('grows the textarea up to eight lines', () => {
     const textarea = fixture.nativeElement.querySelector('.composer__textarea') as HTMLTextAreaElement;
     spyOn(window, 'requestAnimationFrame').and.callFake((callback: FrameRequestCallback) => {
       callback(0);
@@ -345,11 +345,6 @@ describe('ComposerComponent', () => {
       borderBottomWidth: '0px',
       minHeight: '46px'
     } as CSSStyleDeclaration);
-    spyOnProperty(window, 'innerHeight', 'get').and.returnValue(1000);
-    spyOn(fixture.nativeElement, 'getBoundingClientRect').and.returnValue({
-      top: 700,
-      height: 120
-    } as DOMRect);
     Object.defineProperty(textarea, 'scrollHeight', {
       configurable: true,
       get: () => 260
@@ -359,6 +354,5 @@ describe('ComposerComponent', () => {
 
     expect(textarea.style.height).toBe('184px');
     expect(textarea.style.overflowY).toBe('auto');
-    expect(document.documentElement.style.getPropertyValue('--uniq-whatsapp-composer-clearance')).toBe('320px');
   });
 });

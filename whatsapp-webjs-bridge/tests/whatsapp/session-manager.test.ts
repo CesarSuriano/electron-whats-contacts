@@ -8,6 +8,7 @@ function createManager(clientOverrides: Partial<{
   initialize: () => Promise<void>;
   destroy: () => Promise<void>;
   logout: () => Promise<void>;
+  authStrategy: { logout: () => Promise<void> };
 }> = {}) {
   const client = {
     initialize: async () => undefined,
@@ -73,6 +74,33 @@ describe('SessionManager.ensureInitialized', () => {
     await sessionManager.ensureInitialized();
 
     assert.deepEqual(calls, ['destroy', 'initialize:1', 'destroy', 'initialize:2']);
+  });
+
+  it('prepareRestart destroys the client and wipes only the local session so a fresh QR can be issued', async () => {
+    const calls: string[] = [];
+    const { sessionManager, sessionState } = createManager({
+      logout: async () => {
+        calls.push('server-logout');
+      },
+      destroy: async () => {
+        calls.push('destroy');
+      },
+      initialize: async () => {
+        calls.push('initialize');
+      },
+      authStrategy: {
+        logout: async () => {
+          calls.push('local-wipe');
+        }
+      }
+    });
+
+    sessionState.status = 'qr_required';
+    await sessionManager.prepareRestart();
+    await sessionManager.ensureInitialized();
+
+    assert.deepEqual(calls, ['destroy', 'local-wipe', 'initialize']);
+    assert.equal(sessionManager.isManualDisconnectInProgress(), false);
   });
 
   it('logs out only for an explicit manual disconnect', async () => {

@@ -36,7 +36,7 @@ describe('WhatsappPageComponent', () => {
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
 
     gatewaySpy = jasmine.createSpyObj('WhatsappWebjsGatewayService', [
-      'loadSessionStatus', 'connectSession', 'disconnectSession', 'loadLabels'
+      'loadSessionStatus', 'connectSession', 'disconnectSession', 'restartSession', 'loadLabels'
     ]);
     gatewaySpy.loadSessionStatus.and.returnValue(of(makeStatus('initializing')));
     gatewaySpy.loadLabels.and.returnValue(of([]));
@@ -348,23 +348,34 @@ describe('WhatsappPageComponent', () => {
   });
 
   describe('requestNewQrCode', () => {
-    it('starts a new connection when the session is disconnected', () => {
-      gatewaySpy.connectSession.and.returnValue(of(makeStatus('authenticated')));
+    it('restarts the session when it is disconnected', () => {
+      gatewaySpy.restartSession.and.returnValue(of(makeStatus('initializing')));
       component.currentSessionStatus = 'disconnected';
 
       component.requestNewQrCode();
 
-      expect(gatewaySpy.connectSession).toHaveBeenCalled();
-      expect(component.currentSessionStatus).toBe('authenticated');
+      expect(gatewaySpy.restartSession).toHaveBeenCalled();
+      expect(component.currentSessionStatus).toBe('initializing');
       expect(component.isSessionActionLoading).toBeFalse();
     });
 
-    it('does nothing when the session is not disconnected', () => {
+    it('restarts the session to refresh a stale QR code', () => {
+      gatewaySpy.restartSession.and.returnValue(of(makeStatus('initializing')));
+      component.currentSessionStatus = 'qr_required';
+      component.qrCodeDataUrl = 'data:image/png;base64,stale';
+
+      component.requestNewQrCode();
+
+      expect(gatewaySpy.restartSession).toHaveBeenCalled();
+      expect(component.qrCodeDataUrl).toBe('');
+    });
+
+    it('does nothing when the session is active', () => {
       component.currentSessionStatus = 'ready';
 
       component.requestNewQrCode();
 
-      expect(gatewaySpy.connectSession).not.toHaveBeenCalled();
+      expect(gatewaySpy.restartSession).not.toHaveBeenCalled();
     });
   });
 });

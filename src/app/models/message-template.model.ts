@@ -11,7 +11,7 @@ export interface MessageTemplateImages {
 }
 
 export interface MessageTemplateEditorConfig {
-  type: MessageTemplateType;
+  type: MessageTemplateType | 'custom';
   title: string;
   description: string;
 }

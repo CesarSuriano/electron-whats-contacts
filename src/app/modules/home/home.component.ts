@@ -302,6 +302,17 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.selectedClienteIds = new Set();
   }
 
+  get allFilteredSelected(): boolean {
+    return this.filteredClientes.length > 0
+      && this.filteredClientes.every(c => this.selectedClienteIds.has(c.id));
+  }
+
+  toggleSelectAllClientes(): void {
+    this.selectedClienteIds = this.allFilteredSelected
+      ? new Set()
+      : new Set(this.filteredClientes.map(c => c.id));
+  }
+
   sendBulkBirthday(): void {
     const clientes = this.clientes.filter(c => this.selectedClienteIds.has(c.id));
     if (!clientes.length) {
@@ -318,6 +329,22 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
     this.pendingBulkSendService.set({ templateType: 'review', clientes });
     void this.router.navigate(['/whatsapp']);
+  }
+
+  openBulkCustomMessage(): void {
+    if (!this.selectionCount) {
+      return;
+    }
+    this.activeTemplateEditorConfig = {
+      type: 'custom',
+      title: 'Mensagem personalizada',
+      description: 'Essa mensagem será enviada para os clientes selecionados. Use {nome} para incluir o nome do cliente.'
+    };
+    this.isMessageTemplateModalOpen = true;
+  }
+
+  get isCustomBulkEditor(): boolean {
+    return this.activeTemplateEditorConfig?.type === 'custom';
   }
 
   openUploadModal(): void {
@@ -400,6 +427,23 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.activeTemplateEditorConfig.type === 'custom') {
+      const clientes = this.clientes.filter(c => this.selectedClienteIds.has(c.id));
+      this.closeTemplateEditor();
+      if (!clientes.length) {
+        return;
+      }
+      this.pendingBulkSendService.set({
+        templateType: 'custom',
+        clientes,
+        customTemplate: result.text,
+        customImageDataUrls: result.imageDataUrls
+      });
+      this.clearSelection();
+      void this.router.navigate(['/whatsapp']);
+      return;
+    }
+
     this.isSavingTemplate = true;
 
     try {
@@ -463,7 +507,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   get activeTemplateText(): string {
-    if (!this.activeTemplateEditorConfig) {
+    if (!this.activeTemplateEditorConfig || this.activeTemplateEditorConfig.type === 'custom') {
       return '';
     }
 
@@ -471,7 +515,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   get activeTemplateImageDataUrl(): string | undefined {
-    if (!this.activeTemplateEditorConfig) {
+    if (!this.activeTemplateEditorConfig || this.activeTemplateEditorConfig.type === 'custom') {
       return undefined;
     }
 
@@ -626,6 +670,14 @@ export class HomeComponent implements OnInit, OnDestroy {
       const haystack = [cliente.nome, cliente.cpf, cliente.telefone].join(' ').toLocaleLowerCase('pt-BR');
       return haystack.includes(normalizedTerm);
     });
+
+    if (this.selectedClienteIds.size) {
+      const visibleIds = new Set(this.filteredClientes.map(c => c.id));
+      const pruned = [...this.selectedClienteIds].filter(id => visibleIds.has(id));
+      if (pruned.length !== this.selectedClienteIds.size) {
+        this.selectedClienteIds = new Set(pruned);
+      }
+    }
 
     this.birthdaysToday = sorted.filter(c => c.birthdayStatus === 'today');
 

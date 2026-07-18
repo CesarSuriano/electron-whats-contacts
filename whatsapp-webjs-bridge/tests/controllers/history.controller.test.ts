@@ -67,9 +67,8 @@ describe('GET /api/whatsapp/chats/:jid/messages', () => {
       receivedAt: '2026-04-01T10:00:00.000Z',
       isFromMe: false,
       chatJid: '5511999999999@c.us',
-      phone: '5511999999999',
       text: 'primeira',
-      payload: {}
+      payload: { id: 'evt-1', timestamp: 0 }
     });
     eventStore.pushEvent({
       id: 'evt-2',
@@ -77,9 +76,8 @@ describe('GET /api/whatsapp/chats/:jid/messages', () => {
       receivedAt: '2026-04-01T10:01:00.000Z',
       isFromMe: false,
       chatJid: '5511888888888@c.us',
-      phone: '5511888888888',
       text: 'outra conversa',
-      payload: {}
+      payload: { id: 'evt-2', timestamp: 0 }
     });
     eventStore.pushEvent({
       id: 'evt-3',
@@ -87,9 +85,8 @@ describe('GET /api/whatsapp/chats/:jid/messages', () => {
       receivedAt: '2026-04-01T10:02:00.000Z',
       isFromMe: true,
       chatJid: '5511999999999@lid',
-      phone: '5511999999999',
       text: 'segunda',
-      payload: {}
+      payload: { id: 'evt-3', timestamp: 0 }
     });
 
     const res = await request(app).get('/api/whatsapp/chats/5511999999999%40c.us/messages?limit=10');

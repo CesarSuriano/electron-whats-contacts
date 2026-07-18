@@ -522,6 +522,11 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (pending.templateType === 'custom') {
+      this.bulkSend.start(uniqueContacts, pending.customTemplate || '', pending.customImageDataUrls);
+      return;
+    }
+
     const template = this.messageTemplateService.getTemplates()[pending.templateType];
     const imageDataUrl = this.messageTemplateService.getTemplateImage(pending.templateType);
     this.bulkSend.start(uniqueContacts, template, imageDataUrl);

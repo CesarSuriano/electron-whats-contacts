@@ -14,6 +14,7 @@ export class ClientesTableComponent {
   @Input() sortDirection: SortDirection = 'asc';
   @Input() selectionMode = false;
   @Input() selectedClienteIds = new Set<number>();
+  @Input() allSelected = false;
   @Input() recentClienteIds = new Set<number>();
   @Input() actionsDisabled = false;
 
@@ -21,6 +22,7 @@ export class ClientesTableComponent {
   @Output() birthdayClick = new EventEmitter<Cliente>();
   @Output() reviewClick = new EventEmitter<Cliente>();
   @Output() selectionToggle = new EventEmitter<number>();
+  @Output() selectAllToggle = new EventEmitter<void>();
 
   requestSort(column: SortColumn): void {
     this.sortChange.emit(column);

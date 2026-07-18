@@ -40,6 +40,10 @@ export class SessionManager {
     return this.manualDisconnectInProgress;
   }
 
+  isInitializeInFlight(): boolean {
+    return this.initializePromise !== null;
+  }
+
   private async cleanupBeforeInitialize(): Promise<void> {
     try {
       await withTimeout(this.client.destroy(), CLEANUP_TIMEOUT_MS, 'destroy during cleanup');
@@ -102,6 +106,30 @@ export class SessionManager {
       });
 
     return this.initializePromise;
+  }
+
+  async prepareRestart(): Promise<void> {
+    this.initGeneration++;
+    this.initializePromise = null;
+    this.manualDisconnectInProgress = true;
+    try {
+      await this.cleanupBeforeInitialize();
+      // O usuário pediu um QR novo: a sessão local salva não interessa mais.
+      // Sem credenciais, o initialize pula a restauração e vai direto ao QR.
+      const authStrategy = (this.client as { authStrategy?: { logout?: () => Promise<void> } }).authStrategy;
+      if (authStrategy?.logout) {
+        try {
+          await withTimeout(authStrategy.logout(), CLEANUP_TIMEOUT_MS, 'local auth wipe during restart');
+        } catch (error) {
+          console.warn(
+            '[whatsapp-webjs-bridge] Falha ao limpar sessao local no restart (seguindo mesmo assim):',
+            (error as { message?: string } | null)?.message || String(error)
+          );
+        }
+      }
+    } finally {
+      this.manualDisconnectInProgress = false;
+    }
   }
 
   async disconnect(): Promise<void> {

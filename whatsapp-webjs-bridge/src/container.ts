@@ -1,5 +1,6 @@
 import pkg from 'whatsapp-web.js';
 import type { Client as WebJsClient } from 'whatsapp-web.js';
+import type { RawChat } from './domain/types.js';
 import qrcodeTerminal from 'qrcode-terminal';
 import type { BridgeConfig } from './config.js';
 import { SessionState } from './state/SessionState.js';
@@ -21,10 +22,98 @@ import { LabelsController } from './controllers/LabelsController.js';
 import { EventsController } from './controllers/EventsController.js';
 import { HistoryController } from './controllers/HistoryController.js';
 import { MessagesController } from './controllers/MessagesController.js';
+import { wait } from './utils/time.js';
 
 const { Client, LocalAuth } = pkg;
 const CLIENT_AUTH_TIMEOUT_MS = 60000;
 const DEFAULT_AUTHENTICATED_READY_TIMEOUT_MS = 90_000;
+
+const DEFAULT_CHAT_HYDRATION_TIMEOUT_MS = 120_000;
+const DEFAULT_CHAT_HYDRATION_POLL_MS = 2_500;
+const CHAT_HYDRATION_STABLE_POLLS = 2;
+
+function getChatHydrationConfig(): { timeoutMs: number; pollMs: number } {
+  const timeout = Number(process.env.WA_READY_CHATS_TIMEOUT_MS);
+  const poll = Number(process.env.WA_READY_CHATS_POLL_MS);
+  return {
+    timeoutMs: Number.isFinite(timeout) && timeout >= 0 ? timeout : DEFAULT_CHAT_HYDRATION_TIMEOUT_MS,
+    pollMs: Number.isFinite(poll) && poll > 0 ? poll : DEFAULT_CHAT_HYDRATION_POLL_MS
+  };
+}
+
+type WebJsClientWithChatPage = WebJsClient & {
+  getChats: () => Promise<RawChat[]>;
+};
+
+class ChatHydrationCancelledError extends Error {
+  constructor() {
+    super('chat hydration cancelled because the WhatsApp session changed');
+  }
+}
+
+class ChatHydrationBrokenError extends Error {
+  constructor(lastFailure: string) {
+    super(`chat hydration kept failing: ${lastFailure}`);
+  }
+}
+
+const CHAT_HYDRATION_MAX_CONSECUTIVE_FAILURES = 6;
+
+function ensureChatHydrationIsActive(isActive: () => boolean): void {
+  if (!isActive()) {
+    throw new ChatHydrationCancelledError();
+  }
+}
+
+async function loadHydratedChats(
+  client: WebJsClientWithChatPage,
+  isActive: () => boolean = () => true
+): Promise<RawChat[]> {
+  ensureChatHydrationIsActive(isActive);
+  const { timeoutMs, pollMs } = getChatHydrationConfig();
+  if (timeoutMs <= 0) {
+    return client.getChats();
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let chats: RawChat[] = [];
+  let lastCount = -1;
+  let stablePolls = 0;
+  let consecutiveFailures = 0;
+
+  while (Date.now() < deadline) {
+    ensureChatHydrationIsActive(isActive);
+    try {
+      chats = await client.getChats();
+      consecutiveFailures = 0;
+      if (chats.length === lastCount) {
+        stablePolls += 1;
+        if (stablePolls >= CHAT_HYDRATION_STABLE_POLLS) {
+          return chats;
+        }
+      } else {
+        stablePolls = 0;
+        console.log(`[whatsapp-webjs-bridge] Sincronizando conversas no WhatsApp Web... (${chats.length})`);
+      }
+      lastCount = chats.length;
+    } catch (error) {
+      const failureMessage = (error as { message?: string } | null)?.message || String(error);
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= CHAT_HYDRATION_MAX_CONSECUTIVE_FAILURES) {
+        throw new ChatHydrationBrokenError(failureMessage);
+      }
+      console.warn(
+        '[whatsapp-webjs-bridge] getChats falhou durante hidratacao, tentando novamente:',
+        failureMessage
+      );
+    }
+    await wait(pollMs);
+  }
+
+  ensureChatHydrationIsActive(isActive);
+  console.warn(`[whatsapp-webjs-bridge] Tempo maximo de sincronizacao atingido; usando as ${chats.length} conversas coletadas.`);
+  return chats;
+}
 
 function getAuthenticatedReadyTimeoutMs(): number {
   const raw = Number(process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS);
@@ -81,12 +170,14 @@ export function buildContainer(config: BridgeConfig): Container {
     authStrategy: new LocalAuth(localAuthOptions),
     puppeteer: puppeteerOptions,
     authTimeoutMs: CLIENT_AUTH_TIMEOUT_MS,
+    webVersion: '2.3000.1040971408',
     // Pin a known WhatsApp Web HTML to avoid the "stuck after authenticated"
     // bug that happens when WhatsApp updates its frontend and breaks Store injection.
     // Source: https://github.com/wppconnect-team/wa-version
     webVersionCache: {
       type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1037994907-alpha.html'
+      remotePath: process.env.WA_WEB_VERSION_HTML
+        || 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1040971408-alpha.html'
     }
   });
 
@@ -177,6 +268,13 @@ export function bindClientEvents(container: Container): void {
   let disconnectRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   let authenticatedReadyTimer: ReturnType<typeof setTimeout> | null = null;
   let readyBootstrapInFlight = false;
+  let readyBootstrapGeneration = 0;
+
+  const cancelReadyBootstrap = (): void => {
+    readyBootstrapGeneration += 1;
+    readyBootstrapInFlight = false;
+    contactsService.setInitialContactsWarmup(null);
+  };
 
   const stopAuthenticatedReadyWatchdog = (): void => {
     if (authenticatedReadyTimer) {
@@ -231,7 +329,8 @@ export function bindClientEvents(container: Container): void {
   client.on('qr', qr => {
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
-    readyBootstrapInFlight = false;
+    cancelReadyBootstrap();
+    clearLabelsSnapshot('qr_required');
     sessionState.status = 'qr_required';
     sessionState.qr = qr;
     sessionState.lastError = '';
@@ -243,7 +342,7 @@ export function bindClientEvents(container: Container): void {
   client.on('authenticated', () => {
     stopDisconnectRecovery();
     startAuthenticatedReadyWatchdog();
-    readyBootstrapInFlight = false;
+    cancelReadyBootstrap();
     sessionState.status = 'authenticated';
     sessionState.qr = null;
     sessionState.lastError = '';
@@ -364,27 +463,63 @@ export function bindClientEvents(container: Container): void {
       return;
     }
 
+    const bootstrapGeneration = ++readyBootstrapGeneration;
+    const isCurrentBootstrap = (): boolean => sessionState.status === 'ready'
+      && bootstrapGeneration === readyBootstrapGeneration;
     readyBootstrapInFlight = true;
     console.log('[whatsapp-webjs-bridge] Cliente pronto.');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
     startLabelsWarmup();
 
+    let initialContactsWarmup: Promise<void> | null = null;
     try {
-      const clientWithChats = client as unknown as { getChats: () => Promise<Parameters<typeof contactsService.refreshContactsFromChats>[0] extends infer R ? NonNullable<R> : never> };
-      const chats = await clientWithChats.getChats();
-      await contactsService.triggerRefresh({ preloadedChats: chats, reason: 'ready' });
-      await ingestionService.seedEventsFromRecentChats(chats);
+      const clientWithChats = client as WebJsClientWithChatPage;
+      initialContactsWarmup = (async () => {
+        const chats = await loadHydratedChats(clientWithChats, isCurrentBootstrap);
+        if (!isCurrentBootstrap()) return;
+        console.log(`[whatsapp-webjs-bridge] Conversas hidratadas: ${chats.length}. Iniciando refresh de contatos.`);
+        await contactsService.triggerRefresh({ preloadedChats: chats, reason: 'ready' });
+        if (!isCurrentBootstrap()) return;
+        await ingestionService.seedEventsFromRecentChats(chats);
+      })();
+      contactsService.setInitialContactsWarmup(initialContactsWarmup);
+      await initialContactsWarmup;
     } catch (error) {
-      console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', (error as { message?: string } | null)?.message || String(error));
+      if (error instanceof ChatHydrationCancelledError) {
+        console.log('[whatsapp-webjs-bridge] Hidratacao de conversas cancelada porque a sessao mudou.');
+      } else if (error instanceof ChatHydrationBrokenError && bootstrapGeneration === readyBootstrapGeneration) {
+        console.error('[whatsapp-webjs-bridge] WhatsApp Web perdeu a conexao interna apos ready. Reiniciando sessao:', error.message);
+        if (recoveryBudget.tryConsume()) {
+          sessionState.status = 'init_error';
+          sessionState.qr = null;
+          sessionState.lastError = 'Conexao com o WhatsApp Web se perdeu durante o carregamento. Reiniciando a sessao...';
+          broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+          void sessionManager.ensureInitialized().catch(initError => {
+            sessionState.status = 'init_error';
+            sessionState.lastError = (initError as { message?: string } | null)?.message || String(initError);
+            broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+          });
+        } else {
+          sessionState.status = 'init_error';
+          sessionState.qr = null;
+          sessionState.lastError = `Sessao do WhatsApp nao respondeu apos ${recoveryBudget.attemptsInWindow}/${recoveryBudget.maxAttemptsAllowed} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
+          broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
+        }
+      } else {
+        console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', (error as { message?: string } | null)?.message || String(error));
+      }
     } finally {
-      readyBootstrapInFlight = false;
+      if (bootstrapGeneration === readyBootstrapGeneration) {
+        contactsService.setInitialContactsWarmup(null);
+        readyBootstrapInFlight = false;
+      }
     }
   });
 
   client.on('auth_failure', (message: string) => {
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
-    readyBootstrapInFlight = false;
+    cancelReadyBootstrap();
     sessionState.status = 'auth_failure';
     sessionState.lastError = String(message || 'Authentication failure');
     console.error('[whatsapp-webjs-bridge] Falha de autenticacao:', message);
@@ -402,11 +537,20 @@ export function bindClientEvents(container: Container): void {
   const TERMINAL_DISCONNECT_REASONS = /\b(LOGOUT|TOS_BLOCK|BAN|UNPAIRED|CONFLICT)\b/i;
 
   client.on('disconnected', (reason: string) => {
+    const reasonText = String(reason || 'Disconnected');
+    // Eco de disconnect do cliente antigo durante um restart é ruído — mas
+    // razão terminal (LOGOUT/UNPAIRED/...) significa sessão removida no
+    // servidor e precisa ser processada, senão o init espera autenticação
+    // impossível até estourar timeout.
+    if (sessionManager.isInitializeInFlight() && !TERMINAL_DISCONNECT_REASONS.test(reasonText)) {
+      console.warn('[whatsapp-webjs-bridge] Desconexao ignorada durante inicializacao em andamento. Reason:', JSON.stringify(reasonText));
+      return;
+    }
+
     stopAuthenticatedReadyWatchdog();
-    readyBootstrapInFlight = false;
+    cancelReadyBootstrap();
     sessionState.status = 'disconnected';
     sessionState.qr = null;
-    const reasonText = String(reason || 'Disconnected');
     sessionState.lastError = reasonText;
     console.warn('[whatsapp-webjs-bridge] Cliente desconectado. Reason:', JSON.stringify(reasonText));
     clearLabelsSnapshot('disconnected');

@@ -41,6 +41,7 @@ const CONTACTS_REFRESH_COOLDOWN_MS = 25 * 1000;
 const CONTACTS_REFRESH_TIMEOUT_MS = 90 * 1000;
 const CONTACTS_FETCH_TIMEOUT_MS = 45 * 1000;
 const CONTACTS_EMPTY_CACHE_WAIT_MS = 1500;
+const CHAT_HYDRATION_WAIT_TIMEOUT_MS = 270 * 1000;
 
 interface PhotoCacheEntry {
   url: string | null;
@@ -100,6 +101,7 @@ export class ContactsService {
   private readonly photosByJid = new Map<string, PhotoCacheEntry>();
   private lastContactsRefreshAt = 0;
   private contactsRefreshPromise: Promise<void> | null = null;
+  private initialContactsWarmup: Promise<void> | null = null;
   private onContactsUpdated: ContactsUpdatedCallback | null = null;
 
   constructor(
@@ -122,6 +124,10 @@ export class ContactsService {
 
   getCurrentRefreshPromise(): Promise<void> | null {
     return this.contactsRefreshPromise;
+  }
+
+  setInitialContactsWarmup(promise: Promise<void> | null): void {
+    this.initialContactsWarmup = promise;
   }
 
   async loadLabelsMap(): Promise<Map<string, string>> {
@@ -908,6 +914,13 @@ export class ContactsService {
   }
 
   async waitForContactsWarmup(waitForRefresh: boolean): Promise<void> {
+    if (this.initialContactsWarmup) {
+      try {
+        await withTimeout(this.initialContactsWarmup, CHAT_HYDRATION_WAIT_TIMEOUT_MS, 'waiting initial chat hydration');
+      } catch {
+        // Cai no fluxo normal abaixo: cache vazio força um refresh.
+      }
+    }
     const isCacheEmpty = this.contactStore.size === 0;
     const shouldRefresh = this.sessionState.isReady()
       && (isCacheEmpty || Date.now() - this.lastContactsRefreshAt >= CONTACTS_REFRESH_COOLDOWN_MS);

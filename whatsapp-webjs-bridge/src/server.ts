@@ -45,11 +45,22 @@ function installProcessGuards(container: Container): void {
     if (!isRecoverableProcessError(error)) {
       const message = getErrorMessage(error);
       if (origin === 'unhandledRejection') {
-        console.error('[whatsapp-webjs-bridge] Rejeicao nao tratada:', message);
-      } else {
-        console.error('[whatsapp-webjs-bridge] Excecao nao tratada:', message);
+        // Rejeições soltas do puppeteer/whatsapp-web.js (timeouts, bindings
+        // duplicados) não podem derrubar a bridge inteira: loga e segue;
+        // watchdogs e o bail da hidratação cuidam do estado da sessão.
+        console.error('[whatsapp-webjs-bridge] Rejeicao nao tratada (ignorada):', message);
+        return;
       }
+      console.error('[whatsapp-webjs-bridge] Excecao nao tratada:', message);
       process.exit(1);
+      return;
+    }
+
+    if (container.sessionState.status === 'ready' && isRecoverableLocalAuthLockError(error)) {
+      console.warn(
+        '[whatsapp-webjs-bridge] Lock de arquivo ignorado com sessao ativa (nada sera reiniciado):',
+        getErrorMessage(error)
+      );
       return;
     }
 

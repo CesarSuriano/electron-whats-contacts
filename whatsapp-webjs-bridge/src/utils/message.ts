@@ -138,7 +138,11 @@ export function resolveMessagePreviewText(message: RawMessage | null | undefined
       return 'Figurinha';
     case 'revoked':
       return 'Mensagem apagada';
+    case 'location':
+      return 'Localização';
+    case 'poll_creation':
+      return 'Enquete';
     default:
-      return hasMedia ? '[mídia]' : '';
+      return hasMedia ? '[mídia]' : (type ? 'Mensagem' : '');
   }
 }

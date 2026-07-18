@@ -11,6 +11,11 @@ if (!app.isPackaged) {
 }
 
 let bridgeProcess = null;
+let bridgeRestartCount = 0;
+let bridgeStableTimer = null;
+const BRIDGE_MAX_RESTARTS = 5;
+const BRIDGE_RESTART_DELAY_MS = 2000;
+const BRIDGE_STABLE_AFTER_MS = 60_000;
 let agentWindow = null;
 let agentWindowPartition = '';
 let isAppQuitting = false;
@@ -186,7 +191,7 @@ function startWhatsappBridge() {
       // Apenas as flags mínimas necessárias. NAO incluir --disable-gpu nem
       // --no-zygote: ambas impedem o whatsapp-web.js de injetar a Store
       // após a autenticação, deixando o cliente eternamente em "authenticated".
-      PUPPETEER_ARGS: '--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--no-first-run'
+      PUPPETEER_ARGS: '--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--no-first-run,--window-position=-2400,-2400'
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
@@ -202,10 +207,39 @@ function startWhatsappBridge() {
     process.stderr.write(text);
   });
 
+  if (bridgeStableTimer) {
+    clearTimeout(bridgeStableTimer);
+  }
+  bridgeStableTimer = setTimeout(() => {
+    bridgeRestartCount = 0;
+  }, BRIDGE_STABLE_AFTER_MS);
+
   bridgeProcess.on('exit', (code) => {
     const msg = `whatsapp-webjs bridge finalizada (code=${code ?? 'null'})\n`;
     console.log(`[electron] ${msg}`);
     bridgeProcess = null;
+
+    if (bridgeStableTimer) {
+      clearTimeout(bridgeStableTimer);
+      bridgeStableTimer = null;
+    }
+
+    if (isAppQuitting || code === 0) {
+      return;
+    }
+
+    if (bridgeRestartCount >= BRIDGE_MAX_RESTARTS) {
+      console.error('[electron] bridge caiu repetidamente; nao sera reiniciada automaticamente.');
+      return;
+    }
+
+    bridgeRestartCount += 1;
+    console.log(`[electron] reiniciando bridge em ${BRIDGE_RESTART_DELAY_MS}ms (tentativa ${bridgeRestartCount}/${BRIDGE_MAX_RESTARTS})...`);
+    setTimeout(() => {
+      if (!isAppQuitting) {
+        startWhatsappBridge();
+      }
+    }, BRIDGE_RESTART_DELAY_MS);
   });
 
   bridgeProcess.on('error', (error) => {

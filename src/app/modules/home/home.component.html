@@ -117,6 +117,10 @@
                 <span class="material-symbols-outlined home-bulk-bar__icon">star</span>
                 <span>Enviar Avaliação</span>
               </button>
+              <button class="btn home-bulk-bar__button home-bulk-bar__button--custom" type="button" (click)="openBulkCustomMessage()">
+                <span class="material-symbols-outlined home-bulk-bar__icon">edit_note</span>
+                <span>Mensagem personalizada</span>
+              </button>
               <button class="home-bulk-bar__cancel" type="button" (click)="clearSelection()">Cancelar seleção</button>
             </ng-container>
           </div>
@@ -128,12 +132,14 @@
               [sortDirection]="displayedSortDirection"
               [selectionMode]="useInternalWhatsapp"
               [selectedClienteIds]="selectedClienteIds"
+              [allSelected]="allFilteredSelected"
               [recentClienteIds]="recentClienteIds"
               [actionsDisabled]="useInternalWhatsapp && selectionCount > 0"
               (sortChange)="changeSort($event)"
               (birthdayClick)="openWhatsappBirthday($event)"
               (reviewClick)="openWhatsappReview($event)"
               (selectionToggle)="toggleClienteSelection($event)"
+              (selectAllToggle)="toggleSelectAllClientes()"
             ></app-clientes-table>
           </section>
 
@@ -221,6 +227,7 @@
   <app-message-template-modal
     [isOpen]="isMessageTemplateModalOpen"
     [isSaving]="isSavingTemplate"
+    [bulkMode]="isCustomBulkEditor"
     [editorConfig]="activeTemplateEditorConfig"
     [initialTemplate]="activeTemplateText"
     [initialImageDataUrl]="activeTemplateImageDataUrl"

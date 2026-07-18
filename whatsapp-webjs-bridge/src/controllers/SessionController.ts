@@ -34,6 +34,25 @@ export class SessionController {
     }
   };
 
+  restart = async (_req: Request, res: Response): Promise<void> => {
+    try {
+      this.recoveryBudget.reset();
+      await this.sessionManager.prepareRestart();
+      void this.sessionManager.ensureInitialized().catch(error => {
+        console.error(
+          '[whatsapp-webjs-bridge] Falha ao reiniciar sessao para novo QR:',
+          (error as { message?: string } | null)?.message || String(error)
+        );
+      });
+      res.json(this.sessionManager.getSessionSnapshot());
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to restart session',
+        details: (error as { message?: string } | null)?.message
+      });
+    }
+  };
+
   disconnect = async (_req: Request, res: Response): Promise<void> => {
     try {
       await this.sessionManager.disconnect();

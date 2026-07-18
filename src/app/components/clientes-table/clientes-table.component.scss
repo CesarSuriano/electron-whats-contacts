@@ -16,7 +16,7 @@
 }
 
 .clientes-table__head-cell--checkbox {
-  @apply w-11 cursor-default px-2 py-2.5;
+  @apply w-11 cursor-pointer px-2 py-2.5;
 }
 
 .clientes-table__head-cell--actions {

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "serve": "node dist/server.js",
@@ -16,7 +17,7 @@
     "express": "^4.21.2",
     "multer": "^2.1.1",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#1780711a1c86dfeca7c5ba6a66f950eac93dde28",
     "ws": "^8.20.0"
   },
   "devDependencies": {
@@ -27,6 +28,7 @@
     "@types/qrcode-terminal": "^0.12.2",
     "@types/supertest": "^6.0.2",
     "@types/ws": "^8.5.13",
+    "patch-package": "^8.0.1",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"

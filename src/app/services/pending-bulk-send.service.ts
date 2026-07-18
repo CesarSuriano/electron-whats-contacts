@@ -4,8 +4,10 @@ import { Cliente } from '../models/cliente.model';
 import { MessageTemplateType } from '../models/message-template.model';
 
 export interface PendingBulkSend {
-  templateType: MessageTemplateType;
+  templateType: MessageTemplateType | 'custom';
   clientes: Cliente[];
+  customTemplate?: string;
+  customImageDataUrls?: string[];
 }
 
 @Injectable({ providedIn: 'root' })

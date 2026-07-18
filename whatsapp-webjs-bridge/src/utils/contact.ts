@@ -63,7 +63,11 @@ export function extractLastMessagePreview(chat: RawChat | null | undefined): str
       return 'Figurinha';
     case 'revoked':
       return 'Mensagem apagada';
+    case 'location':
+      return 'Localizacao';
+    case 'poll_creation':
+      return 'Enquete';
     default:
-      return hasMedia ? '[mídia]' : '';
+      return hasMedia ? '[mídia]' : (type ? 'Mensagem' : '');
   }
 }

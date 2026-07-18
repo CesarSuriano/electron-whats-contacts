@@ -122,7 +122,7 @@ describe('HomeComponent', () => {
 
     expect(component.displayedSortedColumn).toBe('dataCadastro');
     expect(component.displayedSortDirection).toBe('desc');
-    expect(component.filteredClientes.map(cliente => cliente.id)).toEqual([2, 3, 1]);
+    expect(component.filteredClientes.map(cliente => cliente.id)).toEqual([2, 3]);
     expect(component.recentClienteIds).toEqual(new Set([2, 3]));
   });
 

@@ -6,7 +6,7 @@ import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { LidMap } from '../../src/state/LidMap.js';
 
-function makeService(clientOverride: Partial<WebJsClient> = {}): HistoryService {
+function makeService(clientOverride: Record<string, unknown> = {}): HistoryService {
   const client = {
     info: { wid: { _serialized: '5511000000000@c.us' } },
     getChatById: async () => null,
