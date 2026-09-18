@@ -171,6 +171,7 @@ export class MessagesController {
 
       res.json({ instanceName: this.instanceName, result });
     } catch (error) {
+      console.error('[bridge] Failed to send media:', error);
       res.status(500).json({
         error: 'Failed to send media',
         details: (error as { message?: string } | null)?.message

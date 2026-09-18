@@ -1,5 +1,5 @@
 {
-  "version": "2.7.0",
+  "version": "2.8.0",
   "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/2.7.0/UniqSystem.Setup.2.7.0.exe",
-  "notes": "- Mensagem personalizada em massa pela aba de clientes, com botão de selecionar todos\n- Carregamento de conversas, contatos e fotos compatível com a atualização do WhatsApp Web (correção do erro de contatos)\n- Botão para gerar um novo QR code quando o exibido expira\n- Sessão não é mais reiniciada por erros passageiros de arquivo (QR aparecendo do nada)\n- Correção da janela cinza que aparecia ao abrir o sistema"
+  "notes": "- Correçao do envio de imagens"
 }

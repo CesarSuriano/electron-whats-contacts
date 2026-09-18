@@ -206,13 +206,13 @@ export class MessageService {
     send: (candidateChatId: string) => Promise<T>
   ): Promise<{ chatId: string; sent: T }> {
     const candidates = this.buildSendCandidates(chatId);
-    let lastError: unknown = null;
+    let firstError: unknown = null;
 
     for (const candidate of candidates) {
       try {
         return { chatId: candidate, sent: await send(candidate) };
       } catch (error) {
-        lastError = error;
+        firstError ??= error;
       }
     }
 
@@ -225,11 +225,12 @@ export class MessageService {
       try {
         return { chatId: lookupJid, sent: await send(lookupJid) };
       } catch (error) {
-        lastError = error;
+        firstError ??= error;
       }
     }
 
-    throw lastError ?? new Error('No send candidates produced for ' + chatId);
+    // A failed alias lookup must not hide the original media/send failure.
+    throw firstError ?? new Error('No send candidates produced for ' + chatId);
   }
 
   /**

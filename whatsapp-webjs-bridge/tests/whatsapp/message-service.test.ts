@@ -344,6 +344,25 @@ describe('MessageService.sendText', () => {
 });
 
 describe('MessageService.sendMedia', () => {
+  it('preserves the original media error when the alternative number has no LID', async () => {
+    const originalError = new Error('Data passed to getter must include an id property');
+    const attempts: string[] = [];
+    const { service, eventStore } = buildService({ response: {} }, {
+      clientOverride: {
+        sendMessage: async (chatId: string) => {
+          attempts.push(chatId);
+          throw attempts.length === 1 ? originalError : new Error('No LID for user');
+        }
+      } as Partial<WebJsClient>
+    });
+    await assert.rejects(
+      service.sendMedia('554399528824@c.us', Buffer.from('image'), 'image/png', 'foto.png', ''),
+      error => error === originalError
+    );
+    assert.deepEqual(attempts, ['554399528824@c.us', '5543999528824@c.us']);
+    assert.equal(eventStore.events.length, 0);
+  });
+
   it('flags outbound contact with image metadata', async () => {
     const fakeSend: FakeSend = {
       response: { id: { _serialized: 'sent-media' }, timestamp: 1700001111, to: '5511987654321@c.us', ack: 0 }

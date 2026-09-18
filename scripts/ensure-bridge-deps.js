@@ -18,6 +18,16 @@ if (!existsSync(nodeModules)) {
   }
 }
 
+// Apply updated compatibility patches even when dependencies are already installed.
+const patch = spawnSync(process.execPath, [path.join(nodeModules, 'patch-package', 'index.js'), '--error-on-fail'], {
+  cwd: bridgeDir,
+  stdio: 'inherit'
+});
+if (patch.error || patch.status !== 0) {
+  console.error('[bridge] falha ao aplicar patches de compatibilidade.', patch.error || '');
+  process.exit(patch.status || 1);
+}
+
 if (!existsSync(distEntry)) {
   console.log('[bridge] compilando whatsapp-webjs-bridge (tsc)...');
   const build = spawnSync('npm', ['run', 'build'], {
