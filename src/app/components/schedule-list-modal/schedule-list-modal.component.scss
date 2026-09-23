@@ -49,6 +49,42 @@
   @apply opacity-55;
 }
 
+.schedule-section-hint {
+  @apply m-0 mb-2 text-[0.82rem] text-txt-muted;
+}
+
+.schedule-card-interrupted {
+  @apply items-center border-warn bg-warn-soft;
+}
+
+.schedule-card-interrupted:hover {
+  @apply border-warn;
+}
+
+.schedule-card-interrupted .schedule-card-icon {
+  @apply text-warn;
+}
+
+.schedule-interrupted-progress {
+  @apply flex flex-col gap-1;
+}
+
+.schedule-interrupted-progress-track {
+  @apply h-[6px] w-full overflow-hidden rounded-full bg-border;
+}
+
+.schedule-interrupted-progress-fill {
+  @apply block h-full rounded-full bg-warn transition-[width] duration-200;
+}
+
+.schedule-card-interrupted .schedule-card-actions {
+  @apply items-center gap-2;
+}
+
+.schedule-continue-btn {
+  @apply whitespace-nowrap;
+}
+
 .schedule-card-main {
   @apply flex min-w-0 flex-1 flex-col gap-1;
 }

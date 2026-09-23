@@ -27,6 +27,38 @@
       </div>
 
       <div class="schedule-list-scroll">
+        <div class="schedule-section schedule-section--interrupted" *ngIf="interruptedSchedules.length">
+          <h3 class="schedule-section-title">Envios interrompidos</h3>
+          <p class="schedule-section-hint">Envios em massa que ficaram pela metade. Continue de onde parou ou remova de vez.</p>
+          <div class="schedule-card schedule-card-interrupted" *ngFor="let sch of interruptedSchedules">
+            <div class="schedule-card-main">
+              <div class="schedule-card-date">
+                <span class="material-symbols-outlined schedule-card-icon">pause_circle</span>
+                <span>Interrompido em {{ formatDate(sch.interruptedBulk!.interruptedAt) }}</span>
+              </div>
+              <p class="schedule-card-preview">{{ previewTemplate(sch.template) || 'Sem mensagem padrão' }}</p>
+              <div class="schedule-interrupted-progress">
+                <div class="schedule-interrupted-progress-track">
+                  <span class="schedule-interrupted-progress-fill" [style.width.%]="interruptedProgressPercent(sch)"></span>
+                </div>
+                <span class="schedule-card-contacts">
+                  {{ sch.interruptedBulk!.sentCount }} de {{ sch.interruptedBulk!.totalCount }} enviados ·
+                  {{ sch.contacts.length === 1 ? 'falta 1 contato' : 'faltam ' + sch.contacts.length + ' contatos' }}
+                </span>
+              </div>
+            </div>
+            <div class="schedule-card-actions">
+              <button type="button" class="btn btn-primary schedule-continue-btn" (click)="onTriggerNow(sch.id)" title="Continuar de onde parou">
+                <span class="material-symbols-outlined btn-icon-symbol">play_arrow</span>
+                Continuar
+              </button>
+              <button type="button" class="schedule-action-btn schedule-action-delete" (click)="onDiscardInterrupted(sch.id)" title="Remover de vez">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="schedule-section" *ngIf="pendingSchedules.length">
           <h3 class="schedule-section-title">Agendados</h3>
           <div class="schedule-card" *ngFor="let sch of pendingSchedules">
@@ -71,7 +103,7 @@
           </div>
         </div>
 
-        <p class="schedule-empty" *ngIf="!pendingSchedules.length && !doneSchedules.length">
+        <p class="schedule-empty" *ngIf="!interruptedSchedules.length && !pendingSchedules.length && !doneSchedules.length">
           Nenhum agendamento criado.
         </p>
       </div>

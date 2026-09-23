@@ -54,6 +54,54 @@
   background: rgba(198, 55, 74, 0.12);
 }
 
+.whatsapp-console__interrupted {
+  @apply mx-4 mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-warn bg-warn-soft px-4 py-2.5 text-[0.9rem] text-txt;
+}
+
+.whatsapp-console__interrupted-icon {
+  @apply shrink-0 text-warn;
+}
+
+.whatsapp-console__interrupted-copy {
+  @apply min-w-[12rem] flex-1;
+}
+
+.whatsapp-console__interrupted-actions {
+  @apply flex shrink-0 flex-wrap items-center gap-2;
+}
+
+.whatsapp-console__interrupted-btn {
+  @apply inline-flex items-center gap-1 rounded-full border border-border-strong bg-surface px-3 py-1.5 text-[0.85rem] font-semibold text-txt transition;
+
+  .material-symbols-outlined {
+    @apply text-[1.05rem];
+  }
+
+  &:hover {
+    @apply bg-surface-2;
+  }
+}
+
+.whatsapp-console__interrupted-btn--primary {
+  @apply border-primary bg-primary text-white;
+
+  &:hover {
+    @apply bg-primary-light;
+  }
+}
+
+.whatsapp-console__interrupted-btn--danger {
+  @apply text-danger;
+}
+
+.whatsapp-console__interrupted-dismiss {
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-txt-muted transition;
+
+  &:hover {
+    @apply bg-surface-2;
+  }
+}
+
 .whatsapp-console__body {
   @apply grid min-h-0 flex-1 grid-cols-[minmax(320px,420px)_1fr] overflow-hidden;
 }

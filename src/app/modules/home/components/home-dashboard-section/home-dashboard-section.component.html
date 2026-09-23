@@ -4,6 +4,18 @@
     <p class="home-greeting__description">Aqui está um resumo do que está rolando na loja hoje, {{ greetingDateLabel }}.</p>
   </section>
 
+  <section class="home-interrupted" *ngIf="interruptedSchedules.length" role="status">
+    <span class="material-symbols-outlined home-interrupted__icon">pause_circle</span>
+    <div class="home-interrupted__copy">
+      <strong class="home-interrupted__title">Envio interrompido</strong>
+      <p class="home-interrupted__text">{{ interruptedSummary }} Continue de onde parou ou remova em Agendamentos.</p>
+    </div>
+    <button class="btn btn-primary home-interrupted__action" type="button" (click)="emitOpenScheduleList()">
+      <span class="material-symbols-outlined">play_arrow</span>
+      Ver e continuar
+    </button>
+  </section>
+
   <section class="home-metrics">
     <article class="home-metric-card">
       <span class="home-metric-card__label">Aniversariantes hoje</span>

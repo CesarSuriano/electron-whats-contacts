@@ -35,6 +35,12 @@ export interface BulkScheduleLifecycleEvent {
   outcome: 'completed' | 'cancelled';
 }
 
+export interface BulkInterruptedEvent {
+  queue: BulkQueue;
+  remainingItems: BulkItem[];
+  processedCount: number;
+}
+
 const STORAGE_KEY = 'uniq-system.whatsapp.bulk-queue';
 const QUEUE_PERSIST_DEBOUNCE_MS = 120;
 const POST_SEND_DELAY_MS = 500;
@@ -44,6 +50,7 @@ export class BulkSendService implements OnDestroy {
   private readonly queueSubject = new BehaviorSubject<BulkQueue | null>(null);
   private readonly destroy$ = new Subject<void>();
   private readonly scheduleLifecycleSubject = new Subject<BulkScheduleLifecycleEvent>();
+  private readonly interruptedSubject = new Subject<BulkInterruptedEvent>();
   private sentSubscription: Subscription | null = null;
   private persistTimerId: number | null = null;
   private pendingPersistQueue: BulkQueue | null = null;
@@ -53,6 +60,8 @@ export class BulkSendService implements OnDestroy {
 
   queue$: Observable<BulkQueue | null> = this.queueSubject.asObservable();
   scheduleLifecycle$: Observable<BulkScheduleLifecycleEvent> = this.scheduleLifecycleSubject.asObservable();
+  // Emitido quando uma nova fila substitui outra que ainda tinha contatos pendentes.
+  interrupted$: Observable<BulkInterruptedEvent> = this.interruptedSubject.asObservable();
 
   constructor(private state: WhatsappStateService) {
     this.restoreQueue();
@@ -101,6 +110,7 @@ export class BulkSendService implements OnDestroy {
     // Continua aceitando template vazio quando há ao menos uma imagem.
 
     const imageDataUrls = this.normalizeImageDataUrls(imageData);
+    const previousQueue = this.queueSubject.value;
 
     this.clearPostSendDelay();
     this.trackedSend = null;
@@ -118,6 +128,10 @@ export class BulkSendService implements OnDestroy {
       isPaused: false,
       createdAt: new Date().toISOString()
     };
+
+    if (previousQueue) {
+      this.emitInterrupted(previousQueue);
+    }
 
     this.setQueue(queue);
     this.openCurrent();
@@ -250,6 +264,19 @@ export class BulkSendService implements OnDestroy {
     if (queue.scheduleId) {
       this.scheduleLifecycleSubject.next({ scheduleId: queue.scheduleId, outcome: 'cancelled' });
     }
+  }
+
+  private emitInterrupted(queue: BulkQueue): void {
+    const remainingItems = queue.items.filter(item => item.status === 'pending' || item.status === 'current');
+    if (!remainingItems.length) {
+      return;
+    }
+
+    this.interruptedSubject.next({
+      queue,
+      remainingItems,
+      processedCount: queue.items.length - remainingItems.length
+    });
   }
 
   private openCurrent(): void {

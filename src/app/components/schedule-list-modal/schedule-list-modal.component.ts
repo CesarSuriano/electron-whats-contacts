@@ -1,6 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 
 import {
+  isInterruptedBulk,
   ScheduledMessage,
   ScheduledContact,
   ScheduleRecurrence,
@@ -110,15 +111,21 @@ export class ScheduleListModalComponent implements OnChanges, OnDestroy {
     }, 120);
   }
 
+  get interruptedSchedules(): ScheduledMessage[] {
+    return this.schedules
+      .filter(s => isInterruptedBulk(s) && (s.status === 'pending' || s.status === 'notified'))
+      .sort((a, b) => b.interruptedBulk!.interruptedAt.localeCompare(a.interruptedBulk!.interruptedAt));
+  }
+
   get pendingSchedules(): ScheduledMessage[] {
     return this.schedules
-      .filter(s => s.status === 'pending' || s.status === 'notified')
+      .filter(s => !isInterruptedBulk(s) && (s.status === 'pending' || s.status === 'notified'))
       .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
   }
 
   get doneSchedules(): ScheduledMessage[] {
     return this.schedules
-      .filter(s => s.status === 'done' || s.status === 'cancelled')
+      .filter(s => !isInterruptedBulk(s) && (s.status === 'done' || s.status === 'cancelled'))
       .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))
       .slice(0, 20);
   }
@@ -338,6 +345,24 @@ export class ScheduleListModalComponent implements OnChanges, OnDestroy {
   onTriggerNow(id: string): void {
     this.triggerSchedule.emit(id);
     this.close.emit();
+  }
+
+  interruptedProgressPercent(schedule: ScheduledMessage): number {
+    const info = schedule.interruptedBulk;
+    if (!info || info.totalCount <= 0) {
+      return 0;
+    }
+
+    return Math.round((info.sentCount / info.totalCount) * 100);
+  }
+
+  onDiscardInterrupted(id: string): void {
+    const confirmed = window.confirm('Remover este envio interrompido? Os contatos restantes não serão mais lembrados.');
+    if (!confirmed) {
+      return;
+    }
+
+    this.deleteSchedule.emit(id);
   }
 
   onDelete(id: string): void {

@@ -1,5 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { BulkScheduleLifecycleEvent, BulkSendService } from './bulk-send.service';
+import { BulkInterruptedEvent, BulkScheduleLifecycleEvent, BulkSendService } from './bulk-send.service';
 import { WhatsappStateService } from './whatsapp-state.service';
 import { WhatsappContact } from '../../../models/whatsapp.model';
 import { BehaviorSubject, of } from 'rxjs';
@@ -163,6 +163,32 @@ describe('BulkSendService', () => {
     expect(events.length).toBe(1);
     expect(events[0].scheduleId).toBe('sch-1');
     expect(events[0].outcome).toBe('cancelled');
+  });
+
+  it('emits the remaining contacts when a new bulk replaces an unfinished one', () => {
+    const events: BulkInterruptedEvent[] = [];
+    service.interrupted$.subscribe(value => events.push(value));
+
+    service.start([makeContact('5511@c.us', 'Ana'), makeContact('5522@c.us', 'Bia'), makeContact('5533@c.us', 'Caio')], 'msg', undefined, { scheduleId: 'sch-1' });
+    service.skipCurrent();
+    service.start([makeContact('5599@c.us', 'Duda')], 'outra');
+
+    expect(events.length).toBe(1);
+    expect(events[0].queue.scheduleId).toBe('sch-1');
+    expect(events[0].processedCount).toBe(1);
+    expect(events[0].remainingItems.map(item => item.jid)).toEqual(['5522@c.us', '5533@c.us']);
+    expect(service.currentItem?.jid).toBe('5599@c.us');
+  });
+
+  it('does not emit interrupted when the bulk is cancelled', () => {
+    const events: BulkInterruptedEvent[] = [];
+    service.interrupted$.subscribe(value => events.push(value));
+
+    service.start([makeContact('5511@c.us'), makeContact('5522@c.us')], 'msg');
+    service.cancel();
+    service.start([makeContact('5599@c.us')], 'outra');
+
+    expect(events.length).toBe(0);
   });
 
   it('waits half a second after messageSent$ before advancing to the next contact', fakeAsync(() => {
