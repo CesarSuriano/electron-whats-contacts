@@ -4,6 +4,9 @@
 
 .message-list {
   @apply flex flex-1 flex-col gap-2 overflow-y-auto bg-wa-chat-bg px-[4%] py-4;
+  // Mantém o z-index da setinha/menu das mensagens restrito à lista; sem isso
+  // eles passavam por cima do painel de envio em massa e de outros flutuantes.
+  isolation: isolate;
 }
 
 .message-list::before {
