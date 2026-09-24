@@ -1,5 +1,5 @@
 {
-  "version": "3.1.0",
-  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/3.1.0/UniqSystem.Setup.3.1.0.exe",
-  "notes": "- Agenda do celular salva entre aberturas, com contatos disponíveis mais cedo\n- Leitura leve da agenda para milhares de contatos sem sobrecarregar envios e conversas\n- Botão para atualizar a agenda do celular na hora\n- Lista de contatos mais ágil e melhor associação de números a contatos\n- Envio de mensagens e fotos de perfil preservados para contatos comerciais"
+  "version": "3.1.1",
+  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/3.1.1/UniqSystem.Setup.3.1.1.exe",
+  "notes": "- Recuperação automática quando o WhatsApp autentica mas não termina de carregar, sem esperar o reinício completo\n- Diagnóstico da abertura para identificar a causa de carregamentos demorados"
 }
