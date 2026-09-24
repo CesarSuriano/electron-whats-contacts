@@ -5,6 +5,7 @@ import { filter, takeUntil } from 'rxjs/operators';
 import { WhatsappContact } from '../../../models/whatsapp.model';
 import { renderBulkTemplate } from '../helpers/bulk-message.helper';
 import { WhatsappStateService } from './whatsapp-state.service';
+import { TelemetryData, telemetry } from '../../../telemetry/telemetry';
 
 export type BulkItemStatus = 'pending' | 'current' | 'done' | 'skipped' | 'error';
 
@@ -50,6 +51,17 @@ const POST_SEND_DELAY_MS = 500;
 
 const IMAGES_NOT_PERSISTED = Symbol('images-not-persisted');
 
+// Números de uma execução do envio em massa, para a telemetria.
+interface BulkRunStats {
+  startedAt: number;
+  sent: number;
+  skipped: number;
+  errors: number;
+  contactMsTotal: number;
+  sendMsTotal: number;
+  sendSamples: number;
+}
+
 type PersistedBulkQueue = Omit<BulkQueue, 'imageDataUrls' | 'imageDataUrl'> & { imageCount: number };
 
 @Injectable({ providedIn: 'root' })
@@ -68,6 +80,9 @@ export class BulkSendService implements OnDestroy {
   private persistedImagesSource: unknown = IMAGES_NOT_PERSISTED;
   // Arquivos já decodificados das imagens da fila, reaproveitados entre contatos.
   private cachedImageFiles: { source: string[]; files: File[] } | null = null;
+  private runStats: BulkRunStats | null = null;
+  private currentOpenedAt = 0;
+  private currentSendStartedAt = 0;
 
   queue$: Observable<BulkQueue | null> = this.queueSubject.asObservable();
   scheduleLifecycle$: Observable<BulkScheduleLifecycleEvent> = this.scheduleLifecycleSubject.asObservable();
@@ -145,6 +160,14 @@ export class BulkSendService implements OnDestroy {
     }
 
     this.setQueue(queue);
+    this.runStats = this.createRunStats();
+    telemetry.track('bulk.start', {
+      total: queue.items.length,
+      images: imageDataUrls.length,
+      templateChars: template.length,
+      fromSchedule: Boolean(options.scheduleId),
+      replacedQueue: Boolean(previousQueue)
+    });
     this.openCurrent();
   }
 
@@ -153,6 +176,7 @@ export class BulkSendService implements OnDestroy {
     if (!queue || queue.isPaused) {
       return;
     }
+    telemetry.track('bulk.pause', this.buildRunSummary(queue));
     this.setQueue({ ...queue, isPaused: true });
   }
 
@@ -161,6 +185,8 @@ export class BulkSendService implements OnDestroy {
     if (!queue || !queue.isPaused) {
       return;
     }
+    telemetry.track('bulk.resume', this.buildRunSummary(queue));
+    this.runStats ??= this.createRunStats();
     this.setQueue({ ...queue, isPaused: false });
 
     if (!this.currentItem) {
@@ -195,6 +221,7 @@ export class BulkSendService implements OnDestroy {
     }
 
     this.trackedSend = { jid, remainingMessages: messageCount };
+    this.currentSendStartedAt = Date.now();
   }
 
   clearTrackedCurrentSend(jid: string): void {
@@ -212,6 +239,10 @@ export class BulkSendService implements OnDestroy {
     const currentJid = current ? this.resolveQueueItemJid(current.jid) : '';
 
     this.clearTrackedCurrentSend(currentJid);
+    if (this.runStats) {
+      this.runStats.skipped += 1;
+    }
+    telemetry.track('bulk.item_skipped', { index: this.currentIndex() });
     this.updateCurrent('skipped');
     this.clearDraftStateForJids(currentJid ? [currentJid] : []);
     this.advanceToNext();
@@ -247,6 +278,7 @@ export class BulkSendService implements OnDestroy {
     this.state.sendText(currentJid, caption).subscribe({
       next: () => {},
       error: () => {
+        this.recordItemError('text');
         this.clearTrackedCurrentSend(currentJid);
       }
     });
@@ -262,6 +294,8 @@ export class BulkSendService implements OnDestroy {
       return;
     }
 
+    telemetry.track('bulk.cancel', this.buildRunSummary(queue));
+    this.runStats = null;
     this.trackedSend = null;
     this.clearQueueDraftState();
     this.setQueue(null);
@@ -271,12 +305,47 @@ export class BulkSendService implements OnDestroy {
     }
   }
 
+  private createRunStats(): BulkRunStats {
+    return { startedAt: Date.now(), sent: 0, skipped: 0, errors: 0, contactMsTotal: 0, sendMsTotal: 0, sendSamples: 0 };
+  }
+
+  private currentIndex(): number {
+    const queue = this.queueSubject.value;
+    return queue ? queue.items.findIndex(item => item.status === 'current') + 1 : 0;
+  }
+
+  private recordItemError(kind: 'text' | 'media'): void {
+    if (this.runStats) {
+      this.runStats.errors += 1;
+    }
+    telemetry.track('bulk.item_error', { kind, index: this.currentIndex() });
+  }
+
+  // Resumo da execução atual (sem nomes nem números).
+  private buildRunSummary(queue: BulkQueue): TelemetryData {
+    const stats = this.runStats;
+    const count = (status: BulkItemStatus) => queue.items.filter(item => item.status === status).length;
+    return {
+      total: queue.items.length,
+      done: count('done'),
+      skipped: count('skipped'),
+      remaining: count('pending') + count('current'),
+      errors: stats?.errors ?? 0,
+      images: this.resolveQueueImageDataUrls(queue).length,
+      fromSchedule: Boolean(queue.scheduleId),
+      durationMs: stats ? Date.now() - stats.startedAt : null,
+      avgContactMs: stats && stats.sent ? Math.round(stats.contactMsTotal / stats.sent) : null,
+      avgSendMs: stats && stats.sendSamples ? Math.round(stats.sendMsTotal / stats.sendSamples) : null
+    };
+  }
+
   private emitInterrupted(queue: BulkQueue): void {
     const remainingItems = queue.items.filter(item => item.status === 'pending' || item.status === 'current');
     if (!remainingItems.length) {
       return;
     }
 
+    telemetry.track('bulk.interrupted', { ...this.buildRunSummary(queue), remaining: remainingItems.length });
     this.interruptedSubject.next({
       queue,
       remainingItems,
@@ -304,6 +373,8 @@ export class BulkSendService implements OnDestroy {
     this.state.setDraftTextForJid(currentJid, renderBulkTemplate(queue.template, current.name));
     this.state.setDraftImageDataUrlsForJid(currentJid, this.resolveQueueImageDataUrls(queue));
     this.draftStateJids.add(currentJid);
+    this.currentOpenedAt = Date.now();
+    this.currentSendStartedAt = 0;
   }
 
   private resolveCurrentImageDataUrls(jid: string, queue: BulkQueue): string[] {
@@ -327,6 +398,7 @@ export class BulkSendService implements OnDestroy {
         }
       },
       error: () => {
+        this.recordItemError('media');
         this.clearTrackedCurrentSend(jid);
       }
     });
@@ -428,8 +500,10 @@ export class BulkSendService implements OnDestroy {
   private finishQueue(): void {
     const queue = this.queueSubject.value;
     if (queue) {
+      telemetry.track('bulk.finish', this.buildRunSummary(queue));
       this.clearQueueDraftState();
     }
+    this.runStats = null;
 
     this.setQueue(null);
 
@@ -487,6 +561,19 @@ export class BulkSendService implements OnDestroy {
     if (!current || currentJid !== jid) {
       return;
     }
+
+    const now = Date.now();
+    const contactMs = this.currentOpenedAt ? now - this.currentOpenedAt : null;
+    const sendMs = this.currentSendStartedAt ? now - this.currentSendStartedAt : null;
+    if (this.runStats) {
+      this.runStats.sent += 1;
+      this.runStats.contactMsTotal += contactMs ?? 0;
+      if (sendMs !== null) {
+        this.runStats.sendMsTotal += sendMs;
+        this.runStats.sendSamples += 1;
+      }
+    }
+    telemetry.track('bulk.item_sent', { index: this.currentIndex(), total: this.queueSubject.value?.items.length ?? 0, contactMs, sendMs });
 
     this.updateCurrent('done');
     this.clearDraftStateForJids([currentJid]);
@@ -659,6 +746,10 @@ export class BulkSendService implements OnDestroy {
       };
 
       this.queueSubject.next(restored);
+      telemetry.track('bulk.restored', {
+        ...this.buildRunSummary(restored),
+        savedHoursAgo: Math.round((Date.now() - Date.parse(restored.createdAt)) / 3_600_000) || 0
+      });
       if (typeof imageCount === 'number') {
         this.persistedImagesSource = restored.imageDataUrls;
       }

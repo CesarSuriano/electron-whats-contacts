@@ -12,6 +12,7 @@ import { brazilianAlternativeJid } from '../utils/phone.js';
 import { toIsoFromUnixTimestamp, withTimeout } from '../utils/time.js';
 import { readMessageInlineImageDataUrl } from '../utils/media.js';
 import { isIgnoredWhatsappMessage } from '../utils/message.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 const { MessageMedia } = pkg;
 const MEDIA_VALUE_CACHE_LIMIT = 4;
@@ -256,10 +257,17 @@ export class MessageService {
     const candidates = this.buildSendCandidates(chatId);
     let firstError: unknown = null;
 
-    for (const candidate of candidates) {
+    for (const [index, candidate] of candidates.entries()) {
+      const attemptStartedAt = Date.now();
       try {
-        return { chatId: candidate, sent: await send(candidate) };
+        const sent = await send(candidate);
+        if (index > 0) {
+          // Enviou só na variante do número (ex.: 9º dígito): a primeira tentativa custou tempo.
+          telemetry.track('send.alternative_used', { attempt: index + 1, candidates: candidates.length });
+        }
+        return { chatId: candidate, sent };
       } catch (error) {
+        telemetry.trackError('send.attempt_failed', error, { attempt: index + 1, ms: Date.now() - attemptStartedAt });
         firstError ??= error;
       }
     }
@@ -268,7 +276,9 @@ export class MessageService {
     // canônico daquele número (resolve o caso "número está cadastrado, mas
     // nem com nem sem 9º dígito bate com o que tentamos"). Best-effort:
     // se a chamada falhar ou não devolver JID, propaga o erro original.
+    const lookupStartedAt = Date.now();
     const lookupJid = await this.lookupCanonicalJid(chatId);
+    telemetry.track('send.number_lookup', { found: Boolean(lookupJid), ms: Date.now() - lookupStartedAt });
     if (lookupJid && !candidates.includes(lookupJid)) {
       try {
         return { chatId: lookupJid, sent: await send(lookupJid) };

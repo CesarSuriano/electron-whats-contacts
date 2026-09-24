@@ -17,6 +17,7 @@ import { PendingBulkSendService } from '../../services/pending-bulk-send.service
 import { ScheduleListLauncherService } from '../../services/schedule-list-launcher.service';
 import { ScheduledMessageService } from '../../services/scheduled-message.service';
 import { isInterruptedBulk, RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
+import { telemetry } from '../../telemetry/telemetry';
 
 type HomeSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings';
 type ClientFilter = 'all' | 'today' | 'upcoming' | 'new';
@@ -319,6 +320,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     if (!clientes.length) {
       return;
     }
+    telemetry.track('ui.home_bulk', { type: 'birthday', count: clientes.length });
     this.pendingBulkSendService.set({ templateType: 'birthday', clientes });
     void this.router.navigate(['/whatsapp']);
   }
@@ -328,6 +330,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     if (!clientes.length) {
       return;
     }
+    telemetry.track('ui.home_bulk', { type: 'review', count: clientes.length });
     this.pendingBulkSendService.set({ templateType: 'review', clientes });
     void this.router.navigate(['/whatsapp']);
   }
@@ -434,6 +437,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (!clientes.length) {
         return;
       }
+      telemetry.track('ui.home_bulk', { type: 'custom', count: clientes.length, images: result.imageDataUrls?.length ?? 0 });
       this.pendingBulkSendService.set({
         templateType: 'custom',
         clientes,
@@ -488,6 +492,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   openWhatsappBirthday(cliente: Cliente): void {
+    telemetry.track('ui.home_single', { type: 'birthday', internal: this.useInternalWhatsapp });
     if (this.useInternalWhatsapp) {
       this.pendingBulkSendService.set({ templateType: 'birthday', clientes: [cliente] });
       void this.router.navigate(['/whatsapp']);
@@ -498,6 +503,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   openWhatsappReview(cliente: Cliente): void {
+    telemetry.track('ui.home_single', { type: 'review', internal: this.useInternalWhatsapp });
     if (this.useInternalWhatsapp) {
       this.pendingBulkSendService.set({ templateType: 'review', clientes: [cliente] });
       void this.router.navigate(['/whatsapp']);
@@ -581,13 +587,20 @@ export class HomeComponent implements OnInit, OnDestroy {
   private loadClientes(): void {
     this.isLoading = true;
     this.hasError = false;
+    const startedAt = Date.now();
 
     this.clientesDataService.loadClientes().subscribe({
       next: result => {
         this.applyLoadResult(result);
         this.isLoading = false;
+        telemetry.track('ui.clientes_loaded', {
+          ms: Date.now() - startedAt,
+          count: result.clientes.length,
+          birthdaysToday: this.birthdaysToday.length
+        });
       },
       error: error => {
+        telemetry.trackError('error.ui_clientes_load', error, { ms: Date.now() - startedAt });
         console.error('Erro ao carregar clientes', error);
         this.clientes = [];
         this.hasError = true;

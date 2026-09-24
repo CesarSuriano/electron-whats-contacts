@@ -3,6 +3,7 @@ import { ContactsService } from '../whatsapp/ContactsService.js';
 import { ContactStore } from '../state/ContactStore.js';
 import { MessageService } from '../whatsapp/MessageService.js';
 import { normalizeJid } from '../utils/jid.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 export class ContactsController {
   constructor(
@@ -22,6 +23,7 @@ export class ContactsController {
       const startedAt = Date.now();
       await this.contactsService.waitForContactsWarmup(waitForRefresh);
       const waitedMs = Date.now() - startedAt;
+      telemetry.track('contacts.list', { ms: waitedMs, count: this.contactStore.size, waitForRefresh });
       if (waitForRefresh || waitedMs >= 1000) {
         console.log(`[whatsapp-webjs-bridge] tempo lista de contatos: ${waitedMs}ms (${this.contactStore.size} contatos, waitForRefresh=${waitForRefresh})`);
       }
@@ -50,6 +52,7 @@ export class ContactsController {
       const photoUrl = await this.contactsService.fetchProfilePhotoUrl(jid);
       const elapsedMs = Date.now() - startedAt;
       if (elapsedMs >= 2000) {
+        telemetry.track('photo.slow', { ms: elapsedMs, found: Boolean(photoUrl) });
         console.log(`[whatsapp-webjs-bridge] tempo foto lenta ${jid}: ${elapsedMs}ms (${photoUrl ? 'com foto' : 'sem foto'})`);
       }
       res.json({ jid, photoUrl });

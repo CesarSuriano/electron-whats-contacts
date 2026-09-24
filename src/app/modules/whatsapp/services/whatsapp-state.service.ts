@@ -7,6 +7,7 @@ import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } fro
 import { extractDigits } from '../helpers/phone-format.helper';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
+import { telemetry } from '../../../telemetry/telemetry';
 
 export interface SelectContactOptions {
   loadHistory?: boolean;
@@ -109,6 +110,7 @@ export class WhatsappStateService implements OnDestroy {
   private instancesLoadStarted = false;
   private conversationContextRunId = 0;
   private bootstrapRetryCount = 0;
+  private bootStartedAt = 0;
   private readonly syncingSubject = new BehaviorSubject<boolean>(false);
   private readonly syncStatusSubject = new BehaviorSubject<WhatsappSyncStatus>(IDLE_SYNC_STATUS);
   private readonly contactHistoryInFlight = new Set<string>();
@@ -257,6 +259,7 @@ export class WhatsappStateService implements OnDestroy {
 
     this.ws.on<{ contacts: WhatsappContact[] }>('contacts_updated').pipe(takeUntil(this.destroy$)).subscribe(payload => {
       const contacts = Array.isArray(payload?.contacts) ? payload.contacts : [];
+      telemetry.track('ui.contacts_updated', { count: contacts.length, previous: this.contactsSubject.value.length });
       if (!contacts.length && this.contactsSubject.value.length > 0) {
         return;
       }
@@ -361,6 +364,8 @@ export class WhatsappStateService implements OnDestroy {
     this.clearConversationContextBatchTimer();
     this.initialSyncDone = false;
     this.bootstrapRetryCount = 0;
+    this.bootStartedAt = Date.now();
+    telemetry.track('ui.whatsapp_boot_start', {});
     this.beginInitialSync();
     this.syncingSubject.next(true);
     this.selectedInstanceSubject.next(name);
@@ -586,6 +591,10 @@ export class WhatsappStateService implements OnDestroy {
     this.setLoading({ messages: false });
     this.finishInitialSync();
     this.onInitialSyncComplete();
+    telemetry.track('ui.whatsapp_ready', {
+      msSinceBoot: this.bootStartedAt ? Date.now() - this.bootStartedAt : null,
+      contacts: this.contactsSubject.value.length
+    });
 
     const selectedJid = this.selectedContactJid;
     if (!selectedJid) {
@@ -620,7 +629,7 @@ export class WhatsappStateService implements OnDestroy {
       const startedAt = Date.now();
       this.gateway.sendMessage(instance, resolvedJid, text).subscribe({
         next: result => {
-          this.logSlowSend('texto', startedAt);
+          this.recordSend('texto', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, text, 'send-api', serverId);
           this.setLoading({ sending: false });
@@ -629,6 +638,7 @@ export class WhatsappStateService implements OnDestroy {
           observer.complete();
         },
         error: err => {
+          this.recordSend('texto', startedAt, err);
           this.setError(this.resolveSendErrorMessage(err, 'Não foi possível enviar a mensagem.'));
           this.setLoading({ sending: false });
           observer.error(err);
@@ -647,7 +657,7 @@ export class WhatsappStateService implements OnDestroy {
       const startedAt = Date.now();
       this.gateway.sendMedia(instance, resolvedJid, file, caption).subscribe({
         next: result => {
-          this.logSlowSend('midia', startedAt);
+          this.recordSend('midia', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, caption, 'send-media-api', serverId, {
             hasMedia: true,
@@ -660,6 +670,7 @@ export class WhatsappStateService implements OnDestroy {
           observer.complete();
         },
         error: err => {
+          this.recordSend('midia', startedAt, err);
           this.setError(this.resolveSendErrorMessage(err, 'Não foi possível enviar o arquivo.'));
           this.setLoading({ sending: false });
           observer.error(err);
@@ -729,8 +740,14 @@ export class WhatsappStateService implements OnDestroy {
 
   // Tempo do clique até a resposta, visto pelo app (inclui espera na fila de
   // conexões com a bridge, que o log da bridge não enxerga). Só envios lentos.
-  private logSlowSend(kind: string, startedAt: number): void {
+  private recordSend(kind: string, startedAt: number, error?: unknown): void {
     const elapsedMs = Date.now() - startedAt;
+    telemetry.track('ui.send', {
+      kind,
+      ms: elapsedMs,
+      ok: !error,
+      status: error instanceof HttpErrorResponse ? error.status : null
+    });
     if (elapsedMs >= SLOW_SEND_LOG_THRESHOLD_MS) {
       console.warn(`[whatsapp] envio de ${kind} lento: ${elapsedMs}ms ate a resposta da bridge`);
     }
@@ -1149,6 +1166,7 @@ export class WhatsappStateService implements OnDestroy {
     if (bootstrap) {
       if (collapsed.length === 0 && this.bootstrapRetryCount < BOOTSTRAP_CONTACTS_MAX_RETRIES) {
         this.bootstrapRetryCount++;
+        telemetry.track('ui.contacts_empty_retry', { attempt: this.bootstrapRetryCount });
         const retryRunId = this.conversationContextRunId;
         window.setTimeout(() => {
           if (this.conversationContextRunId === retryRunId) {
@@ -1218,6 +1236,7 @@ export class WhatsappStateService implements OnDestroy {
         },
         error: () => {
           this.setError(CONTACTS_LOAD_ERROR_MESSAGE);
+          telemetry.track('error.ui_contacts_load', { bootstrap, msSinceBoot: this.bootStartedAt ? Date.now() - this.bootStartedAt : null });
           this.setLoading({ contacts: false, messages: false });
           if (options.bootstrap) {
             this.finishInitialSync();
@@ -1383,11 +1402,13 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     this.contactHistoryInFlight.add(resolvedJid);
+    const startedAt = Date.now();
 
     return new Promise(resolve => {
       this.gateway.loadChatMessages(this.selectedInstance, resolvedJid, limit, deep).subscribe({
         next: events => {
           const history = this.mapEventsToMessages(events).filter(message => message.contactJid === resolvedJid);
+          telemetry.track('ui.history_load', { ms: Date.now() - startedAt, count: history.length, limit, deep });
 
           if (markAsLoaded) {
             if (history.length > 1) {
@@ -1405,6 +1426,7 @@ export class WhatsappStateService implements OnDestroy {
         },
         error: () => {
           this.contactHistoryInFlight.delete(resolvedJid);
+          telemetry.track('error.ui_history_load', { ms: Date.now() - startedAt, limit, deep });
 
           resolve(0);
         }
@@ -2320,6 +2342,9 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   private setError(message: string): void {
+    if (message && message !== this.errorMessageSubject.value) {
+      telemetry.track('ui.error_shown', { message });
+    }
     this.errorMessageSubject.next(message);
   }
 }

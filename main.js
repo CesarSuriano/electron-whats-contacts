@@ -3,12 +3,102 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 
 // Em desenvolvimento, usa pasta userData separada para não vazar dados com o release
 if (!app.isPackaged) {
   app.setPath('userData', path.join(app.getPath('appData'), 'uniq-system-dev'));
 }
+
+// ─── Telemetria ─────────────────────────────────────────────────────────────
+// Eventos do processo principal (início do app, quedas da bridge, tela
+// travada) vão para um arquivo local; a bridge lê esse arquivo e envia ao
+// Firestore junto com os dela. Assim eles sobrevivem até a uma queda da bridge.
+// A configuração web do Firebase não é secreta: as regras do Firestore só
+// permitem criar registros.
+const TELEMETRY_FIREBASE = {
+  apiKey: 'AIzaSyBWJKYlE22t9wrRLhrJWWzvRNIWCc94G2c',
+  projectId: 'uniq-system'
+};
+const TELEMETRY_MAIN_QUEUE_MAX_BYTES = 1024 * 1024;
+const telemetryEnabled = process.env.UNIQ_TELEMETRY_DISABLED !== '1';
+const telemetrySessionId = crypto.randomUUID();
+const appStartedAt = Date.now();
+let telemetryInstallId = '';
+
+function getTelemetryDir() {
+  return path.join(app.getPath('userData'), 'telemetry');
+}
+
+function getTelemetryInstallId() {
+  if (telemetryInstallId) {
+    return telemetryInstallId;
+  }
+
+  const dir = getTelemetryDir();
+  const file = path.join(dir, 'install.json');
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (saved && typeof saved.installId === 'string' && saved.installId) {
+      telemetryInstallId = saved.installId;
+      return telemetryInstallId;
+    }
+  } catch {
+    // Primeira execução: cria abaixo.
+  }
+
+  telemetryInstallId = crypto.randomUUID();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ installId: telemetryInstallId, createdAt: new Date().toISOString() }));
+  } catch {
+    // Sem disco o ID vale só nesta execução.
+  }
+  return telemetryInstallId;
+}
+
+function trackMain(name, data = {}) {
+  if (!telemetryEnabled) {
+    return;
+  }
+
+  try {
+    const dir = getTelemetryDir();
+    const file = path.join(dir, 'pending-main.jsonl');
+    fs.mkdirSync(dir, { recursive: true });
+    let size = 0;
+    try { size = fs.statSync(file).size; } catch {}
+    if (size > TELEMETRY_MAIN_QUEUE_MAX_BYTES) {
+      return;
+    }
+    fs.appendFileSync(file, `${JSON.stringify({ name, ts: new Date().toISOString(), sid: telemetrySessionId, data })}\n`);
+  } catch {
+    // Telemetria nunca pode atrapalhar o app.
+  }
+}
+
+function buildTelemetryEnv() {
+  if (!telemetryEnabled) {
+    return { TELEMETRY_DISABLED: '1' };
+  }
+
+  return {
+    TELEMETRY_FIREBASE_API_KEY: TELEMETRY_FIREBASE.apiKey,
+    TELEMETRY_FIREBASE_PROJECT_ID: TELEMETRY_FIREBASE.projectId,
+    TELEMETRY_INSTALL_ID: getTelemetryInstallId(),
+    TELEMETRY_SESSION_ID: telemetrySessionId,
+    TELEMETRY_APP_VERSION: app.getVersion(),
+    TELEMETRY_ENV: app.isPackaged ? 'production' : 'development',
+    TELEMETRY_DIR: getTelemetryDir(),
+    TELEMETRY_BRIDGE_RESTART: String(bridgeRestartCount)
+  };
+}
+
+// Observa exceções do processo principal sem mudar o comportamento padrão.
+process.on('uncaughtExceptionMonitor', (error) => {
+  trackMain('error.main_uncaught', { message: error && error.message ? error.message : String(error) });
+});
 
 let bridgeProcess = null;
 let bridgeRestartCount = 0;
@@ -176,13 +266,22 @@ function startWhatsappBridge() {
     const msg = 'Nao foi possivel localizar Microsoft Edge nem Google Chrome no sistema. '
       + 'Instale o Edge (padrao no Windows 10/11) ou o Chrome e tente novamente.\n';
     console.error(`[electron] ${msg}`);
+    trackMain('bridge.no_browser', {});
     return;
   }
+
+  const bridgeStartedAt = Date.now();
+  trackMain('bridge.spawn', {
+    restart: bridgeRestartCount,
+    browser: path.basename(systemBrowser),
+    msSinceAppStart: bridgeStartedAt - appStartedAt
+  });
 
   bridgeProcess = spawn(process.execPath, [bridgeEntry], {
     cwd: bridgeDir,
     env: {
       ...process.env,
+      ...buildTelemetryEnv(),
       ELECTRON_RUN_AS_NODE: '1',
       PORT: process.env.PORT || '3344',
       ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN || '*',
@@ -214,9 +313,15 @@ function startWhatsappBridge() {
     bridgeRestartCount = 0;
   }, BRIDGE_STABLE_AFTER_MS);
 
-  bridgeProcess.on('exit', (code) => {
+  bridgeProcess.on('exit', (code, signal) => {
     const msg = `whatsapp-webjs bridge finalizada (code=${code ?? 'null'})\n`;
     console.log(`[electron] ${msg}`);
+    trackMain('bridge.exit', {
+      code: code ?? null,
+      signal: signal || null,
+      uptimeMs: Date.now() - bridgeStartedAt,
+      quitting: isAppQuitting
+    });
     bridgeProcess = null;
 
     if (bridgeStableTimer) {
@@ -230,10 +335,12 @@ function startWhatsappBridge() {
 
     if (bridgeRestartCount >= BRIDGE_MAX_RESTARTS) {
       console.error('[electron] bridge caiu repetidamente; nao sera reiniciada automaticamente.');
+      trackMain('bridge.gave_up', { restarts: bridgeRestartCount });
       return;
     }
 
     bridgeRestartCount += 1;
+    trackMain('bridge.restart_scheduled', { attempt: bridgeRestartCount, lastExitCode: code ?? null });
     console.log(`[electron] reiniciando bridge em ${BRIDGE_RESTART_DELAY_MS}ms (tentativa ${bridgeRestartCount}/${BRIDGE_MAX_RESTARTS})...`);
     setTimeout(() => {
       if (!isAppQuitting) {
@@ -245,6 +352,7 @@ function startWhatsappBridge() {
   bridgeProcess.on('error', (error) => {
     const msg = `falha ao iniciar bridge: ${error.message}\n`;
     console.error(`[electron] ${msg}`);
+    trackMain('bridge.spawn_error', { message: error.message });
     bridgeProcess = null;
   });
 }
@@ -654,6 +762,22 @@ function createWindow() {
 
   win.maximize();
 
+  // Tela travada ("não respondendo") e tempo até a interface carregar.
+  let unresponsiveSince = 0;
+  win.webContents.on('did-finish-load', () => {
+    trackMain('app.window_loaded', { msSinceAppStart: Date.now() - appStartedAt });
+  });
+  win.on('unresponsive', () => {
+    unresponsiveSince = Date.now();
+    trackMain('renderer.unresponsive', { msSinceAppStart: unresponsiveSince - appStartedAt });
+  });
+  win.on('responsive', () => {
+    if (unresponsiveSince) {
+      trackMain('renderer.responsive', { frozenMs: Date.now() - unresponsiveSince });
+      unresponsiveSince = 0;
+    }
+  });
+
   const rendererIndex = resolveRendererIndexPath();
   if (!rendererIndex) {
     throw new Error('Nao foi possivel localizar dist/uniq-system/index.html para iniciar o renderer.');
@@ -801,6 +925,7 @@ ipcMain.handle('app:check-update', async (_event, updateUrl) => {
     const latestVersion = String(data.version || '');
     const isNewer = compareVersions(latestVersion, currentVersion) > 0;
     const downloadUrl = String(data.url || '');
+    trackMain('update.checked', { currentVersion, latestVersion, isNewer, hasUrl: downloadUrl.length > 0 });
     return {
       ok: true,
       currentVersion,
@@ -810,6 +935,7 @@ ipcMain.handle('app:check-update', async (_event, updateUrl) => {
       downloadUrl
     };
   } catch (error) {
+    trackMain('update.check_failed', { message: error instanceof Error ? error.message : String(error) });
     return { ok: false, error: error instanceof Error ? error.message : 'Erro ao verificar atualização.' };
   }
 });
@@ -822,21 +948,46 @@ ipcMain.handle('app:install-update', async (_event, downloadUrl) => {
     let filename = 'UniqSystem-Setup.exe';
     try { filename = new URL(downloadUrl).pathname.split('/').filter(Boolean).pop() || filename; } catch {}
     const destPath = path.join(os.tmpdir(), filename);
+    const downloadStartedAt = Date.now();
+    trackMain('update.download_start', { filename });
     await downloadWithNet(downloadUrl, destPath);
+    trackMain('update.download_done', { ms: Date.now() - downloadStartedAt });
     shell.openPath(destPath);
     setTimeout(() => app.quit(), 1500);
     return { ok: true };
   } catch (error) {
+    trackMain('update.download_failed', { message: error instanceof Error ? error.message : String(error) });
     return { ok: false, error: error instanceof Error ? error.message : 'Erro ao baixar atualização.' };
   }
 });
 
 app.whenReady().then(() => {
+  trackMain('app.start', {
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    packaged: app.isPackaged,
+    os: `${os.platform()} ${os.release()} ${os.arch()}`,
+    totalMemMb: Math.round(os.totalmem() / 1048576),
+    freeMemMb: Math.round(os.freemem() / 1048576),
+    cpus: os.cpus().length
+  });
   startWhatsappBridge();
   createWindow();
 });
 
+// Quedas de processos do Electron (janela, GPU etc.).
+app.on('render-process-gone', (_event, _webContents, details) => {
+  trackMain('renderer.gone', { reason: details && details.reason, exitCode: details && details.exitCode });
+});
+
+app.on('child-process-gone', (_event, details) => {
+  trackMain('process.gone', { type: details && details.type, reason: details && details.reason, exitCode: details && details.exitCode });
+});
+
 app.on('before-quit', () => {
+  if (!isAppQuitting) {
+    trackMain('app.quit', { uptimeMin: Math.round((Date.now() - appStartedAt) / 60000) });
+  }
   isAppQuitting = true;
   stopWhatsappBridge();
 

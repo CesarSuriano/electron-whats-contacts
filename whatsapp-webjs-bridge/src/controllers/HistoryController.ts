@@ -8,6 +8,7 @@ import type { HistoryDiagnostics, RawMessage, WhatsappEvent } from '../domain/ty
 import { isSameConversationJid, normalizeRequestedChatJid } from '../utils/jid.js';
 import { normalizePhone } from '../utils/phone.js';
 import { readMessageText, readMessageTimestampSeconds } from '../utils/message.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 interface HistoryStage extends HistoryDiagnostics {
   chatId?: string;
@@ -70,6 +71,11 @@ export class HistoryController {
 
     const startedAt = Date.now();
     await this.historyService.acquireHistorySlot();
+    const queueWaitMs = Date.now() - startedAt;
+    let resultCount = -1;
+    let resolvedChats = -1;
+    let resolveMs = -1;
+    let fallback = false;
     try {
       const notReady = this.messageService.requireReady();
       if (notReady) {
@@ -83,9 +89,14 @@ export class HistoryController {
         return;
       }
 
+      const resolveStartedAt = Date.now();
       const chats = await this.historyService.resolveChatsForHistory(requestedJid);
+      resolveMs = Date.now() - resolveStartedAt;
+      resolvedChats = chats.length;
       if (!chats.length) {
         const fallbackEvents = this.readFallbackEventsForChat(requestedJid, limit);
+        resultCount = fallbackEvents.length;
+        fallback = true;
         res.json({
           instanceName: this.instanceName,
           events: fallbackEvents,
@@ -202,6 +213,7 @@ export class HistoryController {
       })))
         .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
 
+      resultCount = eventsHistory.length;
       res.json({
         instanceName: this.instanceName,
         events: eventsHistory,
@@ -225,6 +237,8 @@ export class HistoryController {
       });
     } catch (error) {
       const requestedJid = normalizeRequestedChatJid(decodeURIComponent(req.params.jid || ''));
+      telemetry.trackError('error.history', error, { limit, deep, ms: Date.now() - startedAt });
+      fallback = true;
       console.warn(
         '[whatsapp-webjs-bridge] fallback de historico por conversa:',
         requestedJid,
@@ -237,6 +251,17 @@ export class HistoryController {
       });
     } finally {
       this.historyService.releaseHistorySlot();
+      telemetry.track('history.load', {
+        ms: Date.now() - startedAt,
+        queueWaitMs,
+        resolveMs,
+        resolvedChats,
+        count: resultCount,
+        limit,
+        deep,
+        fallback,
+        contact: telemetry.contactRef(req.params.jid)
+      });
       console.log(`[whatsapp-webjs-bridge] tempo historico ${req.params.jid || ''}: ${Date.now() - startedAt}ms (limit=${limit}, deep=${deep})`);
     }
   };

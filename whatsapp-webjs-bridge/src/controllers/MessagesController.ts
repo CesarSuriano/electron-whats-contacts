@@ -1,9 +1,25 @@
 import type { Request, Response } from 'express';
 import { MessageService } from '../whatsapp/MessageService.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 // Tempo de cada envio no log, para comparar antes/depois de ajustes de desempenho.
 function logSendTiming(kind: string, startedAt: number, ok: boolean): void {
   console.log(`[whatsapp-webjs-bridge] tempo ${kind}: ${Date.now() - startedAt}ms${ok ? '' : ' (falhou)'}`);
+}
+
+function trackSend(
+  kind: 'text' | 'media',
+  chatId: string,
+  startedAt: number,
+  error: unknown,
+  extra: Record<string, string | number | boolean> = {}
+): void {
+  const data = { kind, ms: Date.now() - startedAt, ok: !error, contact: telemetry.contactRef(chatId), ...extra };
+  if (error) {
+    telemetry.trackError('send.message', error, data);
+  } else {
+    telemetry.track('send.message', data);
+  }
 }
 
 export class MessagesController {
@@ -37,9 +53,11 @@ export class MessagesController {
       const startedAt = Date.now();
       const result = await this.messageService.sendText(destination.chatId, text).catch(error => {
         logSendTiming('envio de texto', startedAt, false);
+        trackSend('text', destination.chatId, startedAt, error, { chars: text.length });
         throw error;
       });
       logSendTiming('envio de texto', startedAt, true);
+      trackSend('text', destination.chatId, startedAt, null, { chars: text.length });
       res.json({ instanceName: this.instanceName, result });
     } catch (error) {
       res.status(500).json({
@@ -180,9 +198,11 @@ export class MessagesController {
         caption
       ).catch(error => {
         logSendTiming('envio de midia', startedAt, false);
+        trackSend('media', destination.chatId, startedAt, error, { mimetype, sizeKb: Math.round(file.buffer.length / 1024), hasCaption: Boolean(caption) });
         throw error;
       });
       logSendTiming('envio de midia', startedAt, true);
+      trackSend('media', destination.chatId, startedAt, null, { mimetype, sizeKb: Math.round(file.buffer.length / 1024), hasCaption: Boolean(caption) });
 
       res.json({ instanceName: this.instanceName, result });
     } catch (error) {

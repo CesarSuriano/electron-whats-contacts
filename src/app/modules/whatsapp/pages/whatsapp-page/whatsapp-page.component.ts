@@ -13,6 +13,7 @@ import { ScheduleListLauncherService } from '../../../../services/schedule-list-
 import { ScheduledMessageService } from '../../../../services/scheduled-message.service';
 import { WhatsappSessionStatus, WhatsappWebjsGatewayService } from '../../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../../services/whatsapp-ws.service';
+import { telemetry } from '../../../../telemetry/telemetry';
 
 const BRIDGE_STARTUP_GRACE_PERIOD_MS = 10_000;
 const SESSION_STATUS_RETRY_INTERVAL_MS = 1_000;
@@ -61,6 +62,8 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   private sessionStatusErrorGraceUntil = 0;
   private qrRenderVersion = 0;
   private readonly destroy$ = new Subject<void>();
+  private readonly pageOpenedAt = Date.now();
+  private hasTrackedSessionStatus = false;
 
   constructor(
     private router: Router,
@@ -253,6 +256,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       return;
     }
 
+    telemetry.track('ui.manual_disconnect', { status: this.currentSessionStatus });
     this.isSessionActionLoading = true;
     this.whatsappGatewayService.disconnectSession().subscribe({
       next: status => {
@@ -269,6 +273,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   retrySession(): void {
+    telemetry.track('ui.retry_session', { status: this.currentSessionStatus, error: this.sessionErrorMessage || null });
     this.startInitialSessionCheck();
   }
 
@@ -276,6 +281,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     if (this.isSessionActionLoading || !this.shouldShowReconnectButton) {
       return;
     }
+    telemetry.track('ui.request_new_qr', { status: this.currentSessionStatus });
 
     this.isSessionActionLoading = true;
     this.sessionErrorMessage = '';
@@ -367,6 +373,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
         this.isCheckingSession = false;
         this.sessionStatusText = 'Não foi possível validar a sessão do WhatsApp.';
         this.sessionErrorMessage = 'Verifique se a bridge está rodando e tente novamente.';
+        telemetry.track('ui.session_check_failed', { sinceOpenMs: Date.now() - this.pageOpenedAt });
       }
     });
   }
@@ -387,6 +394,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
       error: () => {
         this.isSessionActionLoading = false;
         this.sessionErrorMessage = 'Não foi possível iniciar a conexão do WhatsApp.';
+        telemetry.track('ui.session_connect_failed', { sinceOpenMs: Date.now() - this.pageOpenedAt });
         this.scheduleConnectRetry();
       }
     });
@@ -401,6 +409,7 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
     }
 
     if (!options.immediate && this.shouldDeferSessionDowngrade(status)) {
+      telemetry.track('ui.session_downgrade_deferred', { status: status.status });
       this.deferSessionDowngrade(status);
       return;
     }
@@ -410,6 +419,15 @@ export class WhatsappPageComponent implements OnInit, OnDestroy {
   }
 
   private applySessionState(status: WhatsappSessionStatus): void {
+    if (status.status !== this.currentSessionStatus || !this.hasTrackedSessionStatus) {
+      this.hasTrackedSessionStatus = true;
+      telemetry.track('ui.session_status', {
+        from: this.currentSessionStatus,
+        to: status.status,
+        sinceOpenMs: Date.now() - this.pageOpenedAt,
+        lastError: status.lastError || null
+      });
+    }
     this.currentSessionStatus = status.status;
     this.isSessionReady = status.status === 'ready';
     this.syncLabelsLoadWithSessionState(status.status);

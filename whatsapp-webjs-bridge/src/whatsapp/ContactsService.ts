@@ -23,6 +23,7 @@ import {
 import { getContactName, extractLastMessagePreview } from '../utils/contact.js';
 import { resolvePhoneFromLid } from '../utils/lidResolver.js';
 import { withTimeout } from '../utils/time.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 export interface ContactsServiceOptions {
   enableProfilePhotoFetch?: boolean;
@@ -935,6 +936,7 @@ export class ContactsService {
         const loaded = await withTimeout(clientWithContacts.getContacts(), CONTACTS_FETCH_TIMEOUT_MS, 'getContacts');
         contacts = Array.isArray(loaded) ? loaded : [];
       } catch (err) {
+        telemetry.trackError('contacts.agenda', err, { ok: false, ms: Date.now() - startedAt });
         console.warn(
           `[whatsapp-webjs-bridge] getContacts falhou apos ${Date.now() - startedAt}ms; a lista segue com os dados dos chats:`,
           (err as { message?: string } | null)?.message || String(err)
@@ -944,6 +946,13 @@ export class ContactsService {
 
       console.log(`[whatsapp-webjs-bridge] tempo agenda do celular: ${Date.now() - startedAt}ms (${contacts.length} contatos)`);
       const signature = buildAgendaSignature(contacts);
+      telemetry.track('contacts.agenda', {
+        ok: true,
+        ms: Date.now() - startedAt,
+        count: contacts.length,
+        saved: contacts.filter(contact => contact?.isMyContact === true).length,
+        changed: signature !== this.agendaSignatureApplied
+      });
       this.agendaSnapshot = {
         ownerJid: this.selfJidResolver.getOwnJid(),
         contacts,
@@ -1000,6 +1009,8 @@ export class ContactsService {
 
     const { preloadedChats = null, reason = 'unspecified' } = options;
 
+    const telemetryReason = reason.startsWith('unresolved-lid:') ? 'unresolved-lid' : reason;
+    const startedAt = Date.now();
     this.contactsRefreshPromise = (async () => {
       try {
         await withTimeout(
@@ -1007,6 +1018,12 @@ export class ContactsService {
           CONTACTS_REFRESH_TIMEOUT_MS,
           `refreshing contacts (${reason})`
         );
+        telemetry.track('contacts.refresh', {
+          reason: telemetryReason,
+          ms: Date.now() - startedAt,
+          contacts: this.contactStore.size,
+          withAgenda: this.agendaSignatureApplied !== ''
+        });
         if (this.onContactsUpdated) {
           try {
             this.onContactsUpdated(this.contactStore.values());
@@ -1015,6 +1032,7 @@ export class ContactsService {
           }
         }
       } catch (error) {
+        telemetry.trackError('error.contacts_refresh', error, { reason: telemetryReason, ms: Date.now() - startedAt });
         console.warn('[whatsapp-webjs-bridge] Falha ao atualizar contatos:', (error as { message?: string } | null)?.message || String(error));
       } finally {
         this.contactsRefreshPromise = null;

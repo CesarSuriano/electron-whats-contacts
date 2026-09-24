@@ -23,8 +23,39 @@ import { EventsController } from './controllers/EventsController.js';
 import { HistoryController } from './controllers/HistoryController.js';
 import { MessagesController } from './controllers/MessagesController.js';
 import { wait } from './utils/time.js';
+import { errorMessageOf, telemetry } from './telemetry/Telemetry.js';
 
 const { Client, LocalAuth } = pkg;
+
+// Telemetria do navegador interno (Chrome/Edge controlado pelo puppeteer):
+// queda do navegador ou travamento da página derrubam a sessão sem aviso claro.
+const diagnosedPuppeteerObjects = new WeakSet<object>();
+
+type EventTargetLike = { on?: (event: string, listener: (...args: unknown[]) => void) => unknown };
+
+function attachPuppeteerDiagnostics(client: WebJsClient): void {
+  const { pupPage, pupBrowser } = client as unknown as { pupPage?: EventTargetLike | null; pupBrowser?: EventTargetLike | null };
+
+  if (pupBrowser && typeof pupBrowser.on === 'function' && !diagnosedPuppeteerObjects.has(pupBrowser)) {
+    diagnosedPuppeteerObjects.add(pupBrowser);
+    pupBrowser.on('disconnected', () => {
+      telemetry.track('puppeteer.browser_disconnected', {});
+    });
+  }
+
+  if (pupPage && typeof pupPage.on === 'function' && !diagnosedPuppeteerObjects.has(pupPage)) {
+    diagnosedPuppeteerObjects.add(pupPage);
+    pupPage.on('error', (error: unknown) => {
+      telemetry.trackError('puppeteer.page_crashed', error);
+    });
+    pupPage.on('close', () => {
+      telemetry.track('puppeteer.page_closed', {});
+    });
+    pupPage.on('pageerror', (error: unknown) => {
+      telemetry.trackLimitedPageError(error);
+    });
+  }
+}
 const CLIENT_AUTH_TIMEOUT_MS = 60000;
 const DEFAULT_AUTHENTICATED_READY_TIMEOUT_MS = 90_000;
 
@@ -278,6 +309,7 @@ export function bindClientEvents(container: Container): void {
   let authenticatedReadyTimer: ReturnType<typeof setTimeout> | null = null;
   let readyBootstrapInFlight = false;
   let readyBootstrapGeneration = 0;
+  let authenticatedAt = 0;
 
   const cancelReadyBootstrap = (): void => {
     readyBootstrapGeneration += 1;
@@ -303,7 +335,14 @@ export function bindClientEvents(container: Container): void {
         return;
       }
 
-      if (!recoveryBudget.tryConsume()) {
+      const canRecover = recoveryBudget.tryConsume();
+      telemetry.track('session.ready_watchdog_timeout', {
+        timeoutMs,
+        willRecover: canRecover,
+        recoveryAttempt: recoveryBudget.attemptsInWindow
+      });
+
+      if (!canRecover) {
         sessionState.status = 'init_error';
         sessionState.qr = null;
         sessionState.lastError = `WhatsApp autenticou, mas nao ficou pronto apos ${recoveryBudget.attemptsInWindow}/${recoveryBudget.maxAttemptsAllowed} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
@@ -343,6 +382,7 @@ export function bindClientEvents(container: Container): void {
     sessionState.status = 'qr_required';
     sessionState.qr = qr;
     sessionState.lastError = '';
+    attachPuppeteerDiagnostics(client);
     qrcodeTerminal.generate(qr, { small: true });
     console.log('[whatsapp-webjs-bridge] QR recebido. Escaneie no celular.');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
@@ -355,15 +395,19 @@ export function bindClientEvents(container: Container): void {
     sessionState.status = 'authenticated';
     sessionState.qr = null;
     sessionState.lastError = '';
+    authenticatedAt = Date.now();
+    attachPuppeteerDiagnostics(client);
     console.log('[whatsapp-webjs-bridge] Sessao autenticada. Aguardando WhatsApp Web carregar (Store)...');
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
   });
 
   client.on('loading_screen', (percent: number, message: string) => {
+    telemetry.track('client.loading_screen', { percent: Number(percent) || 0, message: String(message || '') });
     console.log(`[whatsapp-webjs-bridge] loading_screen ${percent}%: ${message}`);
   });
 
   client.on('change_state', (state: string) => {
+    telemetry.track('client.change_state', { state: String(state || '') });
     console.log(`[whatsapp-webjs-bridge] change_state: ${state}`);
   });
 
@@ -371,18 +415,24 @@ export function bindClientEvents(container: Container): void {
     reason: string,
     options: { linkedChatResolutionLimit?: number } = {}
   ): Promise<void> => {
+    const startedAt = Date.now();
     try {
       const labels = await contactsService.loadLabels({
         linkedChatResolutionLimit: options.linkedChatResolutionLimit
       });
       const serialized = JSON.stringify(labels);
-      if (serialized === lastLabelsJson) {
+      const changed = serialized !== lastLabelsJson;
+      if (reason !== 'poll' || changed) {
+        telemetry.track('labels.refresh', { reason, ms: Date.now() - startedAt, count: labels.length, changed });
+      }
+      if (!changed) {
         return;
       }
       lastLabelsJson = serialized;
       broadcaster.broadcast('labels_updated', { labels });
       console.log(`[whatsapp-webjs-bridge] labels_updated (${labels.length}, reason=${reason})`);
     } catch (error) {
+      telemetry.trackError('error.labels_refresh', error, { reason, ms: Date.now() - startedAt });
       console.warn(
         '[whatsapp-webjs-bridge] Falha ao atualizar etiquetas:',
         (error as { message?: string } | null)?.message || String(error)
@@ -466,6 +516,11 @@ export function bindClientEvents(container: Container): void {
     stopAuthenticatedReadyWatchdog();
     recoveryBudget.reset();
     const duplicateReadyWhileBootstrapping = sessionState.status === 'ready' && readyBootstrapInFlight;
+    telemetry.track('client.ready', {
+      duplicate: duplicateReadyWhileBootstrapping,
+      msSinceAuthenticated: authenticatedAt ? Date.now() - authenticatedAt : null
+    });
+    attachPuppeteerDiagnostics(client);
     sessionState.status = 'ready';
     sessionState.qr = null;
     sessionState.lastError = '';
@@ -490,19 +545,27 @@ export function bindClientEvents(container: Container): void {
         const hydrationStartedAt = Date.now();
         const chats = await loadHydratedChats(clientWithChats, isCurrentBootstrap);
         if (!isCurrentBootstrap()) return;
-        console.log(`[whatsapp-webjs-bridge] Conversas hidratadas: ${chats.length} em ${Date.now() - hydrationStartedAt}ms. Iniciando refresh de contatos.`);
+        const hydrationMs = Date.now() - hydrationStartedAt;
+        telemetry.track('boot.chats_hydrated', { chats: chats.length, ms: hydrationMs });
+        console.log(`[whatsapp-webjs-bridge] Conversas hidratadas: ${chats.length} em ${hydrationMs}ms. Iniciando refresh de contatos.`);
         const refreshStartedAt = Date.now();
         await contactsService.triggerRefresh({ preloadedChats: chats, reason: 'ready' });
         if (!isCurrentBootstrap()) return;
-        console.log(`[whatsapp-webjs-bridge] tempo refresh de contatos (ready): ${Date.now() - refreshStartedAt}ms`);
+        const refreshMs = Date.now() - refreshStartedAt;
+        telemetry.track('boot.contacts_refreshed', { ms: refreshMs, contacts: contactStore.size });
+        console.log(`[whatsapp-webjs-bridge] tempo refresh de contatos (ready): ${refreshMs}ms`);
+        const seedStartedAt = Date.now();
         await ingestionService.seedEventsFromRecentChats(chats);
+        telemetry.track('boot.events_seeded', { ms: Date.now() - seedStartedAt });
       })();
       contactsService.setInitialContactsWarmup(initialContactsWarmup);
       await initialContactsWarmup;
     } catch (error) {
       if (error instanceof ChatHydrationCancelledError) {
+        telemetry.track('session.hydration_cancelled', { status: sessionState.status });
         console.log('[whatsapp-webjs-bridge] Hidratacao de conversas cancelada porque a sessao mudou.');
       } else if (error instanceof ChatHydrationBrokenError && bootstrapGeneration === readyBootstrapGeneration) {
+        telemetry.trackError('session.hydration_broken', error, { recoveryAttempt: recoveryBudget.attemptsInWindow });
         console.error('[whatsapp-webjs-bridge] WhatsApp Web perdeu a conexao interna apos ready. Reiniciando sessao:', error.message);
         if (recoveryBudget.tryConsume()) {
           sessionState.status = 'init_error';
@@ -521,6 +584,7 @@ export function bindClientEvents(container: Container): void {
           broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
         }
       } else {
+        telemetry.trackError('error.ready_bootstrap', error);
         console.error('[whatsapp-webjs-bridge] Falha ao carregar contatos:', (error as { message?: string } | null)?.message || String(error));
       }
     } finally {
@@ -535,6 +599,7 @@ export function bindClientEvents(container: Container): void {
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
     cancelReadyBootstrap();
+    telemetry.track('session.auth_failure', { message: String(message || '') });
     sessionState.status = 'auth_failure';
     sessionState.lastError = String(message || 'Authentication failure');
     console.error('[whatsapp-webjs-bridge] Falha de autenticacao:', message);
@@ -557,7 +622,20 @@ export function bindClientEvents(container: Container): void {
     // razão terminal (LOGOUT/UNPAIRED/...) significa sessão removida no
     // servidor e precisa ser processada, senão o init espera autenticação
     // impossível até estourar timeout.
-    if (sessionManager.isInitializeInFlight() && !TERMINAL_DISCONNECT_REASONS.test(reasonText)) {
+    const terminal = TERMINAL_DISCONNECT_REASONS.test(reasonText);
+    const ignoredDuringInit = sessionManager.isInitializeInFlight() && !terminal;
+    const manual = sessionManager.isManualDisconnectInProgress();
+    telemetry.track('session.disconnected', {
+      reason: reasonText,
+      terminal,
+      ignoredDuringInit,
+      manual,
+      previousStatus: sessionState.status,
+      recoveryPending: Boolean(disconnectRecoveryTimer),
+      recoveryAttempts: recoveryBudget.attemptsInWindow
+    });
+
+    if (ignoredDuringInit) {
       console.warn('[whatsapp-webjs-bridge] Desconexao ignorada durante inicializacao em andamento. Reason:', JSON.stringify(reasonText));
       return;
     }
@@ -584,6 +662,7 @@ export function bindClientEvents(container: Container): void {
     }
 
     if (!recoveryBudget.tryConsume()) {
+      telemetry.track('session.recovery_exhausted', { origin: 'disconnected', attempts: recoveryBudget.attemptsInWindow });
       sessionState.status = 'init_error';
       sessionState.lastError = `Sessao do WhatsApp nao respondeu apos ${recoveryBudget.attemptsInWindow}/${recoveryBudget.maxAttemptsAllowed} tentativas automaticas. Clique em "Tentar novamente" para reiniciar a conexao.`;
       console.error('[whatsapp-webjs-bridge] Limite de auto-recuperacao excedido apos desconexao transitória.');
@@ -591,6 +670,7 @@ export function bindClientEvents(container: Container): void {
       return;
     }
 
+    telemetry.track('session.recovery_scheduled', { origin: 'disconnected', attempt: recoveryBudget.attemptsInWindow });
     disconnectRecoveryTimer = setTimeout(() => {
       disconnectRecoveryTimer = null;
       void sessionManager.ensureInitialized().catch(initError => {
@@ -624,6 +704,9 @@ export function bindClientEvents(container: Container): void {
     const messageId = typeof message?.id === 'object' && message.id?._serialized
       ? message.id._serialized
       : '';
+    if (typeof ack === 'number' && ack < 0) {
+      telemetry.track('message.ack_error', { ack, type: String(message?.type || '') });
+    }
     if (messageId) {
       eventStore.updateEventAck(messageId, ack);
       messageService.propagateAckToContact(messageId, ack);
@@ -640,6 +723,11 @@ export function bindClientEvents(container: Container): void {
     });
 
     const fromMe = selfJidResolver.resolveIsFromMe(message);
+    telemetry.track('message.created', {
+      fromMe,
+      type: String(message?.type || ''),
+      group: String(message?.from || '').endsWith('@g.us') || String(message?.to || '').endsWith('@g.us')
+    });
     if (!fromMe) {
       ingestionService.ingestInboundMessage(message, 'webjs-inbound-create').catch(err => {
         console.warn(

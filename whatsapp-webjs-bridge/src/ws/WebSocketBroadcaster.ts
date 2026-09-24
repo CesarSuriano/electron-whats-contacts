@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import type { Server as HttpServer } from 'http';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 const SNAPSHOT_REPLAY_ORDER: BroadcastType[] = ['labels_updated', 'session_state'];
@@ -39,12 +40,21 @@ export class WebSocketBroadcaster {
 
     this.wss.on('connection', (socket: WebSocket) => {
       const tracked = socket as TrackedWebSocket;
+      const connectedAt = Date.now();
       tracked.isAlive = true;
+      telemetry.track('ws.client_connected', { clients: this.wss?.clients.size ?? 0 });
       tracked.on('pong', () => {
         tracked.isAlive = true;
       });
       tracked.on('error', () => {
         // silent
+      });
+      tracked.on('close', (code: number) => {
+        telemetry.track('ws.client_disconnected', {
+          code,
+          connectedMs: Date.now() - connectedAt,
+          clients: this.wss?.clients.size ?? 0
+        });
       });
 
       SNAPSHOT_REPLAY_ORDER.forEach(type => {
