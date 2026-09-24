@@ -34,7 +34,7 @@ describe('ConversationListComponent', () => {
     selectedJids$ = new BehaviorSubject<Set<string>>(new Set());
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
-      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection', 'requestPhoto', 'requestConversationContext'
+      'selectContact', 'selectAll', 'exitSelectionMode', 'toggleContactSelection', 'requestPhoto', 'requestConversationContext', 'refresh'
     ], {
       contacts$: contacts$.asObservable(),
       selectedContactJid$: selectedJid$.asObservable(),
@@ -93,6 +93,18 @@ describe('ConversationListComponent', () => {
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('b@c.us');
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('g@g.us');
     expect(stateSpy.requestConversationContext).not.toHaveBeenCalled();
+  });
+
+  it('refreshes contacts (including the phone agenda) from the header button', () => {
+    const button = fixture.nativeElement.querySelector('.conversation-list__refresh-button') as HTMLButtonElement;
+    button.click();
+    expect(stateSpy.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh while contacts are still loading', () => {
+    loadingState$.next({ instances: false, contacts: true, messages: false, sending: false });
+    component.onRefreshContacts();
+    expect(stateSpy.refresh).not.toHaveBeenCalled();
   });
 
   it('tracks loading state', () => {

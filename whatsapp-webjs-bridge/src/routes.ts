@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import multer from 'multer';
 import type { Container } from './container.js';
+import { telemetry } from './telemetry/Telemetry.js';
 
 export function buildRoutes(container: Container): Router {
   const router = Router();
@@ -12,6 +13,21 @@ export function buildRoutes(container: Container): Router {
   });
 
   router.get('/api/health', controllers.health.health);
+
+  // Eventos de telemetria vindos da tela do app; a bridge sanitiza e envia.
+  // Aceita JSON (envio normal) e texto (sendBeacon ao fechar a janela).
+  router.post('/api/telemetry', express.text({ type: 'text/plain', limit: '1mb' }), (req, res) => {
+    let body: unknown = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = null;
+      }
+    }
+    const accepted = telemetry.trackExternal((body as { events?: unknown } | null)?.events, 'renderer');
+    res.status(202).json({ accepted });
+  });
 
   router.get('/api/whatsapp/session', controllers.session.getSession);
   router.post('/api/whatsapp/session/connect', controllers.session.connect);

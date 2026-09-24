@@ -9,14 +9,42 @@ import {
   isRecoverableLocalAuthLockError,
   isRecoverableProcessError
 } from './whatsapp/RecoverableErrors.js';
+import { configureTelemetryFromEnv, telemetry } from './telemetry/Telemetry.js';
 
 dotenv.config();
 
 const RECOVER_INIT_DELAY_MS = 1200;
+const MEMORY_SAMPLE_INTERVAL_MS = 5 * 60 * 1000;
+
+function startTelemetry(): void {
+  if (!configureTelemetryFromEnv()) {
+    return;
+  }
+
+  telemetry.track('bridge.start', {
+    pid: process.pid,
+    node: process.version,
+    bridgeRestart: Number(process.env.TELEMETRY_BRIDGE_RESTART || 0)
+  });
+
+  const memoryTimer = setInterval(() => {
+    const memory = process.memoryUsage();
+    telemetry.track('bridge.memory', {
+      rssMb: Math.round(memory.rss / 1048576),
+      heapUsedMb: Math.round(memory.heapUsed / 1048576),
+      uptimeMin: Math.round(process.uptime() / 60)
+    });
+  }, MEMORY_SAMPLE_INTERVAL_MS);
+  memoryTimer.unref?.();
+
+  // Encerramentos normais: o que não foi enviado fica no disco para o próximo início.
+  process.on('exit', () => telemetry.persistPendingSync());
+}
 
 function stopAutoRecoveryWithBudgetError(container: Container, origin: string, error: unknown): void {
   const attempts = container.recoveryBudget.attemptsInWindow;
   const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+  telemetry.trackError('session.recovery_exhausted', error, { origin, attempts });
 
   container.sessionState.status = 'init_error';
   container.sessionState.qr = null;
@@ -42,7 +70,14 @@ function installProcessGuards(container: Container): void {
   let recoverTimer: NodeJS.Timeout | null = null;
 
   const scheduleRecovery = (origin: 'uncaughtException' | 'unhandledRejection', error: unknown): void => {
-    if (!isRecoverableProcessError(error)) {
+    const recoverable = isRecoverableProcessError(error);
+    telemetry.trackError(
+      origin === 'uncaughtException' ? 'error.uncaught_exception' : 'error.unhandled_rejection',
+      error,
+      { recoverable, sessionStatus: container.sessionState.status }
+    );
+
+    if (!recoverable) {
       const message = getErrorMessage(error);
       if (origin === 'unhandledRejection') {
         // Rejeições soltas do puppeteer/whatsapp-web.js (timeouts, bindings
@@ -52,6 +87,8 @@ function installProcessGuards(container: Container): void {
         return;
       }
       console.error('[whatsapp-webjs-bridge] Excecao nao tratada:', message);
+      telemetry.track('bridge.fatal_exit', { origin });
+      telemetry.persistPendingSync();
       process.exit(1);
       return;
     }
@@ -94,6 +131,7 @@ function installProcessGuards(container: Container): void {
 
     const attempt = container.recoveryBudget.attemptsInWindow;
     const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+    telemetry.track('session.recovery_scheduled', { origin: `process:${origin}`, attempt });
     container.sessionState.lastError = isRecoverableLocalAuthLockError(error)
       ? `Sessao desconectada. Tentando recuperar sessao salva (${attempt}/${maxAttempts})...`
       : `Contexto do WhatsApp Web reiniciado. Tentando restaurar sessao (${attempt}/${maxAttempts})...`;
@@ -123,6 +161,7 @@ function installProcessGuards(container: Container): void {
 }
 
 async function main(): Promise<void> {
+  startTelemetry();
   const config = loadConfigFromEnv();
   const container = buildContainer(config);
   let startupRecoveryTimer: NodeJS.Timeout | null = null;
@@ -153,6 +192,7 @@ async function main(): Promise<void> {
 
     const attempt = container.recoveryBudget.attemptsInWindow;
     const maxAttempts = container.recoveryBudget.maxAttemptsAllowed;
+    telemetry.trackError('session.recovery_scheduled', error, { origin: 'startup', attempt });
     console.warn(
       `[whatsapp-webjs-bridge] Inicializacao transitoria falhou (tentativa ${attempt}/${maxAttempts}). Tentando novamente...`
     );
@@ -204,6 +244,7 @@ async function main(): Promise<void> {
         return;
       }
 
+      telemetry.trackError('error.initial_initialize', error);
       container.sessionState.status = 'init_error';
       container.sessionState.lastError = (error as { message?: string } | null)?.message || String(error);
       console.error(
@@ -214,6 +255,7 @@ async function main(): Promise<void> {
   });
 
   httpServer.on('error', (error: NodeJS.ErrnoException) => {
+    telemetry.trackError('error.http_server', error, { code: error?.code || '' });
     if (error?.code === 'EADDRINUSE') {
       console.warn(`[whatsapp-webjs-bridge] porta ${config.port} ja esta em uso. Usando instancia existente.`);
       process.exit(0);
@@ -227,5 +269,7 @@ async function main(): Promise<void> {
 
 main().catch(error => {
   console.error('[whatsapp-webjs-bridge] Erro fatal:', error);
+  telemetry.trackError('error.bridge_fatal', error);
+  telemetry.persistPendingSync();
   process.exit(1);
 });

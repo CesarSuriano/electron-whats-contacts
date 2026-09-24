@@ -2,6 +2,8 @@ import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
 
+import { telemetry } from '../telemetry/telemetry';
+
 export interface WsMessage<T = unknown> {
   type: string;
   payload: T;
@@ -64,7 +66,9 @@ export class WhatsappWsService implements OnDestroy {
       return;
     }
 
+    const openedAt = Date.now();
     this.socket.onopen = () => {
+      telemetry.track('ui.ws_connected', { retryDelayMs: this.reconnectDelay, openMs: Date.now() - openedAt });
       this.zone.run(() => {
         this.reconnectDelay = RECONNECT_DELAY_MS;
         this.connectedSubject.next(true);
@@ -82,7 +86,8 @@ export class WhatsappWsService implements OnDestroy {
       }
     };
 
-    this.socket.onclose = () => {
+    this.socket.onclose = (event: CloseEvent) => {
+      telemetry.track('ui.ws_closed', { code: event?.code ?? null, intentional: this.intentionalClose });
       this.zone.run(() => this.connectedSubject.next(false));
       this.socket = null;
 

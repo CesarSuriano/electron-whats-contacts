@@ -8,6 +8,7 @@ import {
   ScheduledMessage,
   ScheduleRecurrence
 } from '../models/scheduled-message.model';
+import { telemetry } from '../telemetry/telemetry';
 
 const STORAGE_KEY = 'uniq-system.scheduled-messages';
 const CHECK_INTERVAL_MS = 60_000;
@@ -60,6 +61,12 @@ export class ScheduledMessageService implements OnDestroy {
     });
     const list = [...this.schedulesSubject.value, entry];
     this.setSchedules(list);
+    telemetry.track('schedule.created', {
+      contacts: entry.contacts.length,
+      recurrence: entry.recurrence,
+      images: entry.imageDataUrls?.length ?? 0,
+      interrupted: isInterruptedBulk(entry)
+    });
     return entry;
   }
 
@@ -71,6 +78,10 @@ export class ScheduledMessageService implements OnDestroy {
   }
 
   remove(id: string): void {
+    const removed = this.getById(id);
+    if (removed) {
+      telemetry.track('schedule.removed', { interrupted: isInterruptedBulk(removed), status: removed.status });
+    }
     this.executingScheduleIds.delete(id);
     this.setSchedules(this.schedulesSubject.value.filter(s => s.id !== id));
     if (this.upcomingSubject.value?.id === id) {
@@ -85,6 +96,7 @@ export class ScheduledMessageService implements OnDestroy {
     }
 
     this.executingScheduleIds.add(id);
+    telemetry.track('schedule.started', { interrupted: isInterruptedBulk(schedule), contacts: schedule.contacts.length });
 
     if (schedule.status === 'notified') {
       const list = this.schedulesSubject.value.map(s =>
@@ -100,6 +112,7 @@ export class ScheduledMessageService implements OnDestroy {
 
   completeExecution(id: string): void {
     this.executingScheduleIds.delete(id);
+    telemetry.track('schedule.completed', {});
 
     const schedule = this.getById(id);
     if (schedule && isInterruptedBulk(schedule)) {
@@ -112,6 +125,7 @@ export class ScheduledMessageService implements OnDestroy {
 
   cancelExecution(id: string): void {
     this.executingScheduleIds.delete(id);
+    telemetry.track('schedule.cancelled', {});
 
     // Cancelar a continuação de um envio interrompido descarta o que restava.
     const schedule = this.getById(id);
@@ -129,6 +143,13 @@ export class ScheduledMessageService implements OnDestroy {
     if (!input.remainingContacts.length) {
       return null;
     }
+
+    telemetry.track('schedule.interrupted_saved', {
+      remaining: input.remainingContacts.length,
+      processed: input.processedCount,
+      total: input.totalCount,
+      fromSchedule: Boolean(input.sourceScheduleId)
+    });
 
     const now = new Date().toISOString();
     const source = input.sourceScheduleId ? this.getById(input.sourceScheduleId) : null;
@@ -241,6 +262,7 @@ export class ScheduledMessageService implements OnDestroy {
           s.id === schedule.id ? { ...s, status: 'notified' as const } : s
         );
         this.setSchedules(list);
+        telemetry.track('schedule.reminder_shown', { contacts: schedule.contacts.length, minutesAhead: Math.round(diff / 60000) });
         this.upcomingSubject.next({ ...schedule, status: 'notified' });
         return;
       }

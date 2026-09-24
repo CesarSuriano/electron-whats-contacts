@@ -1,6 +1,6 @@
 {
   "name": "uniq-system",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "main": "main.js",
   "scripts": {
     "ng": "ng",
@@ -13,6 +13,7 @@
     "dist": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --publish never",
     "release": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --win --x64 --publish never",
     "test": "ng test",
+    "logs": "node scripts/telemetry-export.js",
     "make:installer": "npm run bridge:install && npm run bridge:build && ng build --configuration production && electron-builder --publish never",
     "package": "npm run bridge:build && electron-forge package",
     "make": "npm run bridge:build && electron-forge make"
@@ -20,6 +21,7 @@
   "build": {
     "appId": "com.uniq.system",
     "productName": "UniqSystem",
+    "artifactName": "UniqSystem.Setup.${version}.${ext}",
     "beforeBuild": "scripts/before-build.js",
     "asar": true,
     "asarUnpack": [

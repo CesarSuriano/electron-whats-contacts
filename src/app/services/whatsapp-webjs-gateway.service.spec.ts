@@ -85,6 +85,13 @@ describe('WhatsappWebjsGatewayService', () => {
     req.flush({ instanceName: 'inst', contacts: [] });
   });
 
+  it('loadContacts refreshAgenda=true – asks the bridge to re-read the phone agenda', () => {
+    service.loadContacts('inst', { refreshAgenda: true }).subscribe();
+    const req = httpMock.expectOne(r => r.url === `${BASE}/contacts` && r.params.get('refreshAgenda') === '1');
+    expect(req.request.params.has('waitForRefresh')).toBeFalse();
+    req.flush({ instanceName: 'inst', contacts: [] });
+  });
+
   it('loadContactPhoto – uses URL-encoded JID and extracts photoUrl', () => {
     const jid = '5511@s.whatsapp.net';
     let result: string | null | undefined;

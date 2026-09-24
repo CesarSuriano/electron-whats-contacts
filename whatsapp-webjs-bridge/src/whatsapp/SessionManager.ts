@@ -4,6 +4,7 @@ import { SessionState } from '../state/SessionState.js';
 import { SelfJidResolver } from './SelfJidResolver.js';
 import { isRecoverableInitError } from './RecoverableErrors.js';
 import { wait, withTimeout } from '../utils/time.js';
+import { telemetry } from '../telemetry/Telemetry.js';
 
 const CLEANUP_TIMEOUT_MS = 10000;
 const INIT_RETRY_DELAY_MS = 900;
@@ -45,9 +46,13 @@ export class SessionManager {
   }
 
   private async cleanupBeforeInitialize(): Promise<void> {
+    const startedAt = Date.now();
     try {
       await withTimeout(this.client.destroy(), CLEANUP_TIMEOUT_MS, 'destroy during cleanup');
-    } catch {}
+      telemetry.track('session.cleanup', { ms: Date.now() - startedAt, ok: true });
+    } catch (error) {
+      telemetry.trackError('session.cleanup', error, { ms: Date.now() - startedAt, ok: false });
+    }
   }
 
   private async initializeWithRetry(previousStatus: SessionStatus, generation: number, maxAttempts = 2): Promise<void> {
@@ -63,13 +68,17 @@ export class SessionManager {
           await this.cleanupBeforeInitialize();
         }
 
+        const startedAt = Date.now();
+        telemetry.track('session.initialize_start', { attempt, previousStatus });
         await this.client.initialize();
+        telemetry.track('session.initialize_done', { attempt, ms: Date.now() - startedAt });
         return;
       } catch (error) {
         if (generation !== this.initGeneration) {
           return;
         }
         const canRetry = attempt < maxAttempts && isRecoverableInitError(error);
+        telemetry.trackError('session.initialize_failed', error, { attempt, willRetry: canRetry });
         if (!canRetry) {
           throw error;
         }
@@ -109,6 +118,7 @@ export class SessionManager {
   }
 
   async prepareRestart(): Promise<void> {
+    telemetry.track('session.restart_requested', { status: this.sessionState.status });
     this.initGeneration++;
     this.initializePromise = null;
     this.manualDisconnectInProgress = true;
@@ -144,6 +154,7 @@ export class SessionManager {
       + 'Stack:\n' + (new Error('logout-trace').stack || '')
     );
 
+    telemetry.track('session.manual_logout', { status: this.sessionState.status });
     this.initGeneration++;
     this.initializePromise = null;
     this.manualDisconnectInProgress = true;

@@ -1,7 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Client as WebJsClient } from 'whatsapp-web.js';
-import { ContactsService } from '../../src/whatsapp/ContactsService.js';
+import type { RawContact } from '../../src/domain/types.js';
+import { ContactsService, type ContactsServiceOptions } from '../../src/whatsapp/ContactsService.js';
 import { SelfJidResolver } from '../../src/whatsapp/SelfJidResolver.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { ContactStore } from '../../src/state/ContactStore.js';
@@ -18,7 +22,7 @@ type FakeClient = Partial<{
   pupPage: { evaluate: (fn: unknown, ...args: unknown[]) => Promise<unknown> };
 }> & { _type: 'FakeClient' };
 
-function createService(clientOverride: Partial<FakeClient>, options?: { enableProfilePhotoFetch?: boolean }): {
+function createService(clientOverride: Partial<FakeClient>, options?: ContactsServiceOptions): {
   service: ContactsService;
   client: FakeClient;
   contactStore: ContactStore;
@@ -42,7 +46,10 @@ function createService(clientOverride: Partial<FakeClient>, options?: { enablePr
   const contactStore = new ContactStore();
   const eventStore = new EventStore();
   const lidMap = new LidMap();
-  const service = new ContactsService(client, sessionState, contactStore, eventStore, lidMap, selfJidResolver, options);
+  const service = new ContactsService(client, sessionState, contactStore, eventStore, lidMap, selfJidResolver, {
+    readAgenda: () => fake.getContacts?.() as Promise<RawContact[]>,
+    ...options
+  });
   return { service, client: fake, contactStore, lidMap, selfJidResolver };
 }
 
@@ -159,6 +166,30 @@ describe('ContactsService.fetchProfilePhotoUrl', () => {
 
     assert.equal(lidMap.getLid('5511999999999@c.us'), linkedJid);
     assert.ok(lookedUp.includes(linkedJid));
+  });
+
+  it('still fetches a business contact photo after the lean agenda is applied', async () => {
+    const businessJid = '5511999999999@c.us';
+    const fakeDataUrl = 'data:image/png;base64,ZmFrZQ==';
+    const { service, contactStore } = createService({
+      getContacts: async () => [{
+        id: { _serialized: businessJid, user: '5511999999999' },
+        number: '5511999999999',
+        name: 'Loja',
+        isMyContact: true,
+        isMe: false,
+        isBusiness: true
+      }],
+      getProfilePicUrl: async () => undefined,
+      getContactById: async () => ({ getProfilePicUrl: async () => undefined }),
+      pupPage: { evaluate: async () => fakeDataUrl }
+    }, { enableProfilePhotoFetch: true });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+
+    assert.equal(contactStore.get(businessJid)?.name, 'Loja');
+    assert.equal(await service.fetchProfilePhotoUrl(businessJid), fakeDataUrl);
   });
 });
 
@@ -497,11 +528,10 @@ describe('ContactsService agenda em segundo plano', () => {
     await service.whenAgendaSettled();
     assert.equal(getChatsCalls, 2, 'a primeira agenda aplica um refresh');
 
-    (service as unknown as { lastAgendaAttemptAt: number }).lastAgendaAttemptAt = 1;
-    await service.refreshContactsFromChats();
+    service.requestAgendaReload();
     await service.whenAgendaSettled();
 
-    assert.equal(getChatsCalls, 3, 'agenda igual não dispara outro refresh');
+    assert.equal(getChatsCalls, 2, 'agenda igual não dispara outro refresh');
   });
 
   it('only starts reading the agenda after the contacts refresh finished', async () => {
@@ -568,5 +598,274 @@ describe('ContactsService agenda em segundo plano', () => {
     assert.equal(contactStore.has('5511912345678@c.us'), false);
     releaseAgenda([]);
     await service.whenAgendaSettled();
+  });
+});
+
+describe('ContactsService @lid órfãos', () => {
+  function addOrphans(contactStore: ContactStore, count: number): string[] {
+    const jids: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const jid = `${200000000000000 + index}@lid`;
+      contactStore.set(jid, contactStore.createDefault(jid, { phone: '', name: `Cliente ${index}`, found: true }));
+      jids.push(jid);
+    }
+    return jids;
+  }
+
+  it('does not hold the contact list longer than the deadline while orphans are still resolving', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    const { service, contactStore } = createService({
+      getChats: async () => [],
+      pupPage: { evaluate: () => new Promise(resolve => pending.push(resolve)) }
+    }, { orphanReconcileWaitMs: 20 });
+    addOrphans(contactStore, 2);
+
+    let settled = false;
+    await service.refreshContactsFromChats();
+    void service.whenOrphanReconcileSettled().then(() => {
+      settled = true;
+    });
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.equal(settled, false, 'a resolução continua em segundo plano');
+    pending.forEach(resolve => resolve(null));
+    await service.whenOrphanReconcileSettled();
+    await service.whenAgendaSettled();
+  });
+
+  it('resolves at most 4 orphans at a time', async () => {
+    let active = 0;
+    let maxActive = 0;
+    let calls = 0;
+    const { service, contactStore } = createService({
+      getChats: async () => [],
+      pupPage: {
+        evaluate: async () => {
+          calls += 1;
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await new Promise(resolve => setTimeout(resolve, 5));
+          active -= 1;
+          return null;
+        }
+      }
+    });
+    addOrphans(contactStore, 10);
+
+    await service.refreshContactsFromChats();
+    await service.whenOrphanReconcileSettled();
+    await service.whenAgendaSettled();
+
+    assert.equal(calls, 10);
+    assert.equal(maxActive, 4);
+  });
+
+  it('does not retry an orphan that could not be resolved on every refresh', async () => {
+    let calls = 0;
+    const { service, contactStore } = createService({
+      getChats: async () => [],
+      pupPage: {
+        evaluate: async () => {
+          calls += 1;
+          return null;
+        }
+      }
+    });
+    addOrphans(contactStore, 3);
+
+    await service.refreshContactsFromChats();
+    await service.whenOrphanReconcileSettled();
+    await service.refreshContactsFromChats();
+    await service.whenOrphanReconcileSettled();
+    await service.whenAgendaSettled();
+
+    assert.equal(calls, 3);
+  });
+
+  it('updates the app when an orphan is resolved after the list was delivered', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    const notified: string[][] = [];
+    const { service, contactStore, lidMap } = createService({
+      getChats: async () => [],
+      pupPage: { evaluate: () => new Promise(resolve => pending.push(resolve)) }
+    }, { orphanReconcileWaitMs: 20 });
+    service.setOnContactsUpdated(contacts => notified.push(contacts.map(contact => contact.jid)));
+    const [lidJid] = addOrphans(contactStore, 1);
+
+    await service.refreshContactsFromChats();
+    assert.equal(notified.length, 0);
+
+    pending.forEach(resolve => resolve({ lid: lidJid, phone: '5511987654321@c.us' }));
+    await service.whenOrphanReconcileSettled();
+    await service.whenAgendaSettled();
+
+    assert.equal(lidMap.findCanonical(lidJid), '5511987654321@c.us');
+    assert.equal(notified.length, 1);
+    assert.ok(notified[0].includes('5511987654321@c.us'));
+  });
+});
+
+describe('ContactsService agenda salva em disco', () => {
+  const agendaContact = {
+    id: { _serialized: '5511912345678@c.us', user: '5511912345678' },
+    isMyContact: true,
+    isMe: false,
+    number: '5511912345678',
+    name: 'Cliente só na agenda'
+  };
+  const notSavedContact = {
+    id: { _serialized: '5511900000000@c.us', user: '5511900000000' },
+    isMyContact: false,
+    isMe: false,
+    number: '5511900000000',
+    name: 'Não salvo'
+  };
+
+  function tempAgendaFile(): string {
+    return path.join(mkdtempSync(path.join(os.tmpdir(), 'uniq-agenda-')), 'agenda-cache.json');
+  }
+
+  async function waitForFile(file: string): Promise<void> {
+    for (let attempt = 0; attempt < 50 && !existsSync(file); attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+  }
+
+  it('saves only the useful agenda fields and shows them right away on the next opening', async () => {
+    const agendaCacheFile = tempAgendaFile();
+    const first = createService({ getContacts: async () => [agendaContact, notSavedContact] }, { agendaCacheFile });
+    await first.service.refreshContactsFromChats();
+    await first.service.whenAgendaSettled();
+    await waitForFile(agendaCacheFile);
+
+    const saved = JSON.parse(readFileSync(agendaCacheFile, 'utf8'));
+    assert.deepEqual(saved.contacts.map((contact: { number: string }) => contact.number), ['5511912345678']);
+
+    let getContactsCalls = 0;
+    const second = createService({
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      }
+    }, { agendaCacheFile, agendaFirstLoadDelayMs: 60_000 });
+    await second.service.refreshContactsFromChats();
+    await second.service.whenAgendaSettled();
+
+    assert.equal(getContactsCalls, 0, 'a leitura do celular fica para depois do atraso');
+    assert.equal(second.contactStore.get('5511912345678@c.us')?.name, 'Cliente só na agenda');
+  });
+
+  it('reads the phone agenda again on every opening, even with a recent saved copy', async () => {
+    const agendaCacheFile = tempAgendaFile();
+    writeFileSync(agendaCacheFile, JSON.stringify({ ownerJid: '554498958521@c.us', savedAt: Date.now(), contacts: [agendaContact] }));
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [agendaContact];
+      }
+    }, { agendaCacheFile });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+
+    assert.equal(getContactsCalls, 1, 'uma leitura por abertura');
+  });
+
+  it('reads the agenda right away when the user asks to refresh', async () => {
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      }
+    }, { agendaFirstLoadDelayMs: 60_000, isBusy: () => true });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    assert.equal(getContactsCalls, 0);
+
+    assert.equal(await service.requestAgendaReload(), true);
+    assert.equal(getContactsCalls, 1);
+  });
+
+  it('preserves the saved contacts and reports a failed manual refresh', async () => {
+    const agendaCacheFile = tempAgendaFile();
+    writeFileSync(agendaCacheFile, JSON.stringify({
+      ownerJid: '554498958521@c.us', savedAt: Date.now(), contacts: [agendaContact]
+    }));
+    const { service, contactStore } = createService({
+      getContacts: async () => { throw new Error('WhatsApp Web helpers unavailable'); }
+    }, { agendaCacheFile, agendaFirstLoadDelayMs: 60_000 });
+
+    await service.refreshContactsFromChats();
+    assert.equal(contactStore.get('5511912345678@c.us')?.name, agendaContact.name);
+
+    assert.equal(await service.requestAgendaReload(), false);
+    assert.equal(contactStore.get('5511912345678@c.us')?.name, agendaContact.name);
+    assert.equal(JSON.parse(readFileSync(agendaCacheFile, 'utf8')).contacts.length, 1);
+  });
+
+  it('does not use a saved agenda when the account cannot be identified', async () => {
+    const agendaCacheFile = tempAgendaFile();
+    writeFileSync(agendaCacheFile, JSON.stringify({ ownerJid: '', savedAt: Date.now(), contacts: [agendaContact] }));
+    const { service, contactStore } = createService({ getContacts: () => new Promise(() => undefined) }, {
+      agendaCacheFile,
+      agendaFirstLoadDelayMs: 60_000
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.has('5511912345678@c.us'), false);
+  });
+
+  it('ignores a saved agenda that belongs to another account', async () => {
+    const agendaCacheFile = tempAgendaFile();
+    writeFileSync(agendaCacheFile, JSON.stringify({ ownerJid: '5521999999999@c.us', savedAt: Date.now(), contacts: [agendaContact] }));
+    const { service, contactStore } = createService({ getContacts: () => new Promise(() => undefined) }, {
+      agendaCacheFile,
+      agendaFirstLoadDelayMs: 60_000
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.has('5511912345678@c.us'), false);
+  });
+
+  it('waits after the opening before the first agenda read', async () => {
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      }
+    }, { agendaFirstLoadDelayMs: 60_000 });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+
+    assert.equal(getContactsCalls, 0);
+  });
+
+  it('does not read the agenda while messages are being sent', async () => {
+    let busy = true;
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      }
+    }, { isBusy: () => busy });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    assert.equal(getContactsCalls, 0);
+
+    busy = false;
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    assert.equal(getContactsCalls, 1);
   });
 });

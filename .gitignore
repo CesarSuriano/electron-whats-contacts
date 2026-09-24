@@ -55,3 +55,8 @@ testem.log
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Telemetria: exportações locais e chaves de administrador do Firebase (nunca commitar)
+/telemetry-exports
+*firebase-admin*.json
+*-firebase-adminsdk-*.json

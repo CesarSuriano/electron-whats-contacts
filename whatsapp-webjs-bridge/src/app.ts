@@ -3,6 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import type { Container } from './container.js';
 import { buildRoutes } from './routes.js';
+import { telemetry } from './telemetry/Telemetry.js';
 
 export function createApp(container: Container): Express {
   const app = express();
@@ -44,6 +45,27 @@ export function createApp(container: Container): Express {
 
   app.use(express.json({ limit: '2mb' }));
 
+  // Tempo e status de cada requisição. Registra o padrão da rota
+  // (ex.: /chats/:jid/messages), nunca o endereço com o número.
+  app.use((req, res, next) => {
+    if (!telemetry.isEnabled() || req.path === '/api/health' || req.path === '/api/telemetry') {
+      next();
+      return;
+    }
+
+    const startedAt = Date.now();
+    res.on('finish', () => {
+      const route = req.route?.path ? `${req.baseUrl || ''}${String(req.route.path)}` : 'unmatched';
+      telemetry.track('http.request', {
+        method: req.method,
+        route,
+        status: res.statusCode,
+        ms: Date.now() - startedAt
+      });
+    });
+    next();
+  });
+
   app.use(buildRoutes(container));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -52,6 +74,7 @@ export function createApp(container: Container): Express {
       return;
     }
 
+    telemetry.trackError('error.http_unexpected', err);
     res.status(500).json({
       error: 'Unexpected error',
       details: (err as { message?: string } | null)?.message

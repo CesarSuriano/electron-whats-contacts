@@ -18,6 +18,18 @@
   @apply mt-1 text-[0.82rem] text-txt-subtle;
 }
 
+.conversation-list__refresh-button {
+  @apply ml-auto inline-flex h-9 w-9 appearance-none items-center justify-center rounded-full border-none bg-wa-surface text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-55;
+
+  &:hover:not(:disabled) {
+    @apply bg-wa-hover;
+  }
+
+  .material-symbols-outlined {
+    @apply text-[1.2rem];
+  }
+}
+
 .conversation-list__select-button {
   @apply inline-flex appearance-none items-center gap-1.5 rounded-full border-none bg-wa-surface px-3 py-2 text-[0.82rem] font-semibold text-txt-muted shadow-none transition disabled:cursor-not-allowed disabled:opacity-55;
 }

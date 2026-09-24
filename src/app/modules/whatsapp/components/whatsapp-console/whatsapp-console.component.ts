@@ -14,6 +14,7 @@ import { ScheduleCreateRequest, ScheduleEditRequest } from '../../../../componen
 import { extractDigits } from '../../helpers/phone-format.helper';
 import { BulkInterruptedEvent, BulkQueue, BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
+import { telemetry } from '../../../../telemetry/telemetry';
 
 const ERROR_AUTO_DISMISS_MS = 4000;
 const INTERRUPTED_NOTICE_AUTO_DISMISS_MS = 10_000;
@@ -84,6 +85,9 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private errorDismissTimerId: number | null = null;
   private interruptedNoticeTimerId: number | null = null;
+  private readonly openedAt = Date.now();
+  private loadingScreenTracked = false;
+  private sawLoadingScreen = false;
 
   constructor(
     private state: WhatsappStateService,
@@ -118,6 +122,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       this.isLoadingInstances = state.instances;
       this.isLoadingContacts = state.contacts;
       this.isLoadingMessages = state.messages;
+      this.trackLoadingScreenReleased();
     });
 
     this.state.syncStatus$.pipe(takeUntil(this.destroy$)).subscribe(status => {
@@ -127,6 +132,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       this.syncCurrentStep = status.currentStep || 0;
       this.syncTotalSteps = status.totalSteps || 0;
       this.syncProgressPercent = status.progressPercent || 0;
+      this.trackLoadingScreenReleased();
     });
 
     this.state.selectionMode$.pipe(takeUntil(this.destroy$)).subscribe(mode => {
@@ -500,6 +506,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   onContinueInterrupted(id: string): void {
+    telemetry.track('ui.interrupted_continue', {});
     this.dismissInterruptedNotice();
     this.onTriggerSchedule(id);
   }
@@ -510,6 +517,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       return;
     }
 
+    telemetry.track('ui.interrupted_discard', {});
     this.scheduledMessageService.remove(id);
   }
 
@@ -572,6 +580,24 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     }, INTERRUPTED_NOTICE_AUTO_DISMISS_MS);
   }
 
+  // Quanto tempo a tela de carregamento do WhatsApp ficou visível nesta abertura.
+  private trackLoadingScreenReleased(): void {
+    if (this.loadingScreenTracked) {
+      return;
+    }
+    if (this.isInitialLoading) {
+      this.sawLoadingScreen = true;
+      return;
+    }
+    // Antes do carregamento começar os indicadores ficam todos desligados por
+    // um instante; só conta depois de ver o carregamento ou já com contatos.
+    if (!this.sawLoadingScreen && !this.allContacts.length) {
+      return;
+    }
+    this.loadingScreenTracked = true;
+    telemetry.track('ui.whatsapp_screen_ready', { ms: Date.now() - this.openedAt, contacts: this.allContacts.length });
+  }
+
   private clearInterruptedNoticeTimer(): void {
     if (this.interruptedNoticeTimerId === null) {
       return;
@@ -590,14 +616,27 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   }
 
   private processPendingBulk(pending: PendingBulkSend, contacts: WhatsappContact[]): void {
+    let foundInList = 0;
     const matchedContacts = pending.clientes
-      .map(cliente => (
-        this.findContactByPhone(cliente.telefone, contacts)
-        ?? this.createSyntheticContactFromCliente(cliente.nome, cliente.telefone)
-      ))
+      .map(cliente => {
+        const found = this.findContactByPhone(cliente.telefone, contacts);
+        if (found) {
+          foundInList += 1;
+        }
+        return found ?? this.createSyntheticContactFromCliente(cliente.nome, cliente.telefone);
+      })
       .filter((c): c is WhatsappContact => c !== null);
 
     const uniqueContacts = Array.from(new Map(matchedContacts.map(contact => [contact.jid, contact])).values());
+    telemetry.track('ui.pending_bulk', {
+      type: pending.templateType,
+      clientes: pending.clientes.length,
+      foundInList,
+      invalidPhones: pending.clientes.length - matchedContacts.length,
+      unique: uniqueContacts.length,
+      contactsLoaded: contacts.length,
+      waitedMs: Date.now() - this.openedAt
+    });
 
     if (!uniqueContacts.length) {
       return;

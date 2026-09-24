@@ -7,6 +7,7 @@ import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } fro
 import { extractDigits } from '../helpers/phone-format.helper';
 import { WhatsappWebjsGatewayService } from '../../../services/whatsapp-webjs-gateway.service';
 import { WhatsappWsService } from '../../../services/whatsapp-ws.service';
+import { telemetry } from '../../../telemetry/telemetry';
 
 export interface SelectContactOptions {
   loadHistory?: boolean;
@@ -31,6 +32,8 @@ const NON_CONVERSATION_LAST_MESSAGE_TYPES = new Set([
 const SYNCING_HIDE_DELAY_MS = 150;
 const MEDIA_DATA_URL_INTERN_MIN_LENGTH = 4096;
 const MEDIA_DATA_URL_INTERN_LIMIT = 8;
+// Variações de número já calculadas (com/sem 9º dígito, com/sem 55).
+const CONVERSATION_KEYS_CACHE_LIMIT = 50_000;
 // Os retries precisam ser generosos porque na primeira sincronização após
 // scan de QR, a lib do whatsapp-web.js demora pra popular o getChats — pode
 // devolver lista parcial ou vazia se a gente perguntar cedo demais. Já tentei
@@ -109,6 +112,7 @@ export class WhatsappStateService implements OnDestroy {
   private instancesLoadStarted = false;
   private conversationContextRunId = 0;
   private bootstrapRetryCount = 0;
+  private bootStartedAt = 0;
   private readonly syncingSubject = new BehaviorSubject<boolean>(false);
   private readonly syncStatusSubject = new BehaviorSubject<WhatsappSyncStatus>(IDLE_SYNC_STATUS);
   private readonly contactHistoryInFlight = new Set<string>();
@@ -123,6 +127,7 @@ export class WhatsappStateService implements OnDestroy {
   private pendingConversationContextJids = new Set<string>();
   private conversationContextRequestTimer: number | null = null;
   private readonly mediaDataUrlIntern = new Map<string, string>();
+  private readonly conversationKeysCache = new Map<string, Set<string>>();
 
   instances$: Observable<WhatsappInstance[]> = this.instancesSubject.asObservable();
   contacts$: Observable<WhatsappContact[]> = this.contactsSubject.asObservable();
@@ -257,6 +262,7 @@ export class WhatsappStateService implements OnDestroy {
 
     this.ws.on<{ contacts: WhatsappContact[] }>('contacts_updated').pipe(takeUntil(this.destroy$)).subscribe(payload => {
       const contacts = Array.isArray(payload?.contacts) ? payload.contacts : [];
+      telemetry.track('ui.contacts_updated', { count: contacts.length, previous: this.contactsSubject.value.length });
       if (!contacts.length && this.contactsSubject.value.length > 0) {
         return;
       }
@@ -361,6 +367,8 @@ export class WhatsappStateService implements OnDestroy {
     this.clearConversationContextBatchTimer();
     this.initialSyncDone = false;
     this.bootstrapRetryCount = 0;
+    this.bootStartedAt = Date.now();
+    telemetry.track('ui.whatsapp_boot_start', {});
     this.beginInitialSync();
     this.syncingSubject.next(true);
     this.selectedInstanceSubject.next(name);
@@ -406,7 +414,7 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   refresh(): void {
-    void this.loadContacts();
+    void this.loadContacts({ refreshAgenda: true });
 
     const currentSelection = this.selectedContactJid;
     void this.runVisibleMessageLoad(async () => {
@@ -586,6 +594,10 @@ export class WhatsappStateService implements OnDestroy {
     this.setLoading({ messages: false });
     this.finishInitialSync();
     this.onInitialSyncComplete();
+    telemetry.track('ui.whatsapp_ready', {
+      msSinceBoot: this.bootStartedAt ? Date.now() - this.bootStartedAt : null,
+      contacts: this.contactsSubject.value.length
+    });
 
     const selectedJid = this.selectedContactJid;
     if (!selectedJid) {
@@ -620,7 +632,7 @@ export class WhatsappStateService implements OnDestroy {
       const startedAt = Date.now();
       this.gateway.sendMessage(instance, resolvedJid, text).subscribe({
         next: result => {
-          this.logSlowSend('texto', startedAt);
+          this.recordSend('texto', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, text, 'send-api', serverId);
           this.setLoading({ sending: false });
@@ -629,6 +641,7 @@ export class WhatsappStateService implements OnDestroy {
           observer.complete();
         },
         error: err => {
+          this.recordSend('texto', startedAt, err);
           this.setError(this.resolveSendErrorMessage(err, 'Não foi possível enviar a mensagem.'));
           this.setLoading({ sending: false });
           observer.error(err);
@@ -647,7 +660,7 @@ export class WhatsappStateService implements OnDestroy {
       const startedAt = Date.now();
       this.gateway.sendMedia(instance, resolvedJid, file, caption).subscribe({
         next: result => {
-          this.logSlowSend('midia', startedAt);
+          this.recordSend('midia', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, caption, 'send-media-api', serverId, {
             hasMedia: true,
@@ -660,6 +673,7 @@ export class WhatsappStateService implements OnDestroy {
           observer.complete();
         },
         error: err => {
+          this.recordSend('midia', startedAt, err);
           this.setError(this.resolveSendErrorMessage(err, 'Não foi possível enviar o arquivo.'));
           this.setLoading({ sending: false });
           observer.error(err);
@@ -729,8 +743,14 @@ export class WhatsappStateService implements OnDestroy {
 
   // Tempo do clique até a resposta, visto pelo app (inclui espera na fila de
   // conexões com a bridge, que o log da bridge não enxerga). Só envios lentos.
-  private logSlowSend(kind: string, startedAt: number): void {
+  private recordSend(kind: string, startedAt: number, error?: unknown): void {
     const elapsedMs = Date.now() - startedAt;
+    telemetry.track('ui.send', {
+      kind,
+      ms: elapsedMs,
+      ok: !error,
+      status: error instanceof HttpErrorResponse ? error.status : null
+    });
     if (elapsedMs >= SLOW_SEND_LOG_THRESHOLD_MS) {
       console.warn(`[whatsapp] envio de ${kind} lento: ${elapsedMs}ms ate a resposta da bridge`);
     }
@@ -1102,10 +1122,11 @@ export class WhatsappStateService implements OnDestroy {
   private applyContactsSnapshot(contacts: WhatsappContact[], options: { bootstrap?: boolean } = {}): void {
     const bootstrap = options.bootstrap ?? false;
     const current = this.contactsSubject.value;
+    const currentIndex = current.length ? this.buildEquivalenceIndex(current) : null;
     const enriched = contacts
       .map(contact => ({
         ...contact,
-        photoUrl: this.resolveSnapshotPhotoUrl(contact, current)
+        photoUrl: this.resolveSnapshotPhotoUrl(contact, current, currentIndex)
       }));
     const collapsed = this.collapseEquivalentContacts(enriched)
       .sort((a, b) => {
@@ -1149,6 +1170,7 @@ export class WhatsappStateService implements OnDestroy {
     if (bootstrap) {
       if (collapsed.length === 0 && this.bootstrapRetryCount < BOOTSTRAP_CONTACTS_MAX_RETRIES) {
         this.bootstrapRetryCount++;
+        telemetry.track('ui.contacts_empty_retry', { attempt: this.bootstrapRetryCount });
         const retryRunId = this.conversationContextRunId;
         window.setTimeout(() => {
           if (this.conversationContextRunId === retryRunId) {
@@ -1177,8 +1199,16 @@ export class WhatsappStateService implements OnDestroy {
     }
   }
 
-  private resolveSnapshotPhotoUrl(contact: WhatsappContact, current: WhatsappContact[]): string | null {
-    const currentMatch = current.find(existing => this.isEquivalentContactReference(contact.jid || contact.phone, existing));
+  private resolveSnapshotPhotoUrl(
+    contact: WhatsappContact,
+    current: WhatsappContact[],
+    currentIndex: Map<string, number[]> | null
+  ): string | null {
+    // Primeiro contato atual equivalente (mesma regra de antes), via índice.
+    const firstPosition = currentIndex
+      ? this.findEquivalentPositions(contact.jid || contact.phone, current, currentIndex)[0]
+      : undefined;
+    const currentMatch = firstPosition === undefined ? undefined : current[firstPosition];
     const preserved = this.hasPhotoUrl(currentMatch?.photoUrl) ? currentMatch!.photoUrl : null;
 
     if (preserved) {
@@ -1202,7 +1232,7 @@ export class WhatsappStateService implements OnDestroy {
       || this.findEquivalentContact(reference, [contact]) !== null;
   }
 
-  private loadContacts(options: { bootstrap?: boolean } = {}): Promise<void> {
+  private loadContacts(options: { bootstrap?: boolean; refreshAgenda?: boolean } = {}): Promise<void> {
     if (!this.selectedInstance) {
       return Promise.resolve();
     }
@@ -1211,13 +1241,17 @@ export class WhatsappStateService implements OnDestroy {
     this.setLoading({ contacts: true });
 
     return new Promise(resolve => {
-      this.gateway.loadContacts(this.selectedInstance, { waitForRefresh: bootstrap }).subscribe({
+      this.gateway.loadContacts(
+        this.selectedInstance,
+        options.refreshAgenda ? { waitForRefresh: bootstrap, refreshAgenda: true } : { waitForRefresh: bootstrap }
+      ).subscribe({
         next: contacts => {
           this.applyContactsSnapshot(contacts, { bootstrap });
           resolve();
         },
         error: () => {
           this.setError(CONTACTS_LOAD_ERROR_MESSAGE);
+          telemetry.track('error.ui_contacts_load', { bootstrap, msSinceBoot: this.bootStartedAt ? Date.now() - this.bootStartedAt : null });
           this.setLoading({ contacts: false, messages: false });
           if (options.bootstrap) {
             this.finishInitialSync();
@@ -1383,11 +1417,13 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     this.contactHistoryInFlight.add(resolvedJid);
+    const startedAt = Date.now();
 
     return new Promise(resolve => {
       this.gateway.loadChatMessages(this.selectedInstance, resolvedJid, limit, deep).subscribe({
         next: events => {
           const history = this.mapEventsToMessages(events).filter(message => message.contactJid === resolvedJid);
+          telemetry.track('ui.history_load', { ms: Date.now() - startedAt, count: history.length, limit, deep });
 
           if (markAsLoaded) {
             if (history.length > 1) {
@@ -1405,6 +1441,7 @@ export class WhatsappStateService implements OnDestroy {
         },
         error: () => {
           this.contactHistoryInFlight.delete(resolvedJid);
+          telemetry.track('error.ui_history_load', { ms: Date.now() - startedAt, limit, deep });
 
           resolve(0);
         }
@@ -1615,23 +1652,94 @@ export class WhatsappStateService implements OnDestroy {
 
   private collapseEquivalentContacts(contacts: WhatsappContact[]): WhatsappContact[] {
     const collapsed: WhatsappContact[] = [];
+    const index = new Map<string, number[]>();
 
     for (const contact of contacts) {
       const reference = contact.jid || contact.phone;
-      const existing = this.findEquivalentContact(reference, collapsed);
-      if (!existing) {
+      const position = this.findEquivalentPosition(reference, collapsed, index);
+      if (position === -1) {
         collapsed.push(contact);
+        this.addToEquivalenceIndex(index, collapsed.length - 1, contact);
         continue;
       }
 
-      const merged = this.mergeEquivalentContacts(existing, contact);
-      const existingIndex = collapsed.indexOf(existing);
-      if (existingIndex >= 0) {
-        collapsed.splice(existingIndex, 1, merged);
-      }
+      const merged = this.mergeEquivalentContacts(collapsed[position], contact);
+      collapsed[position] = merged;
+      this.addToEquivalenceIndex(index, position, merged);
     }
 
     return collapsed;
+  }
+
+  // Índice "variação do número → posições na lista". Com milhares de contatos,
+  // comparar cada um com todos os outros travava a tela por minutos; o índice
+  // entrega só os candidatos que compartilham alguma variação.
+  private buildEquivalenceIndex(contacts: WhatsappContact[]): Map<string, number[]> {
+    const index = new Map<string, number[]>();
+    contacts.forEach((contact, position) => this.addToEquivalenceIndex(index, position, contact));
+    return index;
+  }
+
+  private addToEquivalenceIndex(index: Map<string, number[]>, position: number, contact: WhatsappContact): void {
+    for (const source of [contact.jid, contact.phone]) {
+      if (!source) {
+        continue;
+      }
+
+      this.addEquivalencePosition(index, `raw:${source}`, position);
+      for (const key of this.buildConversationKeys(source)) {
+        this.addEquivalencePosition(index, key, position);
+      }
+    }
+  }
+
+  private addEquivalencePosition(index: Map<string, number[]>, key: string, position: number): void {
+    const positions = index.get(key);
+    if (!positions) {
+      index.set(key, [position]);
+    } else if (!positions.includes(position)) {
+      positions.push(position);
+    }
+  }
+
+  // Posições (em ordem) dos contatos da lista equivalentes à referência, com a
+  // mesma regra de findEquivalentContact(reference, contacts).
+  private findEquivalentPositions(reference: string, contacts: WhatsappContact[], index: Map<string, number[]>): number[] {
+    if (!reference) {
+      return [];
+    }
+
+    const candidates = new Set<number>();
+    for (const key of [`raw:${reference}`, ...this.buildConversationKeys(reference)]) {
+      for (const position of index.get(key) ?? []) {
+        candidates.add(position);
+      }
+    }
+
+    return Array.from(candidates)
+      .sort((a, b) => a - b)
+      .filter(position => this.matchesEquivalentReference(reference, contacts[position]));
+  }
+
+  // Mesmo contato que findEquivalentContact(reference, contacts) escolheria
+  // (maior pontuação; empate fica com o que vem antes na lista).
+  private findEquivalentPosition(reference: string, contacts: WhatsappContact[], index: Map<string, number[]>): number {
+    const matches = this.findEquivalentPositions(reference, contacts, index);
+    if (!matches.length) {
+      return -1;
+    }
+
+    return [...matches].sort((a, b) =>
+      this.scoreEquivalentContact(reference, contacts[b]) - this.scoreEquivalentContact(reference, contacts[a])
+    )[0];
+  }
+
+  private matchesEquivalentReference(reference: string, contact: WhatsappContact | undefined): boolean {
+    return Boolean(contact) && (
+      contact!.jid === reference
+      || this.isSameConversationTarget(reference, contact!.jid)
+      || this.isSameConversationTarget(reference, contact!.phone)
+    );
   }
 
   private mergeEquivalentContacts(left: WhatsappContact, right: WhatsappContact): WhatsappContact {
@@ -1874,22 +1982,30 @@ export class WhatsappStateService implements OnDestroy {
     return false;
   }
 
+  // O resultado é compartilhado pelo cache: quem chama só pode ler o Set.
   private buildConversationKeys(raw: string): Set<string> {
+    const cached = this.conversationKeysCache.get(raw);
+    if (cached) {
+      return cached;
+    }
+
     const digits = extractDigits(raw);
     const keys = new Set<string>();
 
-    if (!digits) {
-      return keys;
+    if (digits) {
+      keys.add(`exact:${digits}`);
+
+      if (digits.startsWith('55') && digits.length > 11) {
+        keys.add(`exact:${digits.slice(2)}`);
+      }
+
+      this.addBrazilianConversationKeys(digits, keys);
     }
 
-    keys.add(`exact:${digits}`);
-
-    if (digits.startsWith('55') && digits.length > 11) {
-      keys.add(`exact:${digits.slice(2)}`);
+    if (this.conversationKeysCache.size >= CONVERSATION_KEYS_CACHE_LIMIT) {
+      this.conversationKeysCache.clear();
     }
-
-    this.addBrazilianConversationKeys(digits, keys);
-
+    this.conversationKeysCache.set(raw, keys);
     return keys;
   }
 
@@ -2320,6 +2436,9 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   private setError(message: string): void {
+    if (message && message !== this.errorMessageSubject.value) {
+      telemetry.track('ui.error_shown', { message });
+    }
     this.errorMessageSubject.next(message);
   }
 }
