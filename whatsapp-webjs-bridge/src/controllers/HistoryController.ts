@@ -68,6 +68,7 @@ export class HistoryController {
     const deep = this.readBooleanFlag(req.query.deep);
     const debug = this.readBooleanFlag(req.query.debug);
 
+    const startedAt = Date.now();
     await this.historyService.acquireHistorySlot();
     try {
       const notReady = this.messageService.requireReady();
@@ -236,6 +237,7 @@ export class HistoryController {
       });
     } finally {
       this.historyService.releaseHistorySlot();
+      console.log(`[whatsapp-webjs-bridge] tempo historico ${req.params.jid || ''}: ${Date.now() - startedAt}ms (limit=${limit}, deep=${deep})`);
     }
   };
 

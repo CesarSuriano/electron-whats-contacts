@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { MessageService } from '../whatsapp/MessageService.js';
 
+// Tempo de cada envio no log, para comparar antes/depois de ajustes de desempenho.
+function logSendTiming(kind: string, startedAt: number, ok: boolean): void {
+  console.log(`[whatsapp-webjs-bridge] tempo ${kind}: ${Date.now() - startedAt}ms${ok ? '' : ' (falhou)'}`);
+}
+
 export class MessagesController {
   constructor(
     private readonly messageService: MessageService,
@@ -29,7 +34,12 @@ export class MessagesController {
         return;
       }
 
-      const result = await this.messageService.sendText(destination.chatId, text);
+      const startedAt = Date.now();
+      const result = await this.messageService.sendText(destination.chatId, text).catch(error => {
+        logSendTiming('envio de texto', startedAt, false);
+        throw error;
+      });
+      logSendTiming('envio de texto', startedAt, true);
       res.json({ instanceName: this.instanceName, result });
     } catch (error) {
       res.status(500).json({
@@ -161,13 +171,18 @@ export class MessagesController {
 
       const mimetype = file.mimetype || 'application/octet-stream';
       const filename = file.originalname || 'arquivo';
+      const startedAt = Date.now();
       const result = await this.messageService.sendMedia(
         destination.chatId,
         file.buffer,
         mimetype,
         filename,
         caption
-      );
+      ).catch(error => {
+        logSendTiming('envio de midia', startedAt, false);
+        throw error;
+      });
+      logSendTiming('envio de midia', startedAt, true);
 
       res.json({ instanceName: this.instanceName, result });
     } catch (error) {

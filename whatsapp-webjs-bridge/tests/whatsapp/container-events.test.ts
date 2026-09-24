@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import { bindClientEvents } from '../../src/container.js';
+import { LABELS_POLL_PAUSE_AFTER_SEND_MS, bindClientEvents, isOutboundActive } from '../../src/container.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { wait } from '../../src/utils/time.js';
 
@@ -102,6 +102,18 @@ function createContainer(options: {
     getRecoveryBudgetResetCalls: () => recoveryBudgetResetCalls
   };
 }
+
+describe('isOutboundActive', () => {
+  it('is inactive before any send', () => {
+    assert.equal(isOutboundActive(0, 1_000_000), false);
+  });
+
+  it('pauses the labels poll while sends are recent and resumes afterwards', () => {
+    const now = 1_000_000;
+    assert.equal(isOutboundActive(now - 1_000, now), true);
+    assert.equal(isOutboundActive(now - LABELS_POLL_PAUSE_AFTER_SEND_MS, now), false);
+  });
+});
 
 describe('bindClientEvents disconnected recovery', () => {
   it('tries to recover the session after a transient disconnect', async () => {

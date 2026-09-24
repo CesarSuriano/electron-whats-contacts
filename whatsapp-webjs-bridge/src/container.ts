@@ -115,6 +115,15 @@ async function loadHydratedChats(
   return chats;
 }
 
+// Enquanto houver envios recentes (ex.: envio em massa), o recarregamento
+// periódico de etiquetas espera: ele consulta as conversas de cada etiqueta
+// no WhatsApp Web e disputa a página com os envios.
+export const LABELS_POLL_PAUSE_AFTER_SEND_MS = 60_000;
+
+export function isOutboundActive(lastOutboundAt: number, now = Date.now()): boolean {
+  return lastOutboundAt > 0 && now - lastOutboundAt < LABELS_POLL_PAUSE_AFTER_SEND_MS;
+}
+
 function getAuthenticatedReadyTimeoutMs(): number {
   const raw = Number(process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_AUTHENTICATED_READY_TIMEOUT_MS;
@@ -414,6 +423,9 @@ export function bindClientEvents(container: Container): void {
       if (sessionState.status !== 'ready') {
         return;
       }
+      if (isOutboundActive(messageService.lastOutboundAt)) {
+        return;
+      }
       void refreshLabelsAndBroadcast('poll');
     }, LABELS_POLL_INTERVAL_MS);
   };
@@ -475,11 +487,14 @@ export function bindClientEvents(container: Container): void {
     try {
       const clientWithChats = client as WebJsClientWithChatPage;
       initialContactsWarmup = (async () => {
+        const hydrationStartedAt = Date.now();
         const chats = await loadHydratedChats(clientWithChats, isCurrentBootstrap);
         if (!isCurrentBootstrap()) return;
-        console.log(`[whatsapp-webjs-bridge] Conversas hidratadas: ${chats.length}. Iniciando refresh de contatos.`);
+        console.log(`[whatsapp-webjs-bridge] Conversas hidratadas: ${chats.length} em ${Date.now() - hydrationStartedAt}ms. Iniciando refresh de contatos.`);
+        const refreshStartedAt = Date.now();
         await contactsService.triggerRefresh({ preloadedChats: chats, reason: 'ready' });
         if (!isCurrentBootstrap()) return;
+        console.log(`[whatsapp-webjs-bridge] tempo refresh de contatos (ready): ${Date.now() - refreshStartedAt}ms`);
         await ingestionService.seedEventsFromRecentChats(chats);
       })();
       contactsService.setInitialContactsWarmup(initialContactsWarmup);

@@ -380,6 +380,48 @@ describe('MessageService.sendMedia', () => {
     assert.equal(contact.lastMessagePreview, 'Legenda');
   });
 
+  it('sends the exact same media payload and event data when the same image goes to several contacts', async () => {
+    const fakeSend: FakeSend = {
+      response: { id: { _serialized: 'sent-media' }, timestamp: 1700001111, ack: 0 }
+    };
+    const { service, eventStore } = buildService(fakeSend);
+    const buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const expectedBase64 = buffer.toString('base64');
+
+    const sentMedia: Array<{ mimetype: string; data: string; filename: string }> = [];
+    for (const [index, chatId] of ['5511987654321@c.us', '5511912345678@c.us'].entries()) {
+      fakeSend.response = { id: { _serialized: `sent-media-${index}` }, timestamp: 1700001111 + index, ack: 0 };
+      await service.sendMedia(chatId, buffer, 'image/jpeg', 'foto.jpg', 'Legenda');
+      sentMedia.push(fakeSend.lastArgs?.content as { mimetype: string; data: string; filename: string });
+    }
+
+    for (const media of sentMedia) {
+      assert.equal(media.mimetype, 'image/jpeg');
+      assert.equal(media.data, expectedBase64);
+      assert.equal(media.filename, 'foto.jpg');
+    }
+
+    const mediaDataUrls = eventStore.events.map(event => (event.payload as { mediaDataUrl?: string }).mediaDataUrl);
+    assert.deepEqual(mediaDataUrls, [
+      `data:image/jpeg;base64,${expectedBase64}`,
+      `data:image/jpeg;base64,${expectedBase64}`
+    ]);
+  });
+
+  it('does not reuse the encoded payload of a different image', async () => {
+    const fakeSend: FakeSend = { response: { id: { _serialized: 'sent-a' }, timestamp: 1700001111 } };
+    const { service } = buildService(fakeSend);
+
+    await service.sendMedia('5511987654321@c.us', Buffer.from('imagem-a'), 'image/png', 'a.png', '');
+    const first = fakeSend.lastArgs?.content as { data: string };
+    fakeSend.response = { id: { _serialized: 'sent-b' }, timestamp: 1700001112 };
+    await service.sendMedia('5511987654321@c.us', Buffer.from('imagem-b'), 'image/png', 'b.png', '');
+    const second = fakeSend.lastArgs?.content as { data: string };
+
+    assert.equal(first.data, Buffer.from('imagem-a').toString('base64'));
+    assert.equal(second.data, Buffer.from('imagem-b').toString('base64'));
+  });
+
   it('marks non-image media as document with sendMediaAsDocument option', async () => {
     const fakeSend: FakeSend = {
       response: { id: { _serialized: 'sent-doc' }, timestamp: 1700001222, to: '5511987654321@c.us' }
@@ -393,6 +435,30 @@ describe('MessageService.sendMedia', () => {
     assert.ok(contact);
     assert.equal(contact.lastMessageType, 'document');
     assert.equal(contact.lastMessageHasMedia, true);
+  });
+});
+
+describe('MessageService.lastOutboundAt', () => {
+  it('starts at zero and is updated by successful and failed sends', async () => {
+    const fakeSend: FakeSend = { response: { id: { _serialized: 'sent-text' }, timestamp: 1700001111 } };
+    const { service } = buildService(fakeSend);
+    assert.equal(service.lastOutboundAt, 0);
+
+    const beforeSuccess = Date.now();
+    await service.sendText('5511987654321@c.us', 'Oi');
+    assert.ok(service.lastOutboundAt >= beforeSuccess);
+
+    const { service: failingService } = buildService({ response: {} }, {
+      clientOverride: {
+        sendMessage: async () => {
+          throw new Error('falhou');
+        },
+        getNumberId: async () => null
+      } as Partial<WebJsClient>
+    });
+    const beforeFailure = Date.now();
+    await assert.rejects(failingService.sendText('5511987654321@c.us', 'Oi'));
+    assert.ok(failingService.lastOutboundAt >= beforeFailure);
   });
 });
 

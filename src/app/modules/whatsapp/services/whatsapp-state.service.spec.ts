@@ -166,7 +166,7 @@ describe('WhatsappStateService', () => {
       expect(gateway.loadContacts).toHaveBeenCalledWith(mockInstance.name, { waitForRefresh: true });
     });
 
-    it('loads conversation context for each contact after contacts bootstrap', fakeAsync(() => {
+    it('loads context only for the auto-selected conversation after contacts bootstrap', fakeAsync(() => {
       gateway.loadContacts.and.returnValue(of([
         {
           ...mockContact,
@@ -187,9 +187,27 @@ describe('WhatsappStateService', () => {
 
       const calledArgs = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args);
       expect(calledArgs).toEqual([
-        [mockInstance.name, mockContact.jid, 10, false],
-        [mockInstance.name, secondMockContact.jid, 10, false]
+        [mockInstance.name, mockContact.jid, 10, false]
       ]);
+    }));
+
+    it('releases the initial loading screen without waiting for conversation history', fakeAsync(() => {
+      gateway.loadContacts.and.returnValue(of([
+        { ...mockContact, getChatsTimestampMs: 2_000, fromGetChats: true }
+      ]));
+      gateway.loadChatMessages.and.returnValue(new Subject<never>().asObservable());
+
+      let syncActive = true;
+      let messagesLoading = true;
+      service.syncStatus$.subscribe(status => (syncActive = status.active));
+      service.loadingState$.subscribe(state => (messagesLoading = state.messages));
+
+      service.loadInstances();
+      tick();
+
+      expect(gateway.loadChatMessages).toHaveBeenCalledTimes(1);
+      expect(syncActive).toBeFalse();
+      expect(messagesLoading).toBeFalse();
     }));
 
     it('preloads all unread messages for unread conversations during bootstrap', fakeAsync(() => {
@@ -253,7 +271,7 @@ describe('WhatsappStateService', () => {
       expect(calledJids).toEqual(['5511987654321@c.us']);
     }));
 
-    it('caps bootstrap context loading to the first 100 contacts', fakeAsync(() => {
+    it('does not preload history for the other conversations during bootstrap', fakeAsync(() => {
       const contacts = Array.from({ length: 120 }, (_, index) => makeBootstrapContact(index + 1));
       gateway.loadContacts.and.returnValue(of(contacts));
 
@@ -261,11 +279,10 @@ describe('WhatsappStateService', () => {
       tick();
 
       const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
-      expect(calledJids.length).toBe(100);
-      expect(calledJids).toEqual(contacts.slice(0, 100).map(contact => contact.jid));
+      expect(calledJids).toEqual([contacts[0].jid]);
     }));
 
-    it('prioritizes unread conversations in the bootstrap queue even when they are older', fakeAsync(() => {
+    it('auto-selects an unread conversation during bootstrap even when it is older', fakeAsync(() => {
       const contacts = Array.from({ length: 120 }, (_, index) => makeBootstrapContact(index + 1));
       const unreadTailContact = {
         ...makeBootstrapContact(999),
@@ -281,7 +298,8 @@ describe('WhatsappStateService', () => {
       tick();
 
       const calledJids = gateway.loadChatMessages.calls.all().map((call: { args: unknown[] }) => call.args[1] as string);
-      expect(calledJids).toContain(unreadTailContact.jid);
+      expect(service.selectedContactJid).toBe(unreadTailContact.jid);
+      expect(calledJids).toEqual([unreadTailContact.jid]);
     }));
 
     it('hydrates contacts from contacts_updated after an empty bootstrap response', fakeAsync(() => {
@@ -751,6 +769,35 @@ describe('WhatsappStateService', () => {
   });
 
   describe('requestPhoto', () => {
+    it('keeps at most three photo requests in flight so sends are never queued behind photos', fakeAsync(() => {
+      const responses = new Map<string, Subject<string | null>>();
+      gateway.loadContactPhoto.and.callFake((jid: string) => {
+        const response = new Subject<string | null>();
+        responses.set(jid, response);
+        return response.asObservable();
+      });
+
+      const jids = ['5511900000001@c.us', '5511900000002@c.us', '5511900000003@c.us', '5511900000004@c.us', '5511900000005@c.us'];
+      jids.forEach(jid => service.requestPhoto(jid));
+      tick(151);
+
+      expect(gateway.loadContactPhoto).toHaveBeenCalledTimes(3);
+
+      tick(1_000);
+      expect(gateway.loadContactPhoto).toHaveBeenCalledTimes(3);
+
+      responses.get(jids[0])!.next(null);
+      responses.get(jids[0])!.complete();
+      tick(151);
+
+      expect(gateway.loadContactPhoto).toHaveBeenCalledTimes(4);
+      expect(gateway.loadContactPhoto.calls.mostRecent().args[0]).toBe(jids[3]);
+
+      service.requestPhoto(jids[1]);
+      tick(151);
+      expect(gateway.loadContactPhoto).toHaveBeenCalledTimes(4);
+    }));
+
     it('retries photo fetch after previous null result cooldown expires', fakeAsync(() => {
       (service as unknown as { contactsSubject: { next(value: WhatsappContact[]): void } }).contactsSubject.next([
         { ...mockContact, photoUrl: null }

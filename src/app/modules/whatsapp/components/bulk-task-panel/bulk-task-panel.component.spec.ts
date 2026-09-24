@@ -26,6 +26,9 @@ describe('BulkTaskPanelComponent', () => {
   let isSendingCurrent = false;
 
   beforeEach(async () => {
+    // Estado compartilhado: reinicia para o resultado não depender da ordem aleatória dos testes.
+    canSendCurrent = true;
+    isSendingCurrent = false;
     queue$ = new BehaviorSubject<BulkQueue | null>(null);
     bulkSendSpy = jasmine.createSpyObj('BulkSendService', ['pause', 'resume', 'skipCurrent', 'cancel', 'sendCurrent'], {
       queue$: queue$.asObservable(),

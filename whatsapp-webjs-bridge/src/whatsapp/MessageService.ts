@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import pkg from 'whatsapp-web.js';
 import type { Client as WebJsClient, Message } from 'whatsapp-web.js';
 import type { RawMessage } from '../domain/types.js';
@@ -13,6 +14,7 @@ import { readMessageInlineImageDataUrl } from '../utils/media.js';
 import { isIgnoredWhatsappMessage } from '../utils/message.js';
 
 const { MessageMedia } = pkg;
+const MEDIA_VALUE_CACHE_LIMIT = 4;
 
 export interface SendTextResult {
   id: string;
@@ -47,6 +49,13 @@ type WebJsClientWithMessaging = WebJsClient & {
 };
 
 export class MessageService {
+  private lastOutboundAtMs = 0;
+  // O envio em massa manda o mesmo arquivo para centenas de contatos. Reaproveitar
+  // o base64 já calculado evita reprocessar o arquivo e manter uma cópia nova por
+  // evento no EventStore. O valor enviado ao WhatsApp é exatamente o mesmo.
+  private readonly mediaBase64Cache = new Map<string, string>();
+  private readonly mediaDataUrlCache = new Map<string, string>();
+
   constructor(
     private readonly client: WebJsClient,
     private readonly sessionState: SessionState,
@@ -138,9 +147,11 @@ export class MessageService {
     caption: string
   ): Promise<SendMediaResult> {
     const clientWithSend = this.client as WebJsClientWithMessaging;
+    const mediaHash = createHash('sha1').update(buffer).digest('hex');
+    const base64 = this.readCachedMediaValue(this.mediaBase64Cache, mediaHash, () => buffer.toString('base64'));
     const media = new MessageMedia(
       mimetype,
-      buffer.toString('base64'),
+      base64,
       filename || 'arquivo'
     );
 
@@ -162,7 +173,7 @@ export class MessageService {
     const sentIdSerialized = sent.id?._serialized || '';
     const receivedAt = toIsoFromUnixTimestamp(sent.timestamp);
     const mediaDataUrl = isImage
-      ? `data:${mimetype};base64,${buffer.toString('base64')}`
+      ? this.readCachedMediaValue(this.mediaDataUrlCache, `${mimetype}|${mediaHash}`, () => `data:${mimetype};base64,${base64}`)
       : null;
 
     this.registerLidFromSentMessage(deliveredChatId, sent);
@@ -201,7 +212,44 @@ export class MessageService {
     };
   }
 
+  // Momento do último envio (iniciado ou concluído). Tarefas de fundo, como o
+  // recarregamento de etiquetas, usam isso para não disputar o WhatsApp Web
+  // com um envio em massa em andamento.
+  get lastOutboundAt(): number {
+    return this.lastOutboundAtMs;
+  }
+
+  private readCachedMediaValue(cache: Map<string, string>, key: string, build: () => string): string {
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const value = build();
+    cache.set(key, value);
+    if (cache.size > MEDIA_VALUE_CACHE_LIMIT) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        cache.delete(oldestKey);
+      }
+    }
+
+    return value;
+  }
+
   private async sendWithBrazilianAlternative<T>(
+    chatId: string,
+    send: (candidateChatId: string) => Promise<T>
+  ): Promise<{ chatId: string; sent: T }> {
+    this.lastOutboundAtMs = Date.now();
+    try {
+      return await this.sendWithCandidates(chatId, send);
+    } finally {
+      this.lastOutboundAtMs = Date.now();
+    }
+  }
+
+  private async sendWithCandidates<T>(
     chatId: string,
     send: (candidateChatId: string) => Promise<T>
   ): Promise<{ chatId: string; sent: T }> {

@@ -1,5 +1,5 @@
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { BulkInterruptedEvent, BulkScheduleLifecycleEvent, BulkSendService } from './bulk-send.service';
+import { BulkInterruptedEvent, BulkQueue, BulkScheduleLifecycleEvent, BulkSendService } from './bulk-send.service';
 import { WhatsappStateService } from './whatsapp-state.service';
 import { WhatsappContact } from '../../../models/whatsapp.model';
 import { BehaviorSubject, of } from 'rxjs';
@@ -37,6 +37,7 @@ describe('BulkSendService', () => {
 
   beforeEach(() => {
     localStorage.removeItem('uniq-system.whatsapp.bulk-queue');
+    localStorage.removeItem('uniq-system.whatsapp.bulk-queue-images');
     stateMock = makeStateMock();
     TestBed.configureTestingModule({
       providers: [
@@ -50,6 +51,7 @@ describe('BulkSendService', () => {
   afterEach(() => {
     service.ngOnDestroy();
     localStorage.removeItem('uniq-system.whatsapp.bulk-queue');
+    localStorage.removeItem('uniq-system.whatsapp.bulk-queue-images');
   });
 
   it('should be created', () => {
@@ -248,6 +250,26 @@ describe('BulkSendService', () => {
     expect(caption).toBe('Legenda');
   });
 
+  it('reuses the decoded image file for every contact of the same queue', fakeAsync(() => {
+    const imageDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    stateMock.getDraftTextForJid.and.returnValue('Legenda');
+    service.start([makeContact('5511@c.us'), makeContact('5522@c.us')], 'msg', imageDataUrl);
+
+    service.sendCurrent();
+    (stateMock.messageSent$ as BehaviorSubject<{ jid: string; at: number } | null>).next({ jid: '5511@c.us', at: Date.now() });
+    tick(500);
+    service.sendCurrent();
+    tick(120);
+
+    expect(stateMock.sendMedia).toHaveBeenCalledTimes(2);
+    const firstFile = stateMock.sendMedia.calls.argsFor(0)[1] as File;
+    const secondFile = stateMock.sendMedia.calls.argsFor(1)[1] as File;
+    expect(stateMock.sendMedia.calls.argsFor(1)[0]).toBe('5522@c.us');
+    expect(secondFile).toBe(firstFile);
+    expect(firstFile.type).toBe('image/png');
+    expect(firstFile.name).toBe('bulk-template.png');
+  }));
+
   it('sendCurrent sends every queued image and keeps the caption only on the first file', () => {
     const imageDataUrls = [
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -304,5 +326,110 @@ describe('BulkSendService', () => {
     expect(queue?.items[0].status).toBe('current');
     expect(service.hasActiveQueue).toBeTrue();
     expect(stateMock.sendText).not.toHaveBeenCalled();
+  });
+
+  describe('queue persistence', () => {
+    const QUEUE_KEY = 'uniq-system.whatsapp.bulk-queue';
+    const IMAGES_KEY = 'uniq-system.whatsapp.bulk-queue-images';
+    const imageDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+    function restoreFromStorage(): BulkSendService {
+      const restoredService = new BulkSendService(stateMock as unknown as WhatsappStateService);
+      return restoredService;
+    }
+
+    it('stores the images once and only the item statuses on every step', fakeAsync(() => {
+      const setItemSpy = spyOn(Storage.prototype, 'setItem').and.callThrough();
+
+      service.start([makeContact('5511@c.us'), makeContact('5522@c.us'), makeContact('5533@c.us')], 'msg', imageDataUrl);
+      tick(120);
+      service.skipCurrent();
+      tick(120);
+      service.skipCurrent();
+      tick(120);
+
+      const imageWrites = setItemSpy.calls.all().filter(call => call.args[0] === IMAGES_KEY);
+      expect(imageWrites.length).toBe(1);
+
+      const persisted = JSON.parse(localStorage.getItem(QUEUE_KEY)!);
+      expect(persisted.imageDataUrls).toBeUndefined();
+      expect(persisted.imageDataUrl).toBeUndefined();
+      expect(persisted.imageCount).toBe(1);
+      expect(persisted.items.map((item: { status: string }) => item.status)).toEqual(['skipped', 'skipped', 'current']);
+      expect(JSON.parse(localStorage.getItem(IMAGES_KEY)!)).toEqual([imageDataUrl]);
+    }));
+
+    it('restores a paused queue with its images after the app restarts', fakeAsync(() => {
+      service.start([makeContact('5511@c.us'), makeContact('5522@c.us')], 'Olá {nome}', imageDataUrl);
+      tick(120);
+      service.skipCurrent();
+      tick(120);
+
+      const restoredService = restoreFromStorage();
+      const restored = (restoredService as unknown as { queueSubject: BehaviorSubject<BulkQueue | null> }).queueSubject.value;
+
+      expect(restored?.isPaused).toBeTrue();
+      expect(restored?.template).toBe('Olá {nome}');
+      expect(restored?.imageDataUrls).toEqual([imageDataUrl]);
+      expect(restored?.items.map(item => item.status)).toEqual(['skipped', 'pending']);
+      restoredService.ngOnDestroy();
+    }));
+
+    it('restores queues saved in the previous format with the images inline', () => {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify({
+        template: 'msg',
+        imageDataUrls: [imageDataUrl],
+        items: [{ jid: '5511@c.us', name: 'Ana', status: 'current' }],
+        isPaused: false,
+        createdAt: '2026-09-01T10:00:00.000Z'
+      }));
+
+      const restoredService = restoreFromStorage();
+      const restored = (restoredService as unknown as { queueSubject: BehaviorSubject<BulkQueue | null> }).queueSubject.value;
+
+      expect(restored?.imageDataUrls).toEqual([imageDataUrl]);
+      expect(restored?.items[0].status).toBe('pending');
+      restoredService.ngOnDestroy();
+    });
+
+    it('does not restore a queue whose images could not be saved, so it never resumes without them', () => {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify({
+        template: 'msg',
+        imageCount: 1,
+        items: [{ jid: '5511@c.us', name: 'Ana', status: 'pending' }],
+        isPaused: true,
+        createdAt: '2026-09-01T10:00:00.000Z'
+      }));
+
+      const restoredService = restoreFromStorage();
+
+      expect(restoredService.hasActiveQueue).toBeFalse();
+      expect(localStorage.getItem(QUEUE_KEY)).toBeNull();
+      restoredService.ngOnDestroy();
+    });
+
+    it('drops the previous images when a text-only queue replaces an image queue', fakeAsync(() => {
+      service.start([makeContact('5511@c.us')], 'com imagem', imageDataUrl);
+      tick(120);
+      service.start([makeContact('5522@c.us')], 'só texto');
+      tick(120);
+
+      expect(localStorage.getItem(IMAGES_KEY)).toBeNull();
+
+      const restoredService = restoreFromStorage();
+      const restored = (restoredService as unknown as { queueSubject: BehaviorSubject<BulkQueue | null> }).queueSubject.value;
+      expect(restored?.template).toBe('só texto');
+      expect(restored?.imageDataUrls).toBeUndefined();
+      restoredService.ngOnDestroy();
+    }));
+
+    it('clears everything when the queue is cancelled', fakeAsync(() => {
+      service.start([makeContact('5511@c.us'), makeContact('5522@c.us')], 'msg', imageDataUrl);
+      tick(120);
+      service.cancel();
+
+      expect(localStorage.getItem(QUEUE_KEY)).toBeNull();
+      expect(localStorage.getItem(IMAGES_KEY)).toBeNull();
+    }));
   });
 });

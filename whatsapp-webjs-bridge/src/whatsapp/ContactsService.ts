@@ -42,6 +42,30 @@ const CONTACTS_REFRESH_TIMEOUT_MS = 90 * 1000;
 const CONTACTS_FETCH_TIMEOUT_MS = 45 * 1000;
 const CONTACTS_EMPTY_CACHE_WAIT_MS = 1500;
 const CHAT_HYDRATION_WAIT_TIMEOUT_MS = 270 * 1000;
+// A agenda do celular muda pouco: recarrega em segundo plano no máximo a cada
+// 5 minutos; se a última tentativa falhou, tenta de novo após 1 minuto.
+const AGENDA_RELOAD_INTERVAL_MS = 5 * 60 * 1000;
+const AGENDA_RETRY_AFTER_FAILURE_MS = 60 * 1000;
+
+interface AgendaSnapshot {
+  ownerJid: string;
+  contacts: RawContact[];
+  signature: string;
+}
+
+function buildAgendaSignature(contacts: RawContact[]): string {
+  return contacts
+    .map(contact => [
+      contact?.id?._serialized || '',
+      contact?.number || '',
+      contact?.name || '',
+      contact?.pushname || '',
+      contact?.shortName || '',
+      contact?.isMe ? '1' : '0',
+      contact?.isMyContact ? '1' : '0'
+    ].join('|'))
+    .join('\n');
+}
 
 interface PhotoCacheEntry {
   url: string | null;
@@ -97,12 +121,29 @@ function resolveLastMessageMetadata(
   };
 }
 
+// O ack da última mensagem vem da própria lista de conversas do WhatsApp Web,
+// para a prévia mostrar os tiques sem precisar carregar o histórico do chat.
+function resolveLastMessageAck(
+  lastMessage: RawMessage | null | undefined,
+  existing: Partial<ContactEntry> | null | undefined
+): number | null {
+  if (lastMessage && typeof lastMessage.ack === 'number') {
+    return lastMessage.ack;
+  }
+
+  return existing?.lastMessageAck ?? null;
+}
+
 export class ContactsService {
   private readonly photosByJid = new Map<string, PhotoCacheEntry>();
   private lastContactsRefreshAt = 0;
   private contactsRefreshPromise: Promise<void> | null = null;
   private initialContactsWarmup: Promise<void> | null = null;
   private onContactsUpdated: ContactsUpdatedCallback | null = null;
+  private agendaSnapshot: AgendaSnapshot | null = null;
+  private agendaLoadPromise: Promise<void> | null = null;
+  private lastAgendaAttemptAt = 0;
+  private agendaSignatureApplied = '';
 
   constructor(
     private readonly client: WebJsClient,
@@ -507,25 +548,23 @@ export class ContactsService {
 
     const clientWithChats = this.client as WebJsClient & {
       getChats: () => Promise<RawChat[]>;
-      getContacts: () => Promise<RawContact[]>;
     };
 
     const chatsPromise: Promise<RawChat[]> = preloadedChats
       ? Promise.resolve(preloadedChats)
       : clientWithChats.getChats();
 
-    const contactsPromise: Promise<RawContact[]> = withTimeout(
-      clientWithChats.getContacts(),
-      CONTACTS_FETCH_TIMEOUT_MS,
-      'getContacts'
-    ).catch(err => {
-      console.warn('[whatsapp-webjs-bridge] getContacts demorou demais, continuando só com dados dos chats:', (err as { message?: string } | null)?.message || String(err));
-      return [] as RawContact[];
-    });
+    // A agenda do celular não segura mais a lista: usa a última agenda já
+    // carregada e busca uma nova em segundo plano ao fim deste refresh (antes
+    // disso ela disputaria o WhatsApp Web com ele). Quando ela chega e mudou,
+    // um novo refresh aplica os contatos com exatamente esta mesma lógica.
+    const contacts = this.readCachedAgenda();
+    this.agendaSignatureApplied = this.agendaSnapshot && contacts === this.agendaSnapshot.contacts
+      ? this.agendaSnapshot.signature
+      : '';
 
-    const [chats, contacts, labelsMap] = await Promise.all([
+    const [chats, labelsMap] = await Promise.all([
       chatsPromise,
-      contactsPromise,
       this.loadLabelsMap()
     ]);
     const resolvedCanonicalByLid = await this.resolveRecentLinkedChatCanonicals(chats);
@@ -676,7 +715,7 @@ export class ContactsService {
           lastMessageType,
           lastMessageHasMedia,
           lastMessageMediaMimetype,
-          lastMessageAck: existing?.lastMessageAck ?? null,
+          lastMessageAck: resolveLastMessageAck(chat?.lastMessage, existing),
           unreadCount,
           labels,
           isGroup: false,
@@ -724,7 +763,7 @@ export class ContactsService {
           lastMessageType,
           lastMessageHasMedia,
           lastMessageMediaMimetype,
-          lastMessageAck: existing?.lastMessageAck ?? null,
+          lastMessageAck: resolveLastMessageAck(chat?.lastMessage, existing),
           unreadCount,
           labels,
           isGroup: true,
@@ -804,7 +843,7 @@ export class ContactsService {
           lastMessageType,
           lastMessageHasMedia,
           lastMessageMediaMimetype,
-          lastMessageAck: existing?.lastMessageAck ?? null,
+          lastMessageAck: resolveLastMessageAck(chat?.lastMessage, existing),
           unreadCount,
           labels,
           isGroup: false,
@@ -850,6 +889,78 @@ export class ContactsService {
     }
 
     await this.reconcileOrphanLinkedContacts();
+    this.startAgendaLoad();
+  }
+
+  // Resolve quando a carga da agenda em andamento (e o refresh que ela dispara)
+  // terminar.
+  whenAgendaSettled(): Promise<void> {
+    return this.agendaLoadPromise ?? Promise.resolve();
+  }
+
+  private readCachedAgenda(): RawContact[] {
+    const snapshot = this.agendaSnapshot;
+    if (!snapshot) {
+      return [];
+    }
+
+    // Agenda de outra conta (novo QR lido) não pode ser misturada.
+    const ownerJid = this.selfJidResolver.getOwnJid();
+    if (snapshot.ownerJid && ownerJid && snapshot.ownerJid !== ownerJid) {
+      return [];
+    }
+
+    return snapshot.contacts;
+  }
+
+  private startAgendaLoad(): void {
+    if (this.agendaLoadPromise) {
+      return;
+    }
+
+    const reloadAfterMs = this.agendaSnapshot ? AGENDA_RELOAD_INTERVAL_MS : AGENDA_RETRY_AFTER_FAILURE_MS;
+    if (this.lastAgendaAttemptAt && Date.now() - this.lastAgendaAttemptAt < reloadAfterMs) {
+      return;
+    }
+
+    const clientWithContacts = this.client as WebJsClient & {
+      getContacts: () => Promise<RawContact[]>;
+    };
+    const startedAt = Date.now();
+    this.lastAgendaAttemptAt = startedAt;
+
+    this.agendaLoadPromise = (async () => {
+      let contacts: RawContact[];
+      try {
+        const loaded = await withTimeout(clientWithContacts.getContacts(), CONTACTS_FETCH_TIMEOUT_MS, 'getContacts');
+        contacts = Array.isArray(loaded) ? loaded : [];
+      } catch (err) {
+        console.warn(
+          `[whatsapp-webjs-bridge] getContacts falhou apos ${Date.now() - startedAt}ms; a lista segue com os dados dos chats:`,
+          (err as { message?: string } | null)?.message || String(err)
+        );
+        return;
+      }
+
+      console.log(`[whatsapp-webjs-bridge] tempo agenda do celular: ${Date.now() - startedAt}ms (${contacts.length} contatos)`);
+      const signature = buildAgendaSignature(contacts);
+      this.agendaSnapshot = {
+        ownerJid: this.selfJidResolver.getOwnJid(),
+        contacts,
+        signature
+      };
+
+      if (signature === this.agendaSignatureApplied || !this.sessionState.isReady()) {
+        return;
+      }
+
+      // Espera um refresh em andamento terminar; senão o pedido seria absorvido
+      // por ele, que ainda está usando a agenda antiga.
+      await this.contactsRefreshPromise?.catch(() => undefined);
+      await this.triggerRefresh({ reason: 'agenda' });
+    })().finally(() => {
+      this.agendaLoadPromise = null;
+    });
   }
 
   private async reconcileOrphanLinkedContacts(): Promise<void> {
@@ -907,6 +1018,10 @@ export class ContactsService {
         console.warn('[whatsapp-webjs-bridge] Falha ao atualizar contatos:', (error as { message?: string } | null)?.message || String(error));
       } finally {
         this.contactsRefreshPromise = null;
+        // Garante a busca da agenda mesmo se o refresh falhou no meio.
+        if (this.sessionState.isReady()) {
+          this.startAgendaLoad();
+        }
       }
     })();
 
@@ -1139,12 +1254,15 @@ export class ContactsService {
       return null;
     }
 
-    const clientWithContacts = this.client as WebJsClient & {
-      getContacts: () => Promise<RawContact[]>;
-    };
+    // Usa a agenda já carregada em segundo plano. Ler a agenda inteira do
+    // WhatsApp Web a cada foto (milhares de contatos, dezenas de segundos)
+    // travava a página e atrasava os envios. Sem agenda ainda, segue sem LID.
+    const contacts = this.readCachedAgenda();
+    if (!contacts.length) {
+      return null;
+    }
 
     try {
-      const contacts = await clientWithContacts.getContacts();
       for (const contact of contacts) {
         const rawJid = contact?.id?._serialized;
         if (!isLinkedId(rawJid)) continue;

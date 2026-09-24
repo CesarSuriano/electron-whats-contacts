@@ -92,9 +92,7 @@ describe('ConversationListComponent', () => {
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('a@c.us');
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('b@c.us');
     expect(stateSpy.requestPhoto).toHaveBeenCalledWith('g@g.us');
-    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('a@c.us');
-    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('b@c.us');
-    expect(stateSpy.requestConversationContext).toHaveBeenCalledWith('g@g.us');
+    expect(stateSpy.requestConversationContext).not.toHaveBeenCalled();
   });
 
   it('tracks loading state', () => {
@@ -319,5 +317,54 @@ describe('ConversationListComponent', () => {
     (component as any).applyFilter();
 
     expect(component.filteredContacts.map(contact => contact.jid)).toEqual(['a@c.us']);
+  });
+
+  describe('render batches', () => {
+    const manyContacts = (count: number): WhatsappContact[] =>
+      Array.from({ length: count }, (_, index) => makeContact(`55${1000 + index}@c.us`, `Contato ${index}`));
+    const renderedCount = (): number => fixture.nativeElement.querySelectorAll('.conversation-item').length;
+
+    it('renders only the first batch of a long list while keeping every contact filtered', () => {
+      contacts$.next(manyContacts(200));
+      fixture.detectChanges();
+
+      expect(component.filteredContacts.length).toBe(200);
+      expect(renderedCount()).toBe(80);
+    });
+
+    it('renders the next batch when the user scrolls near the bottom', () => {
+      contacts$.next(manyContacts(200));
+      fixture.detectChanges();
+
+      const container = fixture.nativeElement.querySelector('.list-scroll') as HTMLDivElement;
+      Object.defineProperty(container, 'scrollHeight', { value: 6000, configurable: true });
+      Object.defineProperty(container, 'clientHeight', { value: 600, configurable: true });
+      Object.defineProperty(container, 'scrollTop', { value: 5000, configurable: true });
+
+      component.onScroll();
+      fixture.detectChanges();
+
+      expect(renderedCount()).toBe(160);
+    });
+
+    it('always renders the selected conversation even when it is beyond the first batch', () => {
+      const list = manyContacts(200);
+      contacts$.next(list);
+      selectedJid$.next(list[150].jid);
+      fixture.detectChanges();
+
+      expect(component.renderLimit).toBe(160);
+      expect(renderedCount()).toBe(160);
+    });
+
+    it('goes back to the first batch when the search changes', () => {
+      contacts$.next(manyContacts(200));
+      component.renderLimit = 200;
+
+      component.onSearchChange('Contato');
+      fixture.detectChanges();
+
+      expect(component.renderLimit).toBe(80);
+    });
   });
 });

@@ -34,6 +34,10 @@ interface PreviousContactFlashSnapshot {
 const MOVE_FLASH_DURATION_MS = 650;
 const PHOTO_VISIBLE_OVERSCAN = 6;
 const PHOTO_FALLBACK_ITEM_HEIGHT = 76;
+// A lista desenha os contatos em lotes e carrega mais ao rolar, em vez de
+// desenhar (e recalcular a cada mudança) centenas de linhas de uma vez.
+const CONVERSATION_RENDER_BATCH = 80;
+const CONVERSATION_RENDER_SCROLL_THRESHOLD_PX = 600;
 
 @Component({
   selector: 'app-conversation-list',
@@ -60,6 +64,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
 
   contacts: WhatsappContact[] = [];
   filteredContacts: WhatsappContact[] = [];
+  renderLimit = CONVERSATION_RENDER_BATCH;
   selectedJid = '';
   searchTerm = '';
   activeFilter: ConversationFilterId = 'all';
@@ -90,6 +95,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   private prevContactSnapshotMap = new Map<string, PreviousContactFlashSnapshot>();
   private scrollContainer?: ElementRef<HTMLDivElement>;
   private visiblePhotoTimer: number | null = null;
+  private renderFilterKey = '';
 
   constructor(
     private state: WhatsappStateService,
@@ -166,7 +172,39 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   onScroll(): void {
+    this.renderMoreIfNearBottom();
     this.scheduleVisiblePhotoPrefetch();
+  }
+
+  private renderMoreIfNearBottom(): void {
+    const container = this.scrollContainer?.nativeElement;
+    if (!container || this.renderLimit >= this.filteredContacts.length) {
+      return;
+    }
+
+    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceToBottom > CONVERSATION_RENDER_SCROLL_THRESHOLD_PX) {
+      return;
+    }
+
+    this.renderLimit += CONVERSATION_RENDER_BATCH;
+    this.cdr.markForCheck();
+  }
+
+  private syncRenderLimit(term: string): void {
+    const filterKey = `${this.activeFilter}\u0000${term}`;
+    if (filterKey !== this.renderFilterKey) {
+      this.renderFilterKey = filterKey;
+      this.renderLimit = CONVERSATION_RENDER_BATCH;
+    }
+
+    // A conversa selecionada (ex.: contato atual do envio em massa) sempre fica desenhada.
+    const selectedIndex = this.selectedJid
+      ? this.filteredContacts.findIndex(contact => contact.jid === this.selectedJid)
+      : -1;
+    if (selectedIndex >= this.renderLimit) {
+      this.renderLimit = (Math.floor(selectedIndex / CONVERSATION_RENDER_BATCH) + 1) * CONVERSATION_RENDER_BATCH;
+    }
   }
 
   isFlashing(jid: string): boolean {
@@ -559,6 +597,7 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       return digits.length > 0 && phone.includes(digits);
     });
 
+    this.syncRenderLimit(term);
     this.filteredContactsChange.emit(this.filteredContacts);
     this.scheduleVisiblePhotoPrefetch();
   }
@@ -597,9 +636,12 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
     const visibleCount = Math.ceil(container.clientHeight / itemHeight) + PHOTO_VISIBLE_OVERSCAN;
     const visibleEnd = Math.min(this.filteredContacts.length, visibleStart + visibleCount);
 
+    // Só fotos: prévia, horário e não lidas já vêm da lista de contatos, e o
+    // histórico é carregado ao abrir a conversa. Pré-carregar histórico aqui
+    // disparava chamadas pesadas a cada reordenação da lista (inclusive a
+    // cada mensagem do envio em massa).
     for (const contact of this.filteredContacts.slice(visibleStart, visibleEnd)) {
       this.state.requestPhoto(contact.jid);
-      this.state.requestConversationContext(contact.jid);
     }
   }
 

@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, Subject, combineLatest, distinctUntilChanged, map, of, switchMap, timer } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { finalize, takeUntil } from 'rxjs/operators';
 
 import { WhatsappContact, WhatsappEvent, WhatsappInstance, WhatsappMessage } from '../../../models/whatsapp.model';
 import { extractDigits } from '../helpers/phone-format.helper';
@@ -14,14 +14,13 @@ export interface SelectContactOptions {
 }
 
 const LOCAL_MESSAGE_TTL_MS = 30000;
-const PHOTO_BATCH_SIZE = 6;
+const PHOTO_MAX_IN_FLIGHT = 3;
+const SLOW_SEND_LOG_THRESHOLD_MS = 1500;
 const PHOTO_NULL_RETRY_MS = 30 * 60 * 1000;
 const CHAT_HISTORY_LIMIT = 180;
 const CONVERSATION_CONTEXT_MESSAGES_PER_CHAT = 10;
 const MAX_MESSAGES_PER_CHAT = 260;
 const CONVERSATION_CONTEXT_CONCURRENCY = 6;
-const INITIAL_PRIORITY_CONVERSATIONS = 50;
-const BACKGROUND_PRIORITY_CONVERSATIONS = 50;
 const CONVERSATION_CONTEXT_BATCH_DELAY_MS = 150;
 const NON_CONVERSATION_LAST_MESSAGE_TYPES = new Set([
   'e2e_notification',
@@ -30,6 +29,8 @@ const NON_CONVERSATION_LAST_MESSAGE_TYPES = new Set([
   'biz_content_placeholder'
 ]);
 const SYNCING_HIDE_DELAY_MS = 150;
+const MEDIA_DATA_URL_INTERN_MIN_LENGTH = 4096;
+const MEDIA_DATA_URL_INTERN_LIMIT = 8;
 // Os retries precisam ser generosos porque na primeira sincronização após
 // scan de QR, a lib do whatsapp-web.js demora pra popular o getChats — pode
 // devolver lista parcial ou vazia se a gente perguntar cedo demais. Já tentei
@@ -39,11 +40,10 @@ const SYNCING_HIDE_DELAY_MS = 150;
 const BOOTSTRAP_CONTACTS_RETRY_DELAY_MS = 2000;
 const BOOTSTRAP_CONTACTS_MAX_RETRIES = 5;
 const CONTACTS_LOAD_ERROR_MESSAGE = 'Não foi possível carregar os contatos.';
-const INITIAL_SYNC_TOTAL_STEPS = 2;
+const INITIAL_SYNC_TOTAL_STEPS = 1;
 const INITIAL_SYNC_CONTACTS_STEP = 1;
-const INITIAL_SYNC_CONVERSATIONS_STEP = 2;
 const INITIAL_SYNC_CONTACTS_START_PERCENT = 8;
-const INITIAL_SYNC_CONTACTS_MAX_PERCENT = 42;
+const INITIAL_SYNC_CONTACTS_MAX_PERCENT = 90;
 
 const CONTACT_SCORE_CANONICAL_JID = 40;
 const CONTACT_SCORE_LINKED_ID = 5;
@@ -117,10 +117,12 @@ export class WhatsappStateService implements OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private initialSyncProgressTimer: number | null = null;
   private pendingPhotoJids = new Set<string>();
+  private readonly photoJidsInFlight = new Set<string>();
   private photoRetryUntil = new Map<string, number>();
   private photoRequestTimer: number | null = null;
   private pendingConversationContextJids = new Set<string>();
   private conversationContextRequestTimer: number | null = null;
+  private readonly mediaDataUrlIntern = new Map<string, string>();
 
   instances$: Observable<WhatsappInstance[]> = this.instancesSubject.asObservable();
   contacts$: Observable<WhatsappContact[]> = this.contactsSubject.asObservable();
@@ -516,15 +518,15 @@ export class WhatsappStateService implements OnDestroy {
     );
   }
 
-  private buildBootstrapConversationQueues(): { priorityRequests: ConversationContextRequest[]; remainingRequests: ConversationContextRequest[] } {
+  // Conversa aberta automaticamente no boot: não lidas primeiro, depois a mais recente.
+  private resolveBootstrapSelectionJid(): string {
     const contacts = this.contactsSubject.value;
     const conversationCandidates = contacts
       .filter(contact => contact.jid && this.isRealConversationForBootstrap(contact))
       .map(contact => ({
         jid: contact.jid,
         ts: this.resolveBootstrapSortTimestampMs(contact),
-        unreadCount: this.resolveUnreadCount(contact),
-        limit: this.resolveConversationContextLimitForContact(contact)
+        unreadCount: this.resolveUnreadCount(contact)
       }))
       .sort((a, b) => {
         const aHasUnread = a.unreadCount > 0 ? 1 : 0;
@@ -541,23 +543,9 @@ export class WhatsappStateService implements OnDestroy {
           return b.ts - a.ts;
         }
         return a.jid.localeCompare(b.jid, 'pt-BR');
-      })
-      .map(item => ({ jid: item.jid, limit: item.limit }));
+      });
 
-    if (!conversationCandidates.length) {
-      return { priorityRequests: [], remainingRequests: [] };
-    }
-
-    const priorityRequests = conversationCandidates.slice(0, INITIAL_PRIORITY_CONVERSATIONS);
-    const remainingRequests = conversationCandidates.slice(
-      priorityRequests.length,
-      priorityRequests.length + BACKGROUND_PRIORITY_CONVERSATIONS
-    );
-
-    return {
-      priorityRequests,
-      remainingRequests
-    };
+    return conversationCandidates[0]?.jid || '';
   }
 
   private resolveGetChatsTimestampMs(contact: WhatsappContact): number {
@@ -589,74 +577,34 @@ export class WhatsappStateService implements OnDestroy {
 
   private bootstrapConversationContextLoad(): void {
     const runId = this.conversationContextRunId;
-    const { priorityRequests, remainingRequests } = this.buildBootstrapConversationQueues();
-    const priorityTotal = priorityRequests.length;
-    let initialScreenReleased = false;
 
-    const releaseInitialLoading = (): void => {
-      if (initialScreenReleased || runId !== this.conversationContextRunId) {
-        return;
-      }
+    // O histórico das conversas é carregado sob demanda, ao abrir cada uma.
+    // Pré-carregar dezenas de conversas aqui segurava a tela inicial por
+    // minutos e disputava o WhatsApp Web com os envios. A tela é liberada
+    // assim que os contatos chegam; só a conversa já selecionada recebe as
+    // últimas mensagens para não abrir vazia.
+    this.setLoading({ messages: false });
+    this.finishInitialSync();
+    this.onInitialSyncComplete();
 
-      initialScreenReleased = true;
-      this.setLoading({ messages: false });
-      this.finishInitialSync();
-      this.onInitialSyncComplete();
-    };
-
-    this.beginInitialConversationPhase();
-
-    if (!priorityTotal) {
-      this.updateInitialSyncStatus({ progressPercent: 100 });
-      releaseInitialLoading();
+    const selectedJid = this.selectedContactJid;
+    if (!selectedJid) {
       this.syncingSubject.next(false);
       return;
     }
 
     void this.loadConversationContextForContacts({
-      contactRequests: priorityRequests,
-      concurrency: CONVERSATION_CONTEXT_CONCURRENCY,
+      contactJids: [selectedJid],
+      concurrency: 1,
       force: true,
       ensureContacts: false,
       limit: CONVERSATION_CONTEXT_MESSAGES_PER_CHAT,
       deep: false,
       markAsLoaded: false,
       markAsWarmed: true,
-      runId,
-      onItemFinished: ({ completed, total }) => {
-        if (runId !== this.conversationContextRunId) {
-          return;
-        }
-
-        this.updateInitialSyncStatus({
-          progressPercent: 50 + Math.round((completed / Math.max(1, total)) * 50)
-        });
-      }
-    }).then(async () => {
-      if (runId === this.conversationContextRunId) {
-        this.updateInitialSyncStatus({ progressPercent: 100 });
-      }
-
-      releaseInitialLoading();
-
-      if (runId !== this.conversationContextRunId || !remainingRequests.length) {
-        return;
-      }
-
-      await this.loadConversationContextForContacts({
-        contactRequests: remainingRequests,
-        concurrency: CONVERSATION_CONTEXT_CONCURRENCY,
-        force: true,
-        ensureContacts: false,
-        limit: CONVERSATION_CONTEXT_MESSAGES_PER_CHAT,
-        deep: false,
-        markAsLoaded: false,
-        markAsWarmed: true,
-        runId
-      });
+      runId
     }).finally(() => {
       if (runId === this.conversationContextRunId) {
-        releaseInitialLoading();
         this.syncingSubject.next(false);
       }
     });
@@ -669,8 +617,10 @@ export class WhatsappStateService implements OnDestroy {
     const instance = this.selectedInstance;
     const resolvedJid = this.resolveConversationJid(jid);
     return new Observable(observer => {
+      const startedAt = Date.now();
       this.gateway.sendMessage(instance, resolvedJid, text).subscribe({
         next: result => {
+          this.logSlowSend('texto', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, text, 'send-api', serverId);
           this.setLoading({ sending: false });
@@ -694,8 +644,10 @@ export class WhatsappStateService implements OnDestroy {
     const instance = this.selectedInstance;
     const resolvedJid = this.resolveConversationJid(jid);
     return new Observable(observer => {
+      const startedAt = Date.now();
       this.gateway.sendMedia(instance, resolvedJid, file, caption).subscribe({
         next: result => {
+          this.logSlowSend('midia', startedAt);
           const serverId = (result as Record<string, unknown>)?.['id'] as string;
           this.appendOutgoingMessage(resolvedJid, caption, 'send-media-api', serverId, {
             hasMedia: true,
@@ -773,6 +725,15 @@ export class WhatsappStateService implements OnDestroy {
         }
       });
     });
+  }
+
+  // Tempo do clique até a resposta, visto pelo app (inclui espera na fila de
+  // conexões com a bridge, que o log da bridge não enxerga). Só envios lentos.
+  private logSlowSend(kind: string, startedAt: number): void {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs >= SLOW_SEND_LOG_THRESHOLD_MS) {
+      console.warn(`[whatsapp] envio de ${kind} lento: ${elapsedMs}ms ate a resposta da bridge`);
+    }
   }
 
   private appendOutgoingMessage(jid: string, text: string, source: string, serverId?: string, payload?: Record<string, unknown>): void {
@@ -969,7 +930,7 @@ export class WhatsappStateService implements OnDestroy {
   }
 
   requestPhoto(jid: string): void {
-    if (!jid || this.pendingPhotoJids.has(jid)) {
+    if (!jid || this.pendingPhotoJids.has(jid) || this.photoJidsInFlight.has(jid)) {
       return;
     }
 
@@ -1027,20 +988,29 @@ export class WhatsappStateService implements OnDestroy {
     }, 150);
   }
 
+  // No máximo PHOTO_MAX_IN_FLIGHT fotos por vez: o navegador abre só 6 conexões
+  // com a bridge, e fotos lentas ocupando todas deixavam os envios na fila.
   private processPhotoBatch(): void {
-    const batch = Array.from(this.pendingPhotoJids).slice(0, PHOTO_BATCH_SIZE);
-    batch.forEach(jid => this.pendingPhotoJids.delete(jid));
-
+    const available = Math.max(0, PHOTO_MAX_IN_FLIGHT - this.photoJidsInFlight.size);
+    const batch = Array.from(this.pendingPhotoJids).slice(0, available);
     batch.forEach(jid => {
-      this.gateway.loadContactPhoto(jid).subscribe({
-        next: url => this.setContactPhoto(jid, url),
-        error: () => this.setContactPhoto(jid, null)
-      });
+      this.pendingPhotoJids.delete(jid);
+      this.photoJidsInFlight.add(jid);
     });
 
-    if (this.pendingPhotoJids.size > 0) {
-      this.schedulePhotoBatch();
-    }
+    batch.forEach(jid => {
+      this.gateway.loadContactPhoto(jid)
+        .pipe(finalize(() => {
+          this.photoJidsInFlight.delete(jid);
+          if (this.pendingPhotoJids.size > 0) {
+            this.schedulePhotoBatch();
+          }
+        }))
+        .subscribe({
+          next: url => this.setContactPhoto(jid, url),
+          error: () => this.setContactPhoto(jid, null)
+        });
+    });
   }
 
   private scheduleConversationContextBatch(): void {
@@ -1162,7 +1132,7 @@ export class WhatsappStateService implements OnDestroy {
       ? (this.findEquivalentContact(currentSelection, collapsed)?.jid || '')
       : '';
     const bootstrapPrioritySelection = bootstrap
-      ? (this.buildBootstrapConversationQueues().priorityRequests[0]?.jid || '')
+      ? this.resolveBootstrapSelectionJid()
       : '';
     const fallbackSelection = bootstrapPrioritySelection || collapsed[0]?.jid || '';
     const selectedJid = preservedSelection || fallbackSelection;
@@ -1501,17 +1471,6 @@ export class WhatsappStateService implements OnDestroy {
   private finishInitialSync(): void {
     this.clearInitialSyncProgressTimer();
     this.syncStatusSubject.next(IDLE_SYNC_STATUS);
-  }
-
-  private beginInitialConversationPhase(): void {
-    this.clearInitialSyncProgressTimer();
-    this.updateInitialSyncStatus({
-      message: 'Carregando as conversas',
-      detail: '',
-      currentStep: INITIAL_SYNC_CONVERSATIONS_STEP,
-      totalSteps: INITIAL_SYNC_TOTAL_STEPS,
-      progressPercent: 50
-    });
   }
 
   private startInitialSyncProgressTimer(targetPercent: number): void {
@@ -2118,6 +2077,10 @@ export class WhatsappStateService implements OnDestroy {
       ? this.toImageDataUrlFromRawBase64(rawImageBase64, mediaMimetype)
       : '');
 
+    if (typeof normalized['mediaDataUrl'] === 'string') {
+      normalized['mediaDataUrl'] = this.internMediaDataUrl(normalized['mediaDataUrl']);
+    }
+
     if (inferredDataUrl) {
       normalized['hasMedia'] = true;
       if (typeof normalized['mediaDataUrl'] !== 'string' || !normalized['mediaDataUrl']) {
@@ -2135,6 +2098,30 @@ export class WhatsappStateService implements OnDestroy {
     }
 
     return normalized;
+  }
+
+  // Cada evento chega com uma cópia nova do base64. No envio em massa é a mesma
+  // imagem para centenas de contatos; reaproveitar a instância já guardada
+  // evita manter centenas de cópias idênticas em memória.
+  private internMediaDataUrl(value: string): string {
+    if (value.length < MEDIA_DATA_URL_INTERN_MIN_LENGTH) {
+      return value;
+    }
+
+    const existing = this.mediaDataUrlIntern.get(value);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    this.mediaDataUrlIntern.set(value, value);
+    if (this.mediaDataUrlIntern.size > MEDIA_DATA_URL_INTERN_LIMIT) {
+      const oldestKey = this.mediaDataUrlIntern.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.mediaDataUrlIntern.delete(oldestKey);
+      }
+    }
+
+    return value;
   }
 
   private normalizeEventText(rawText: unknown): string {

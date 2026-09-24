@@ -42,8 +42,15 @@ export interface BulkInterruptedEvent {
 }
 
 const STORAGE_KEY = 'uniq-system.whatsapp.bulk-queue';
+// Imagens ficam em chave própria e só são regravadas quando mudam: a fila é
+// persistida a cada contato e serializar o base64 junto travava a interface.
+const IMAGES_STORAGE_KEY = 'uniq-system.whatsapp.bulk-queue-images';
 const QUEUE_PERSIST_DEBOUNCE_MS = 120;
 const POST_SEND_DELAY_MS = 500;
+
+const IMAGES_NOT_PERSISTED = Symbol('images-not-persisted');
+
+type PersistedBulkQueue = Omit<BulkQueue, 'imageDataUrls' | 'imageDataUrl'> & { imageCount: number };
 
 @Injectable({ providedIn: 'root' })
 export class BulkSendService implements OnDestroy {
@@ -57,6 +64,10 @@ export class BulkSendService implements OnDestroy {
   private readonly draftStateJids = new Set<string>();
   private postSendDelayTimerId: number | null = null;
   private trackedSend: { jid: string; remainingMessages: number } | null = null;
+  // Referência da lista de imagens já gravada, para não regravar a cada passo.
+  private persistedImagesSource: unknown = IMAGES_NOT_PERSISTED;
+  // Arquivos já decodificados das imagens da fila, reaproveitados entre contatos.
+  private cachedImageFiles: { source: string[]; files: File[] } | null = null;
 
   queue$: Observable<BulkQueue | null> = this.queueSubject.asObservable();
   scheduleLifecycle$: Observable<BulkScheduleLifecycleEvent> = this.scheduleLifecycleSubject.asObservable();
@@ -218,19 +229,13 @@ export class BulkSendService implements OnDestroy {
     const imageDataUrls = this.resolveCurrentImageDataUrls(currentJid, queue);
 
     if (imageDataUrls.length) {
-      const files = imageDataUrls.map((imageDataUrl, index) =>
-        this.dataUrlToFile(
-          imageDataUrl,
-          imageDataUrls.length === 1 ? 'bulk-template' : `bulk-template-${index + 1}`
-        )
-      );
-
-      if (files.some(file => !file)) {
+      const files = this.resolveImageFiles(imageDataUrls);
+      if (!files) {
         return;
       }
 
       this.trackCurrentSend(currentJid, files.length);
-      this.sendMediaBatch(currentJid, files as File[], caption);
+      this.sendMediaBatch(currentJid, files, caption);
       return;
     }
 
@@ -325,6 +330,33 @@ export class BulkSendService implements OnDestroy {
         this.clearTrackedCurrentSend(jid);
       }
     });
+  }
+
+  // As mesmas imagens vão para todos os contatos: decodifica o base64 uma vez
+  // e reaproveita os arquivos enquanto as imagens não mudarem.
+  private resolveImageFiles(imageDataUrls: string[]): File[] | null {
+    const cached = this.cachedImageFiles;
+    if (
+      cached
+      && cached.source.length === imageDataUrls.length
+      && cached.source.every((dataUrl, index) => dataUrl === imageDataUrls[index])
+    ) {
+      return cached.files;
+    }
+
+    const files = imageDataUrls.map((imageDataUrl, index) =>
+      this.dataUrlToFile(
+        imageDataUrl,
+        imageDataUrls.length === 1 ? 'bulk-template' : `bulk-template-${index + 1}`
+      )
+    );
+
+    if (files.some(file => !file)) {
+      return null;
+    }
+
+    this.cachedImageFiles = { source: [...imageDataUrls], files: files as File[] };
+    return this.cachedImageFiles.files;
   }
 
   private dataUrlToFile(dataUrl: string, filenameBase = 'bulk-template'): File | null {
@@ -479,6 +511,10 @@ export class BulkSendService implements OnDestroy {
   }
 
   private setQueue(queue: BulkQueue | null): void {
+    if (!queue) {
+      this.cachedImageFiles = null;
+    }
+
     this.queueSubject.next(queue);
     this.schedulePersist(queue);
   }
@@ -529,15 +565,60 @@ export class BulkSendService implements OnDestroy {
   }
 
   private persistQueue(queue: BulkQueue | null): void {
-    try {
-      if (!queue) {
-        localStorage.removeItem(STORAGE_KEY);
-        return;
+    if (!queue) {
+      this.clearPersistedQueue();
+      return;
+    }
+
+    const imagesSource = queue.imageDataUrls ?? queue.imageDataUrl;
+    const imageDataUrls = this.resolveQueueImageDataUrls(queue);
+
+    if (imagesSource !== this.persistedImagesSource) {
+      this.persistedImagesSource = imagesSource;
+      try {
+        if (imageDataUrls.length) {
+          localStorage.setItem(IMAGES_STORAGE_KEY, JSON.stringify(imageDataUrls));
+        } else {
+          localStorage.removeItem(IMAGES_STORAGE_KEY);
+        }
+      } catch {
+        // Sem espaço para as imagens: a restauração descarta a fila em vez de
+        // retomar um envio que perderia as imagens.
+        this.removeStorageKey(IMAGES_STORAGE_KEY);
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
+    }
+
+    try {
+      const { imageDataUrls: _images, imageDataUrl: _legacyImage, ...rest } = queue;
+      const persisted: PersistedBulkQueue = { ...rest, imageCount: imageDataUrls.length };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {
       // ignore persistence errors
     }
+  }
+
+  private clearPersistedQueue(): void {
+    this.persistedImagesSource = IMAGES_NOT_PERSISTED;
+    this.removeStorageKey(STORAGE_KEY);
+    this.removeStorageKey(IMAGES_STORAGE_KEY);
+  }
+
+  private removeStorageKey(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore persistence errors
+    }
+  }
+
+  private readPersistedImages(): string[] | null {
+    const raw = localStorage.getItem(IMAGES_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? this.normalizeImageDataUrls(parsed as string[]) : null;
   }
 
   private restoreQueue(): void {
@@ -547,16 +628,30 @@ export class BulkSendService implements OnDestroy {
         return;
       }
 
-      const parsed = JSON.parse(raw) as BulkQueue;
+      const parsed = JSON.parse(raw) as BulkQueue & { imageCount?: number };
       if (!parsed || !Array.isArray(parsed.items) || typeof parsed.template !== 'string') {
         return;
       }
 
-      const imageDataUrls = this.normalizeImageDataUrls(parsed.imageDataUrls?.length ? parsed.imageDataUrls : parsed.imageDataUrl);
+      const { imageCount, ...queueFields } = parsed;
+      let imageDataUrls: string[];
+
+      if (typeof imageCount === 'number') {
+        const storedImages = this.readPersistedImages();
+        if (!storedImages || storedImages.length !== imageCount) {
+          this.clearPersistedQueue();
+          return;
+        }
+        imageDataUrls = storedImages;
+      } else {
+        // Formato antigo: imagens gravadas junto com a fila.
+        imageDataUrls = this.normalizeImageDataUrls(parsed.imageDataUrls?.length ? parsed.imageDataUrls : parsed.imageDataUrl);
+      }
 
       const restored: BulkQueue = {
-        ...parsed,
+        ...queueFields,
         imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
+        imageDataUrl: undefined,
         isPaused: true,
         items: parsed.items.map(item =>
           item.status === 'current' ? { ...item, status: 'pending' } : item
@@ -564,8 +659,11 @@ export class BulkSendService implements OnDestroy {
       };
 
       this.queueSubject.next(restored);
+      if (typeof imageCount === 'number') {
+        this.persistedImagesSource = restored.imageDataUrls;
+      }
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      this.clearPersistedQueue();
     }
   }
 }

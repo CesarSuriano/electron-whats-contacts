@@ -118,6 +118,48 @@ describe('ContactsService.fetchProfilePhotoUrl', () => {
     const result = await service.fetchProfilePhotoUrl(groupJid);
     assert.equal(result, fakeDataUrl);
   });
+
+  it('never reads the whole phone agenda while looking up a photo', async () => {
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getProfilePicUrl: async () => undefined,
+      getContactById: async () => ({ getProfilePicUrl: async () => undefined }),
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      },
+      pupPage: { evaluate: async () => null }
+    }, { enableProfilePhotoFetch: true });
+
+    const result = await service.fetchProfilePhotoUrl('5511999999999@c.us');
+
+    assert.equal(result, null);
+    assert.equal(getContactsCalls, 0);
+  });
+
+  it('finds the linked id of a photo in the agenda already loaded in memory', async () => {
+    const linkedJid = '12345678901234@lid';
+    const lookedUp: string[] = [];
+    const { service, lidMap } = createService({
+      getChats: async () => [],
+      getContacts: async () => [
+        { id: { _serialized: linkedJid, user: '12345678901234' }, number: '5511999999999', isMyContact: false }
+      ],
+      getProfilePicUrl: async (id: string) => {
+        lookedUp.push(id);
+        return undefined;
+      },
+      getContactById: async () => ({ getProfilePicUrl: async () => undefined }),
+      pupPage: { evaluate: async () => null }
+    }, { enableProfilePhotoFetch: true });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    await service.fetchProfilePhotoUrl('5511999999999@c.us');
+
+    assert.equal(lidMap.getLid('5511999999999@c.us'), linkedJid);
+    assert.ok(lookedUp.includes(linkedJid));
+  });
 });
 
 describe('ContactsService.refreshContactsFromChats', () => {
@@ -144,6 +186,7 @@ describe('ContactsService.refreshContactsFromChats', () => {
     });
 
     await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
     assert.equal(contactStore.has('144873692885172@lid'), false);
   });
 
@@ -174,6 +217,34 @@ describe('ContactsService.refreshContactsFromChats', () => {
     assert.deepEqual(entry.labels, ['Importante']);
     assert.equal(entry.isGroup, false);
     assert.equal(entry.fromGetChats, true);
+  });
+
+  it('takes the last message ack from the chat list so the preview shows delivery ticks', async () => {
+    const { service, contactStore } = createService({
+      getChats: async () => [
+        {
+          id: { _serialized: '5511987654321@c.us' },
+          isGroup: false,
+          name: 'Cliente A',
+          timestamp: 1713000000,
+          lastMessage: { body: 'Parabéns!', fromMe: true, type: 'chat', ack: 3 }
+        },
+        {
+          id: { _serialized: '5511912345678@c.us' },
+          isGroup: false,
+          name: 'Cliente B',
+          timestamp: 1713000001,
+          lastMessage: { body: 'Oi', fromMe: false, type: 'chat' }
+        }
+      ],
+      getContacts: async () => [],
+      getLabels: async () => []
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.get('5511987654321@c.us')?.lastMessageAck, 3);
+    assert.equal(contactStore.get('5511912345678@c.us')?.lastMessageAck, null);
   });
 
   it('preserves @g.us group chats', async () => {
@@ -229,6 +300,7 @@ describe('ContactsService.refreshContactsFromChats', () => {
     }));
 
     await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
 
     assert.equal(contactStore.has('278649089585374@c.us'), false);
     assert.equal(lidMap.findCanonical('278649089585374@lid'), '554499104514@c.us');
@@ -338,5 +410,163 @@ describe('ContactsService.waitForContactsWarmup', () => {
     await service.waitForContactsWarmup(true);
 
     assert.equal(getChatsCalls, 1);
+  });
+});
+
+describe('ContactsService agenda em segundo plano', () => {
+  const chat = {
+    id: { _serialized: '5511987654321@c.us' },
+    isGroup: false,
+    name: 'Cliente com conversa',
+    timestamp: 1713000000,
+    lastMessage: { body: 'Oi', fromMe: false, type: 'chat' }
+  };
+  const agendaOnlyContact = {
+    id: { _serialized: '5511912345678@c.us', user: '5511912345678' },
+    isMyContact: true,
+    isMe: false,
+    number: '5511912345678',
+    name: 'Cliente só na agenda'
+  };
+
+  it('does not wait for a slow agenda before finishing the contacts refresh', async () => {
+    let releaseAgenda: (contacts: unknown[]) => void = () => undefined;
+    const { service, contactStore } = createService({
+      getChats: async () => [chat],
+      getContacts: () => new Promise(resolve => {
+        releaseAgenda = resolve;
+      })
+    });
+
+    await service.refreshContactsFromChats();
+
+    assert.ok(contactStore.get('5511987654321@c.us'));
+    assert.equal(contactStore.has('5511912345678@c.us'), false);
+
+    releaseAgenda([agendaOnlyContact]);
+    await service.whenAgendaSettled();
+
+    assert.equal(contactStore.get('5511912345678@c.us')?.name, 'Cliente só na agenda');
+    assert.ok(contactStore.get('5511987654321@c.us'));
+  });
+
+  it('notifies the app when the agenda arrives with new contacts', async () => {
+    const notifiedSizes: number[] = [];
+    const { service } = createService({
+      getChats: async () => [chat],
+      getContacts: async () => [agendaOnlyContact]
+    });
+    service.setOnContactsUpdated(contacts => notifiedSizes.push(contacts.length));
+
+    await service.triggerRefresh({ reason: 'test' });
+    await service.whenAgendaSettled();
+
+    assert.deepEqual(notifiedSizes, [1, 2]);
+  });
+
+  it('keeps the list with chat data only when the agenda fails', async () => {
+    let getChatsCalls = 0;
+    const { service, contactStore } = createService({
+      getChats: async () => {
+        getChatsCalls += 1;
+        return [chat];
+      },
+      getContacts: async () => {
+        throw new Error('Timeout while getContacts');
+      }
+    });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+
+    assert.equal(getChatsCalls, 1);
+    assert.ok(contactStore.get('5511987654321@c.us'));
+  });
+
+  it('does not refresh again when the agenda did not change', async () => {
+    let getChatsCalls = 0;
+    const { service } = createService({
+      getChats: async () => {
+        getChatsCalls += 1;
+        return [chat];
+      },
+      getContacts: async () => [agendaOnlyContact]
+    });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    assert.equal(getChatsCalls, 2, 'a primeira agenda aplica um refresh');
+
+    (service as unknown as { lastAgendaAttemptAt: number }).lastAgendaAttemptAt = 1;
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+
+    assert.equal(getChatsCalls, 3, 'agenda igual não dispara outro refresh');
+  });
+
+  it('only starts reading the agenda after the contacts refresh finished', async () => {
+    const order: string[] = [];
+    let releaseChats: (chats: unknown[]) => void = () => undefined;
+    const { service } = createService({
+      getChats: () => new Promise(resolve => {
+        order.push('getChats');
+        releaseChats = resolve;
+      }),
+      getContacts: async () => {
+        order.push('getContacts');
+        return [];
+      }
+    });
+
+    const refresh = service.refreshContactsFromChats();
+    await Promise.resolve();
+    assert.deepEqual(order, ['getChats']);
+
+    releaseChats([chat]);
+    await refresh;
+    await service.whenAgendaSettled();
+    assert.deepEqual(order, ['getChats', 'getContacts']);
+  });
+
+  it('still reads the agenda when the contacts refresh fails', async () => {
+    let getContactsCalls = 0;
+    const { service } = createService({
+      getChats: async () => {
+        throw new Error('getChats falhou');
+      },
+      getContacts: async () => {
+        getContactsCalls += 1;
+        return [];
+      }
+    });
+
+    await service.triggerRefresh({ reason: 'test' });
+    await service.whenAgendaSettled();
+
+    assert.equal(getContactsCalls, 1);
+  });
+
+  it('ignores a cached agenda that belongs to another account', async () => {
+    const { service, contactStore, client } = createService({
+      getChats: async () => [],
+      getContacts: async () => [agendaOnlyContact]
+    });
+
+    await service.refreshContactsFromChats();
+    await service.whenAgendaSettled();
+    assert.ok(contactStore.get('5511912345678@c.us'));
+
+    contactStore.delete('5511912345678@c.us');
+    client.info = { wid: { _serialized: '5521999999999@c.us' } };
+    let releaseAgenda: (contacts: unknown[]) => void = () => undefined;
+    client.getContacts = () => new Promise(resolve => {
+      releaseAgenda = resolve;
+    });
+    (service as unknown as { lastAgendaAttemptAt: number }).lastAgendaAttemptAt = 1;
+    await service.refreshContactsFromChats();
+
+    assert.equal(contactStore.has('5511912345678@c.us'), false);
+    releaseAgenda([]);
+    await service.whenAgendaSettled();
   });
 });
