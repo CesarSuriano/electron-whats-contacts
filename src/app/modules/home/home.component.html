@@ -1,7 +1,7 @@
 <div class="home-shell">
   <app-shell-sidebar
     [activeSection]="activeSection"
-    [schedulesBadge]="pendingSchedules.length"
+    [schedulesBadge]="pendingSchedules.length + interruptedSchedules.length"
     [whatsappBadge]="unreadConversations"
     (sectionSelect)="onShellSectionSelect($event)"
     (about)="openAboutModal()"
@@ -39,6 +39,7 @@
           [greetingDateLabel]="greetingDateLabel"
           [birthdaysToday]="birthdaysToday"
           [pendingSchedules]="pendingSchedules"
+          [interruptedSchedules]="interruptedSchedules"
           [clientesCount]="clientes.length"
           [clientesAddedThisWeek]="clientesAddedThisWeek"
           (openClients)="onShellSectionSelect('clients')"

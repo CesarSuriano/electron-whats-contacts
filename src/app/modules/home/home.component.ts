@@ -16,7 +16,7 @@ import { MessageTemplateService } from '../../services/message-template.service'
 import { PendingBulkSendService } from '../../services/pending-bulk-send.service';
 import { ScheduleListLauncherService } from '../../services/schedule-list-launcher.service';
 import { ScheduledMessageService } from '../../services/scheduled-message.service';
-import { RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
+import { isInterruptedBulk, RECURRENCE_LABELS, ScheduledMessage } from '../../models/scheduled-message.model';
 
 type HomeSection = 'home' | 'clients' | 'messages' | 'schedules' | 'settings';
 type ClientFilter = 'all' | 'today' | 'upcoming' | 'new';
@@ -226,6 +226,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   filteredClientes: Cliente[] = [];
   birthdaysToday: Cliente[] = [];
   pendingSchedules: ScheduledMessage[] = [];
+  interruptedSchedules: ScheduledMessage[] = [];
   recentClienteIds = new Set<number>();
 
   changeSort(column: SortColumn): void {
@@ -681,9 +682,15 @@ export class HomeComponent implements OnInit, OnDestroy {
 
     this.birthdaysToday = sorted.filter(c => c.birthdayStatus === 'today');
 
-    this.pendingSchedules = [...this.scheduledMessages]
-      .filter(s => s.status === 'pending' || s.status === 'notified')
+    const activeSchedules = this.scheduledMessages.filter(s => s.status === 'pending' || s.status === 'notified');
+
+    this.pendingSchedules = activeSchedules
+      .filter(s => !isInterruptedBulk(s))
       .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
+    this.interruptedSchedules = activeSchedules
+      .filter(isInterruptedBulk)
+      .sort((a, b) => b.interruptedBulk!.interruptedAt.localeCompare(a.interruptedBulk!.interruptedAt));
   }
 
   private setActiveSection(section: HomeSection): void {

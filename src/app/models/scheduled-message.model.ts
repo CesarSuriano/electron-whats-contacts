@@ -6,6 +6,14 @@ export interface ScheduledContact {
   phone: string;
 }
 
+// Progresso de um envio em massa que foi substituído por outro antes de terminar.
+// `contacts` do agendamento guarda apenas quem ainda falta receber.
+export interface InterruptedBulkInfo {
+  interruptedAt: string;
+  sentCount: number;
+  totalCount: number;
+}
+
 export interface ScheduledMessage {
   id: string;
   scheduledAt: string;
@@ -19,6 +27,21 @@ export interface ScheduledMessage {
   createdAt: string;
   lastTriggeredAt?: string;
   reminderDismissedForScheduledAt?: string;
+  interruptedBulk?: InterruptedBulkInfo;
+}
+
+export interface InterruptedBulkInput {
+  template: string;
+  imageDataUrls?: string[];
+  remainingContacts: ScheduledContact[];
+  processedCount: number;
+  totalCount: number;
+  // Agendamento que originou a fila interrompida, se houver.
+  sourceScheduleId?: string;
+}
+
+export function isInterruptedBulk(schedule: ScheduledMessage): boolean {
+  return Boolean(schedule.interruptedBulk);
 }
 
 export const RECURRENCE_LABELS: Record<ScheduleRecurrence, string> = {

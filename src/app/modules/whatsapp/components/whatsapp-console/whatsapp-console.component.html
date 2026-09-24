@@ -45,6 +45,44 @@
     </button>
   </div>
 
+  <div class="whatsapp-console__interrupted" *ngIf="interruptedNotice" role="status">
+    <span class="material-symbols-outlined whatsapp-console__interrupted-icon">bookmark_added</span>
+    <span class="whatsapp-console__interrupted-copy">{{ interruptedNotice }}</span>
+    <div class="whatsapp-console__interrupted-actions">
+      <button type="button" class="whatsapp-console__interrupted-btn" (click)="dismissInterruptedNotice(); onOpenScheduleList()">
+        Ver agendamentos
+      </button>
+      <button type="button" class="whatsapp-console__interrupted-dismiss" (click)="dismissInterruptedNotice()" aria-label="Fechar aviso">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="whatsapp-console__interrupted" *ngIf="showInterruptedBanner && latestInterrupted as interrupted" role="status">
+    <span class="material-symbols-outlined whatsapp-console__interrupted-icon">pause_circle</span>
+    <span class="whatsapp-console__interrupted-copy">
+      <strong>Envio interrompido:</strong>
+      {{ interrupted.interruptedBulk!.sentCount }} de {{ interrupted.interruptedBulk!.totalCount }} enviados,
+      {{ interrupted.contacts.length === 1 ? 'falta 1 contato' : 'faltam ' + interrupted.contacts.length + ' contatos' }}.
+      <ng-container *ngIf="interruptedSchedules.length > 1">
+        (+{{ interruptedSchedules.length - 1 }} {{ interruptedSchedules.length === 2 ? 'outro' : 'outros' }})
+      </ng-container>
+    </span>
+    <div class="whatsapp-console__interrupted-actions">
+      <button type="button" class="whatsapp-console__interrupted-btn whatsapp-console__interrupted-btn--primary" (click)="onContinueInterrupted(interrupted.id)">
+        <span class="material-symbols-outlined">play_arrow</span>
+        Continuar
+      </button>
+      <button type="button" class="whatsapp-console__interrupted-btn" *ngIf="interruptedSchedules.length > 1" (click)="onOpenScheduleList()">
+        Ver todos
+      </button>
+      <button type="button" class="whatsapp-console__interrupted-btn whatsapp-console__interrupted-btn--danger" (click)="onDiscardInterrupted(interrupted.id)">
+        <span class="material-symbols-outlined">delete</span>
+        Remover
+      </button>
+    </div>
+  </div>
+
   <div class="whatsapp-console__body" *ngIf="!isInitialLoading; else loading">
     <app-conversation-list
       class="console-sidebar"

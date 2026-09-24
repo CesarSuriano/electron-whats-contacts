@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
-  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/2.8.0/UniqSystem.Setup.2.8.0.exe",
-  "notes": "- Correçao do envio de imagens"
+  "version": "3.0.0",
+  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/3.0.0/UniqSystem.Setup.3.0.0.exe",
+  "notes": "- WhatsApp abre bem mais rápido: as conversas carregam quando você abre cada uma\n- Envio em massa mais fluido, sem travar entre um contato e outro\n- Envio em massa interrompido fica salvo em Agendamentos para continuar de onde parou ou remover\n- Correção da seta de opções da mensagem que aparecia por cima do painel de envio"
 }

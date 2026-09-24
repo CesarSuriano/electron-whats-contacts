@@ -224,6 +224,30 @@
   @apply text-[13px] text-txt-muted;
 }
 
+.home-interrupted {
+  @apply flex flex-wrap items-center gap-4 rounded-[20px] border border-warn bg-warn-soft px-5 py-4;
+}
+
+.home-interrupted__icon {
+  @apply shrink-0 text-[1.8rem] text-warn;
+}
+
+.home-interrupted__copy {
+  @apply flex min-w-[14rem] flex-1 flex-col gap-1;
+}
+
+.home-interrupted__title {
+  @apply text-[1rem] text-txt;
+}
+
+.home-interrupted__text {
+  @apply m-0 text-[0.9rem] text-txt-muted;
+}
+
+.home-interrupted__action {
+  @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap;
+}
+
 .home-inline-empty {
   @apply rounded-[16px] border border-dashed border-border bg-surface-2 px-4 py-6 text-center text-sm text-txt-muted;
 }

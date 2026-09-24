@@ -15,6 +15,10 @@ const DEFAULT_BULK_PANEL_CLEARANCE_PX = 92;
 // Extra space between the bulk panel's bottom edge and the composer's top edge.
 const BULK_PANEL_CLEARANCE_GAP_PX = 20;
 const BULK_PANEL_CLEARANCE_VAR = '--uniq-whatsapp-composer-clearance';
+// No envio em massa as mesmas imagens do modelo são anexadas a cada contato;
+// guarda os bytes já decodificados das últimas imagens para não refazer o atob.
+const DECODED_ATTACHMENT_CACHE_LIMIT = 4;
+const decodedAttachmentCache = new Map<string, Blob>();
 
 const EMOJI_LIST = [
   '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😊',
@@ -137,12 +141,22 @@ export class ComposerComponent implements AfterViewInit, OnChanges, OnDestroy {
       const base64Data = dataUrl.slice(commaIndex + 1);
       const mimeMatch = header.match(/:(.*?);/);
       const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-      const byteString = atob(base64Data);
-      const bytes = new Uint8Array(byteString.length);
-      for (let i = 0; i < byteString.length; i++) {
-        bytes[i] = byteString.charCodeAt(i);
+      let blob = decodedAttachmentCache.get(dataUrl);
+      if (!blob) {
+        const byteString = atob(base64Data);
+        const bytes = new Uint8Array(byteString.length);
+        for (let i = 0; i < byteString.length; i++) {
+          bytes[i] = byteString.charCodeAt(i);
+        }
+        blob = new Blob([bytes], { type: mime });
+        decodedAttachmentCache.set(dataUrl, blob);
+        if (decodedAttachmentCache.size > DECODED_ATTACHMENT_CACHE_LIMIT) {
+          const oldestKey = decodedAttachmentCache.keys().next().value;
+          if (oldestKey !== undefined) {
+            decodedAttachmentCache.delete(oldestKey);
+          }
+        }
       }
-      const blob = new Blob([bytes], { type: mime });
       this.selectedFiles.push(new File([blob], filename, { type: mime }));
       this.filePreviewUrls.push(mime.startsWith('image/') ? dataUrl : null);
     } catch {

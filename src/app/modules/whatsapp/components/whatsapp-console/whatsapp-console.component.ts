@@ -12,10 +12,11 @@ import { ScheduledMessageService } from '../../../../services/scheduled-message.
 import { ScheduleResult } from '../../../../components/schedule-modal/schedule-modal.component';
 import { ScheduleCreateRequest, ScheduleEditRequest } from '../../../../components/schedule-list-modal/schedule-list-modal.component';
 import { extractDigits } from '../../helpers/phone-format.helper';
-import { BulkQueue, BulkSendService } from '../../services/bulk-send.service';
+import { BulkInterruptedEvent, BulkQueue, BulkSendService } from '../../services/bulk-send.service';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
 
 const ERROR_AUTO_DISMISS_MS = 4000;
+const INTERRUPTED_NOTICE_AUTO_DISMISS_MS = 10_000;
 
 @Component({
   selector: 'app-whatsapp-console',
@@ -64,6 +65,8 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   editingScheduleId: string | null = null;
   schedules: ScheduledMessage[] = [];
   upcomingSchedule: ScheduledMessage | null = null;
+  interruptedSchedules: ScheduledMessage[] = [];
+  interruptedNotice = '';
 
   scheduleTemplateConfig: MessageTemplateEditorConfig = {
     type: 'birthday',
@@ -80,6 +83,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
   private selectedJidSet = new Set<string>();
   private destroy$ = new Subject<void>();
   private errorDismissTimerId: number | null = null;
+  private interruptedNoticeTimerId: number | null = null;
 
   constructor(
     private state: WhatsappStateService,
@@ -143,6 +147,12 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
         this.allSelected = visible.length > 0 && visible.every(c => selectedJids.has(c.jid));
       });
 
+    // Precisa estar inscrito antes do envio pendente abaixo, que pode iniciar
+    // uma nova fila de forma síncrona e substituir a anterior.
+    this.bulkSend.interrupted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => this.saveInterruptedQueue(event));
+
     const pending = this.pendingBulkSendService.consume();
     if (pending) {
       const requiresBootstrapCompletion = !this.state.selectedInstance;
@@ -181,6 +191,10 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     this.scheduledMessageService.upcoming$
       .pipe(takeUntil(this.destroy$))
       .subscribe(upcoming => (this.upcomingSchedule = upcoming));
+
+    this.scheduledMessageService.interrupted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(list => (this.interruptedSchedules = list));
 
     this.bulkSend.scheduleLifecycle$
       .pipe(takeUntil(this.destroy$))
@@ -222,6 +236,7 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.clearErrorDismissTimer();
+    this.clearInterruptedNoticeTimer();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -476,19 +491,48 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
     const schedule = this.schedules.find(s => s.id === id);
     if (!schedule) return;
 
-    const matchedContacts = schedule.contacts
-      .map(sc => this.resolveScheduledContact(sc))
-      .filter((c): c is WhatsappContact => c !== null);
-    const imageDataUrls = this.resolveScheduleImageDataUrls(schedule);
-
-    if (matchedContacts.length) {
-      this.scheduledMessageService.beginExecution(schedule.id);
-      this.bulkSend.start(matchedContacts, schedule.template, imageDataUrls.length ? imageDataUrls : undefined, { scheduleId: schedule.id });
-    }
+    this.startScheduleExecution(schedule);
     this.isScheduleListModalOpen = false;
   }
 
   onNotificationAction(schedule: ScheduledMessage): void {
+    this.startScheduleExecution(schedule);
+  }
+
+  onContinueInterrupted(id: string): void {
+    this.dismissInterruptedNotice();
+    this.onTriggerSchedule(id);
+  }
+
+  onDiscardInterrupted(id: string): void {
+    const confirmed = window.confirm('Remover este envio interrompido? Os contatos restantes não serão mais lembrados.');
+    if (!confirmed) {
+      return;
+    }
+
+    this.scheduledMessageService.remove(id);
+  }
+
+  dismissInterruptedNotice(): void {
+    this.interruptedNotice = '';
+    this.clearInterruptedNoticeTimer();
+  }
+
+  get latestInterrupted(): ScheduledMessage | null {
+    return this.interruptedSchedules[0] ?? null;
+  }
+
+  get showInterruptedBanner(): boolean {
+    return !this.activeBulkQueue && !this.interruptedNotice && this.interruptedSchedules.length > 0;
+  }
+
+  private startScheduleExecution(schedule: ScheduledMessage): void {
+    // Se a fila ativa já é deste agendamento, retoma de onde parou em vez de recomeçar.
+    if (this.activeBulkQueue?.scheduleId === schedule.id) {
+      this.bulkSend.resume();
+      return;
+    }
+
     const matchedContacts = schedule.contacts
       .map(sc => this.resolveScheduledContact(sc))
       .filter((c): c is WhatsappContact => c !== null);
@@ -498,6 +542,43 @@ export class WhatsappConsoleComponent implements OnInit, OnDestroy {
       this.scheduledMessageService.beginExecution(schedule.id);
       this.bulkSend.start(matchedContacts, schedule.template, imageDataUrls.length ? imageDataUrls : undefined, { scheduleId: schedule.id });
     }
+  }
+
+  private saveInterruptedQueue(event: BulkInterruptedEvent): void {
+    const imageDataUrls = this.resolveBulkQueueImageDataUrls(event.queue);
+    const saved = this.scheduledMessageService.saveInterruptedBulk({
+      template: event.queue.template,
+      imageDataUrls: imageDataUrls.length ? imageDataUrls : undefined,
+      remainingContacts: event.remainingItems.map(item => ({
+        jid: item.jid,
+        name: item.name,
+        phone: this.allContacts.find(contact => contact.jid === item.jid)?.phone || extractDigits(item.jid.split('@')[0])
+      })),
+      processedCount: event.processedCount,
+      totalCount: event.queue.items.length,
+      sourceScheduleId: event.queue.scheduleId
+    });
+
+    if (!saved) {
+      return;
+    }
+
+    const remaining = saved.contacts.length;
+    this.interruptedNotice = `O envio anterior foi salvo em Agendamentos. ${remaining === 1 ? 'Falta 1 contato' : `Faltam ${remaining} contatos`} — continue quando quiser.`;
+    this.clearInterruptedNoticeTimer();
+    this.interruptedNoticeTimerId = window.setTimeout(() => {
+      this.interruptedNoticeTimerId = null;
+      this.interruptedNotice = '';
+    }, INTERRUPTED_NOTICE_AUTO_DISMISS_MS);
+  }
+
+  private clearInterruptedNoticeTimer(): void {
+    if (this.interruptedNoticeTimerId === null) {
+      return;
+    }
+
+    window.clearTimeout(this.interruptedNoticeTimerId);
+    this.interruptedNoticeTimerId = null;
   }
 
   onNotificationDismiss(id: string): void {

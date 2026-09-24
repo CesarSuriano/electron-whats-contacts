@@ -106,7 +106,7 @@
 
   <div class="list-scroll conversation-list__scroll" *ngIf="!isLoading; else loadingState" #scrollContainer (scroll)="onScroll()">
     <div
-      *ngFor="let contact of filteredContacts; trackBy: trackByJid"
+      *ngFor="let contact of filteredContacts | slice:0:renderLimit; trackBy: trackByJid"
       class="conversation-item conversation-list__item"
       [class.conversation-list__item--active]="!isSelectionMode && contact.jid === selectedJid"
       [class.conversation-list__item--selected]="isSelectionMode && selectedJids.has(contact.jid)"

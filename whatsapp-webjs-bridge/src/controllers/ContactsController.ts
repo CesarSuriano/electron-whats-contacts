@@ -19,7 +19,12 @@ export class ContactsController {
         || waitForRefreshRaw === 'true'
         || waitForRefreshRaw === 'yes';
 
+      const startedAt = Date.now();
       await this.contactsService.waitForContactsWarmup(waitForRefresh);
+      const waitedMs = Date.now() - startedAt;
+      if (waitForRefresh || waitedMs >= 1000) {
+        console.log(`[whatsapp-webjs-bridge] tempo lista de contatos: ${waitedMs}ms (${this.contactStore.size} contatos, waitForRefresh=${waitForRefresh})`);
+      }
 
       res.json({
         instanceName: this.instanceName,
@@ -41,7 +46,12 @@ export class ContactsController {
         return;
       }
 
+      const startedAt = Date.now();
       const photoUrl = await this.contactsService.fetchProfilePhotoUrl(jid);
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs >= 2000) {
+        console.log(`[whatsapp-webjs-bridge] tempo foto lenta ${jid}: ${elapsedMs}ms (${photoUrl ? 'com foto' : 'sem foto'})`);
+      }
       res.json({ jid, photoUrl });
     } catch (error) {
       res.status(500).json({

@@ -59,6 +59,8 @@ describe('WhatsappConsoleComponent', () => {
   const openRequests$ = new BehaviorSubject<void>(undefined);
   const scheduleLifecycle$ = new Subject<any>();
   const bulkQueue$ = new BehaviorSubject<BulkQueue | null>(null);
+  const bulkInterrupted$ = new Subject<any>();
+  const interrupted$ = new BehaviorSubject<ScheduledMessage[]>([]);
 
   beforeEach(async () => {
     instances$.next([]);
@@ -81,6 +83,7 @@ describe('WhatsappConsoleComponent', () => {
     upcoming$.next(null);
     openRequests$.next(undefined);
     bulkQueue$.next(null);
+    interrupted$.next([]);
 
     stateSpy = jasmine.createSpyObj('WhatsappStateService', [
       'loadInstances', 'selectInstance', 'refresh', 'selectAll', 'exitSelectionMode', 'clearErrorMessage', 'resolveConversationJid'
@@ -99,7 +102,8 @@ describe('WhatsappConsoleComponent', () => {
     });
     stateSpy.resolveConversationJid.and.callFake((jid: string) => jid);
 
-    bulkSpy = jasmine.createSpyObj('BulkSendService', ['start', 'updateTemplate'], {
+    bulkSpy = jasmine.createSpyObj('BulkSendService', ['start', 'updateTemplate', 'resume'], {
+      interrupted$: bulkInterrupted$.asObservable(),
       scheduleLifecycle$: scheduleLifecycle$.asObservable(),
       queue$: bulkQueue$.asObservable(),
       isSendingCurrent: false
@@ -118,7 +122,8 @@ describe('WhatsappConsoleComponent', () => {
     Object.defineProperty(scheduleListLauncherSpy, 'openRequests$', {
       value: openRequests$.asObservable()
     });
-    scheduledMessageServiceSpy = jasmine.createSpyObj('ScheduledMessageService', ['beginExecution', 'completeExecution', 'cancelExecution'], {
+    scheduledMessageServiceSpy = jasmine.createSpyObj('ScheduledMessageService', ['beginExecution', 'completeExecution', 'cancelExecution', 'saveInterruptedBulk', 'remove'], {
+      interrupted$: interrupted$.asObservable(),
       schedules$: schedules$.asObservable(),
       upcoming$: upcoming$.asObservable()
     });
@@ -416,6 +421,66 @@ describe('WhatsappConsoleComponent', () => {
     scheduleLifecycle$.next({ scheduleId: 'sch-1', outcome: 'cancelled' });
 
     expect(scheduledMessageServiceSpy.cancelExecution).toHaveBeenCalledWith('sch-1');
+  });
+
+  it('saves the remaining contacts of a replaced bulk and shows a notice', () => {
+    component.allContacts = [makeContact('5522@c.us')];
+    scheduledMessageServiceSpy.saveInterruptedBulk.and.returnValue({
+      id: 'sch-int',
+      contacts: [{ jid: '5522@c.us', name: 'Bia', phone: '5522' }]
+    } as ScheduledMessage);
+
+    bulkInterrupted$.next({
+      queue: {
+        template: 'Oi {nome}',
+        imageDataUrls: ['data:image/png;base64,one'],
+        scheduleId: 'sch-1',
+        items: [
+          { jid: '5511@c.us', name: 'Ana', status: 'done' },
+          { jid: '5522@c.us', name: 'Bia', status: 'current' }
+        ],
+        isPaused: false,
+        createdAt: '2026-04-24T10:00:00.000Z'
+      },
+      remainingItems: [{ jid: '5522@c.us', name: 'Bia', status: 'current' }],
+      processedCount: 1
+    });
+
+    expect(scheduledMessageServiceSpy.saveInterruptedBulk).toHaveBeenCalledWith({
+      template: 'Oi {nome}',
+      imageDataUrls: ['data:image/png;base64,one'],
+      remainingContacts: [{ jid: '5522@c.us', name: 'Bia', phone: '5522' }],
+      processedCount: 1,
+      totalCount: 2,
+      sourceScheduleId: 'sch-1'
+    });
+    expect(component.interruptedNotice).toContain('Falta 1 contato');
+  });
+
+  it('resumes the active queue instead of restarting when its schedule is triggered again', () => {
+    const schedule = {
+      id: 'sch-int',
+      scheduledAt: '2026-04-24T12:00:00.000Z',
+      recurrence: 'none',
+      template: 'Oi',
+      contacts: [{ jid: '5511@c.us', name: 'User', phone: '5511' }],
+      status: 'pending',
+      createdAt: '2026-04-24T10:00:00.000Z'
+    } as ScheduledMessage;
+    component.schedules = [schedule];
+    component.allContacts = [makeContact('5511@c.us')];
+    bulkQueue$.next({
+      template: 'Oi',
+      scheduleId: 'sch-int',
+      items: [{ jid: '5511@c.us', name: 'User', status: 'pending' }],
+      isPaused: true,
+      createdAt: '2026-04-24T10:00:00.000Z'
+    });
+
+    component.onContinueInterrupted('sch-int');
+
+    expect(bulkSpy.resume).toHaveBeenCalled();
+    expect(bulkSpy.start).not.toHaveBeenCalled();
   });
 
   it('maps pending clientes to the correct contacts and includes selected clients not in contacts', () => {

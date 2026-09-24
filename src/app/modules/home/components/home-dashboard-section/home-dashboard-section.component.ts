@@ -14,6 +14,7 @@ export class HomeDashboardSectionComponent {
   @Input() greetingDateLabel = '';
   @Input() birthdaysToday: Cliente[] = [];
   @Input() pendingSchedules: ScheduledMessage[] = [];
+  @Input() interruptedSchedules: ScheduledMessage[] = [];
   @Input() clientesCount = 0;
   @Input() clientesAddedThisWeek = 0;
 
@@ -46,6 +47,12 @@ export class HomeDashboardSectionComponent {
   formatScheduleContacts(schedule: ScheduledMessage): string {
     const count = schedule.contacts.length;
     return `${count} contato${count === 1 ? '' : 's'} • ${RECURRENCE_LABELS[schedule.recurrence]}`;
+  }
+
+  get interruptedSummary(): string {
+    const remaining = this.interruptedSchedules.reduce((total, schedule) => total + schedule.contacts.length, 0);
+    const sends = this.interruptedSchedules.length === 1 ? 'Um envio em massa ficou' : `${this.interruptedSchedules.length} envios em massa ficaram`;
+    return `${sends} pela metade: ${remaining === 1 ? 'falta 1 contato' : `faltam ${remaining} contatos`}.`;
   }
 
   getClienteInitials(name: string): string {

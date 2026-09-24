@@ -2,7 +2,12 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-import { ScheduledMessage, ScheduleRecurrence } from '../models/scheduled-message.model';
+import {
+  InterruptedBulkInput,
+  isInterruptedBulk,
+  ScheduledMessage,
+  ScheduleRecurrence
+} from '../models/scheduled-message.model';
 
 const STORAGE_KEY = 'uniq-system.scheduled-messages';
 const CHECK_INTERVAL_MS = 60_000;
@@ -19,6 +24,12 @@ export class ScheduledMessageService implements OnDestroy {
 
   pending$: Observable<ScheduledMessage[]> = this.schedulesSubject.pipe(
     map(list => list.filter(s => s.status === 'pending'))
+  );
+
+  interrupted$: Observable<ScheduledMessage[]> = this.schedulesSubject.pipe(
+    map(list => list
+      .filter(s => isInterruptedBulk(s) && s.status !== 'done' && s.status !== 'cancelled')
+      .sort((a, b) => b.interruptedBulk!.interruptedAt.localeCompare(a.interruptedBulk!.interruptedAt)))
   );
 
   upcoming$: Observable<ScheduledMessage | null> = this.upcomingSubject.asObservable();
@@ -89,15 +100,78 @@ export class ScheduledMessageService implements OnDestroy {
 
   completeExecution(id: string): void {
     this.executingScheduleIds.delete(id);
+
+    const schedule = this.getById(id);
+    if (schedule && isInterruptedBulk(schedule)) {
+      this.remove(id);
+      return;
+    }
+
     this.markDone(id);
   }
 
   cancelExecution(id: string): void {
     this.executingScheduleIds.delete(id);
 
+    // Cancelar a continuação de um envio interrompido descarta o que restava.
+    const schedule = this.getById(id);
+    if (schedule && isInterruptedBulk(schedule)) {
+      this.remove(id);
+      return;
+    }
+
     if (this.upcomingSubject.value?.id === id) {
       this.upcomingSubject.next(null);
     }
+  }
+
+  saveInterruptedBulk(input: InterruptedBulkInput): ScheduledMessage | null {
+    if (!input.remainingContacts.length) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const source = input.sourceScheduleId ? this.getById(input.sourceScheduleId) : null;
+
+    // Fila que já era a continuação de um envio interrompido: atualiza o mesmo item.
+    if (source?.interruptedBulk) {
+      this.executingScheduleIds.delete(source.id);
+      const updated = this.normalizeSchedule({
+        ...source,
+        template: input.template,
+        imageDataUrls: input.imageDataUrls,
+        imageDataUrl: undefined,
+        contacts: input.remainingContacts,
+        status: 'pending',
+        interruptedBulk: {
+          interruptedAt: now,
+          sentCount: source.interruptedBulk.sentCount + input.processedCount,
+          totalCount: source.interruptedBulk.totalCount
+        }
+      });
+      this.setSchedules(this.schedulesSubject.value.map(s => (s.id === source.id ? updated : s)));
+      return updated;
+    }
+
+    const entry = this.create({
+      scheduledAt: now,
+      recurrence: 'none',
+      template: input.template,
+      imageDataUrls: input.imageDataUrls,
+      contacts: input.remainingContacts,
+      interruptedBulk: {
+        interruptedAt: now,
+        sentCount: input.processedCount,
+        totalCount: input.totalCount
+      }
+    });
+
+    // O restante do agendamento original agora vive no item interrompido.
+    if (source) {
+      this.completeExecution(source.id);
+    }
+
+    return entry;
   }
 
   markDone(id: string): void {
@@ -155,6 +229,7 @@ export class ScheduledMessageService implements OnDestroy {
 
     for (const schedule of schedules) {
       if (schedule.status !== 'pending' || this.executingScheduleIds.has(schedule.id)) continue;
+      if (isInterruptedBulk(schedule)) continue;
       if (schedule.reminderDismissedForScheduledAt === schedule.scheduledAt) continue;
 
       const targetMs = new Date(schedule.scheduledAt).getTime();
