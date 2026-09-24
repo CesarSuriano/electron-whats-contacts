@@ -1,3 +1,4 @@
+import path from 'path';
 import pkg from 'whatsapp-web.js';
 import type { Client as WebJsClient } from 'whatsapp-web.js';
 import type { RawChat } from './domain/types.js';
@@ -150,6 +151,9 @@ async function loadHydratedChats(
 // periódico de etiquetas espera: ele consulta as conversas de cada etiqueta
 // no WhatsApp Web e disputa a página com os envios.
 export const LABELS_POLL_PAUSE_AFTER_SEND_MS = 60_000;
+// Primeira leitura da agenda (sem cópia em disco) só depois do início, quando
+// os envios de abertura já passaram.
+const AGENDA_FIRST_LOAD_DELAY_MS = 2 * 60 * 1000;
 
 export function isOutboundActive(lastOutboundAt: number, now = Date.now()): boolean {
   return lastOutboundAt > 0 && now - lastOutboundAt < LABELS_POLL_PAUSE_AFTER_SEND_MS;
@@ -229,7 +233,11 @@ export function buildContainer(config: BridgeConfig): Container {
 
   const sessionManager = new SessionManager(client, sessionState, selfJidResolver, config.instanceName);
   const contactsService = new ContactsService(client, sessionState, contactStore, eventStore, lidMap, selfJidResolver, {
-    enableProfilePhotoFetch: config.enableProfilePhotoFetch
+    enableProfilePhotoFetch: config.enableProfilePhotoFetch,
+    agendaCacheFile: config.dataPath ? path.join(config.dataPath, 'agenda-cache.json') : undefined,
+    agendaFirstLoadDelayMs: AGENDA_FIRST_LOAD_DELAY_MS,
+    // Mesmo a leitura leve espera os envios iniciais terminarem.
+    isBusy: () => isOutboundActive(messageService.lastOutboundAt)
   });
   const historyService = new HistoryService(client, sessionState, lidMap, selfJidResolver, {
     enableHistoryEvents: config.enableHistoryEvents

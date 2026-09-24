@@ -1,3 +1,4 @@
+import { promises as fsp, readFileSync } from 'fs';
 import type { Client as WebJsClient } from 'whatsapp-web.js';
 import type {
   ContactEntry,
@@ -24,9 +25,20 @@ import { getContactName, extractLastMessagePreview } from '../utils/contact.js';
 import { resolvePhoneFromLid } from '../utils/lidResolver.js';
 import { withTimeout } from '../utils/time.js';
 import { telemetry } from '../telemetry/Telemetry.js';
+import { readLeanAgenda } from './readLeanAgenda.js';
 
 export interface ContactsServiceOptions {
   enableProfilePhotoFetch?: boolean;
+  // Quanto a lista espera pela resolução de @lid órfãos (padrão 5s).
+  orphanReconcileWaitMs?: number;
+  // Arquivo onde a agenda fica salva entre aberturas (sem ele, não salva).
+  agendaCacheFile?: string;
+  // Quanto esperar após a abertura antes da primeira leitura da agenda.
+  agendaFirstLoadDelayMs?: number;
+  // true enquanto houver envios recentes: a leitura da agenda espera.
+  isBusy?: () => boolean;
+  // Permite simular a leitura da página nos testes sem consultar uma sessão real.
+  readAgenda?: (client: WebJsClient) => Promise<RawContact[]>;
 }
 
 export interface LoadLabelsOptions {
@@ -43,15 +55,19 @@ const CONTACTS_REFRESH_TIMEOUT_MS = 90 * 1000;
 const CONTACTS_FETCH_TIMEOUT_MS = 45 * 1000;
 const CONTACTS_EMPTY_CACHE_WAIT_MS = 1500;
 const CHAT_HYDRATION_WAIT_TIMEOUT_MS = 270 * 1000;
-// A agenda do celular muda pouco: recarrega em segundo plano no máximo a cada
-// 5 minutos; se a última tentativa falhou, tenta de novo após 1 minuto.
-const AGENDA_RELOAD_INTERVAL_MS = 5 * 60 * 1000;
+// Mantém a cópia no disco e adia a primeira leitura leve, preservando a
+// abertura e os primeiros envios. Falhas não acionam o getContacts pesado.
+const AGENDA_BUSY_RETRY_MS = 60 * 1000;
 const AGENDA_RETRY_AFTER_FAILURE_MS = 60 * 1000;
+const ORPHAN_LID_RESOLVE_CONCURRENCY = 4;
+const ORPHAN_RECONCILE_WAIT_MS = 5 * 1000;
+const ORPHAN_LID_RETRY_AFTER_MS = 30 * 60 * 1000;
 
 interface AgendaSnapshot {
   ownerJid: string;
   contacts: RawContact[];
   signature: string;
+  loadedAt: number;
 }
 
 function buildAgendaSignature(contacts: RawContact[]): string {
@@ -145,6 +161,13 @@ export class ContactsService {
   private agendaLoadPromise: Promise<void> | null = null;
   private lastAgendaAttemptAt = 0;
   private agendaSignatureApplied = '';
+  private orphanReconcilePromise: Promise<void> | null = null;
+  private agendaDiskChecked = false;
+  private agendaReadThisRun = false;
+  private lastAgendaLoadSucceeded = false;
+  private agendaEarliestLoadAt: number | null = null;
+  private agendaRetryTimer: NodeJS.Timeout | null = null;
+  private readonly orphanLidRetryAt = new Map<string, number>();
 
   constructor(
     private readonly client: WebJsClient,
@@ -889,7 +912,7 @@ export class ContactsService {
       });
     }
 
-    await this.reconcileOrphanLinkedContacts();
+    await this.reconcileOrphansWithDeadline();
     this.startAgendaLoad();
   }
 
@@ -900,45 +923,161 @@ export class ContactsService {
   }
 
   private readCachedAgenda(): RawContact[] {
+    this.loadAgendaFromDiskOnce();
     const snapshot = this.agendaSnapshot;
     if (!snapshot) {
       return [];
     }
 
-    // Agenda de outra conta (novo QR lido) não pode ser misturada.
+    // Agenda de outra conta (novo QR lido) não pode ser misturada; sem saber
+    // de quem é a conta, não usa.
     const ownerJid = this.selfJidResolver.getOwnJid();
-    if (snapshot.ownerJid && ownerJid && snapshot.ownerJid !== ownerJid) {
+    if (!snapshot.ownerJid || !ownerJid || snapshot.ownerJid !== ownerJid) {
       return [];
     }
 
     return snapshot.contacts;
   }
 
-  private startAgendaLoad(): void {
+  // A agenda salva em disco vale para a próxima abertura: evita reler milhares
+  // de contatos do WhatsApp Web logo no início, quando os envios começam.
+  private loadAgendaFromDiskOnce(): void {
+    if (this.agendaDiskChecked || this.agendaSnapshot) {
+      return;
+    }
+    this.agendaDiskChecked = true;
+
+    const file = this.options.agendaCacheFile;
+    if (!file) {
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(readFileSync(file, 'utf8')) as { ownerJid?: unknown; savedAt?: unknown; contacts?: unknown };
+      if (typeof saved?.ownerJid !== 'string' || !saved.ownerJid || typeof saved?.savedAt !== 'number' || !Array.isArray(saved?.contacts)) {
+        return;
+      }
+      const contacts = saved.contacts as RawContact[];
+      this.agendaSnapshot = {
+        ownerJid: saved.ownerJid,
+        contacts,
+        signature: buildAgendaSignature(contacts),
+        loadedAt: saved.savedAt
+      };
+      telemetry.track('contacts.agenda_from_disk', {
+        count: contacts.length,
+        ageHours: Math.round((Date.now() - saved.savedAt) / 3_600_000)
+      });
+    } catch {
+      // Sem cópia salva (primeira abertura) ou arquivo ilegível.
+    }
+  }
+
+  private async saveAgendaToDisk(snapshot: AgendaSnapshot): Promise<void> {
+    const file = this.options.agendaCacheFile;
+    if (!file || !snapshot.ownerJid) {
+      return;
+    }
+
+    // Só o necessário: contatos salvos, o próprio número e @lid com telefone.
+    const contacts = snapshot.contacts
+      .filter(contact => contact?.isMe === true || contact?.isMyContact === true
+        || (isLinkedId(contact?.id?._serialized || '') && typeof contact?.number === 'string' && contact.number.length > 0))
+      .map(contact => ({
+        id: { _serialized: contact.id?._serialized, user: contact.id?.user },
+        number: contact.number,
+        name: contact.name,
+        pushname: contact.pushname,
+        shortName: contact.shortName,
+        isMe: contact.isMe,
+        isMyContact: contact.isMyContact
+      }));
+
+    // Grava num temporário e renomeia: um fechamento no meio não corrompe a cópia.
+    const tempFile = `${file}.tmp`;
+    try {
+      await fsp.writeFile(tempFile, JSON.stringify({ ownerJid: snapshot.ownerJid, savedAt: snapshot.loadedAt, contacts }));
+      await fsp.rename(tempFile, file);
+    } catch {
+      // Sem disco: a próxima abertura lê a agenda do WhatsApp de novo.
+    }
+  }
+
+  private scheduleAgendaRetry(delayMs: number): void {
+    if (this.agendaRetryTimer) {
+      return;
+    }
+    this.agendaRetryTimer = setTimeout(() => {
+      this.agendaRetryTimer = null;
+      if (this.sessionState.isReady()) {
+        this.startAgendaLoad();
+      }
+    }, Math.max(1_000, delayMs));
+    this.agendaRetryTimer.unref?.();
+  }
+
+  // Pedido pelo botão Atualizar: relê a agenda na hora, sem atraso.
+  async requestAgendaReload(): Promise<boolean> {
+    if (!this.sessionState.isReady()) {
+      return false;
+    }
+    this.startAgendaLoad(true);
+    await this.whenAgendaSettled();
+    return this.lastAgendaLoadSucceeded;
+  }
+
+  private startAgendaLoad(force = false): void {
     if (this.agendaLoadPromise) {
       return;
     }
 
-    const reloadAfterMs = this.agendaSnapshot ? AGENDA_RELOAD_INTERVAL_MS : AGENDA_RETRY_AFTER_FAILURE_MS;
-    if (this.lastAgendaAttemptAt && Date.now() - this.lastAgendaAttemptAt < reloadAfterMs) {
-      return;
+    const now = Date.now();
+    this.loadAgendaFromDiskOnce();
+
+    if (!force) {
+      // Uma leitura do celular por abertura; até lá vale a cópia do disco.
+      if (this.agendaReadThisRun) {
+        return;
+      }
+      if (this.lastAgendaAttemptAt && now - this.lastAgendaAttemptAt < AGENDA_RETRY_AFTER_FAILURE_MS) {
+        return;
+      }
+
+      // Espera um pouco depois da abertura e um momento sem envios.
+      this.agendaEarliestLoadAt ??= now + (this.options.agendaFirstLoadDelayMs ?? 0);
+      if (now < this.agendaEarliestLoadAt) {
+        this.scheduleAgendaRetry(this.agendaEarliestLoadAt - now);
+        return;
+      }
+      if (this.options.isBusy?.()) {
+        this.scheduleAgendaRetry(AGENDA_BUSY_RETRY_MS);
+        return;
+      }
     }
 
-    const clientWithContacts = this.client as WebJsClient & {
-      getContacts: () => Promise<RawContact[]>;
-    };
     const startedAt = Date.now();
     this.lastAgendaAttemptAt = startedAt;
+    this.lastAgendaLoadSucceeded = false;
 
     this.agendaLoadPromise = (async () => {
       let contacts: RawContact[];
       try {
-        const loaded = await withTimeout(clientWithContacts.getContacts(), CONTACTS_FETCH_TIMEOUT_MS, 'getContacts');
-        contacts = Array.isArray(loaded) ? loaded : [];
+        const loaded = await withTimeout(
+          (this.options.readAgenda ?? readLeanAgenda)(this.client),
+          CONTACTS_FETCH_TIMEOUT_MS,
+          'readLeanAgenda'
+        );
+        if (!Array.isArray(loaded)) {
+          throw new Error('WhatsApp Web returned an invalid agenda');
+        }
+        if (!loaded.length && this.readCachedAgenda().length) {
+          throw new Error('WhatsApp Web returned an empty agenda while a saved copy exists');
+        }
+        contacts = loaded;
       } catch (err) {
-        telemetry.trackError('contacts.agenda', err, { ok: false, ms: Date.now() - startedAt });
+        telemetry.trackError('contacts.agenda', err, { ok: false, source: 'light', ms: Date.now() - startedAt });
         console.warn(
-          `[whatsapp-webjs-bridge] getContacts falhou apos ${Date.now() - startedAt}ms; a lista segue com os dados dos chats:`,
+          `[whatsapp-webjs-bridge] leitura leve da agenda falhou apos ${Date.now() - startedAt}ms; a lista segue com os dados salvos e dos chats:`,
           (err as { message?: string } | null)?.message || String(err)
         );
         return;
@@ -948,16 +1087,21 @@ export class ContactsService {
       const signature = buildAgendaSignature(contacts);
       telemetry.track('contacts.agenda', {
         ok: true,
+        source: 'light',
         ms: Date.now() - startedAt,
         count: contacts.length,
         saved: contacts.filter(contact => contact?.isMyContact === true).length,
         changed: signature !== this.agendaSignatureApplied
       });
+      this.agendaReadThisRun = true;
+      this.lastAgendaLoadSucceeded = true;
       this.agendaSnapshot = {
         ownerJid: this.selfJidResolver.getOwnJid(),
         contacts,
-        signature
+        signature,
+        loadedAt: Date.now()
       };
+      await this.saveAgendaToDisk(this.agendaSnapshot);
 
       if (signature === this.agendaSignatureApplied || !this.sessionState.isReady()) {
         return;
@@ -972,7 +1116,57 @@ export class ContactsService {
     });
   }
 
-  private async reconcileOrphanLinkedContacts(): Promise<void> {
+  // Resolve os @lid sem número conhecido. Cada consulta pode esperar o servidor
+  // do WhatsApp (até 5s); em contas grandes eram centenas, uma por vez, a cada
+  // refresh, segurando a lista. Agora: 4 por vez, a lista espera no máximo
+  // ORPHAN_RECONCILE_WAIT_MS e o restante segue em segundo plano (atualizando
+  // a tela via contacts_updated); quem não resolveu só é tentado de novo
+  // depois de ORPHAN_LID_RETRY_AFTER_MS.
+  private async reconcileOrphansWithDeadline(): Promise<void> {
+    const reconcile = this.startOrphanReconcile();
+    let timer: NodeJS.Timeout | null = null;
+    await Promise.race([
+      reconcile,
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, this.options.orphanReconcileWaitMs ?? ORPHAN_RECONCILE_WAIT_MS);
+        timer.unref?.();
+      })
+    ]);
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  whenOrphanReconcileSettled(): Promise<void> {
+    return this.orphanReconcilePromise ?? Promise.resolve();
+  }
+
+  private startOrphanReconcile(): Promise<void> {
+    if (this.orphanReconcilePromise) {
+      return this.orphanReconcilePromise;
+    }
+
+    const startedAt = Date.now();
+    this.orphanReconcilePromise = this.reconcileOrphanLinkedContacts()
+      .then(({ attempted, resolved }) => {
+        if (attempted) {
+          telemetry.track('contacts.orphans_reconciled', { attempted, resolved, ms: Date.now() - startedAt });
+        }
+        // Resolvido depois que a lista já foi entregue: avisa a tela. Se houver
+        // um refresh em andamento, ele mesmo avisa ao terminar.
+        if (resolved > 0 && !this.contactsRefreshPromise && this.onContactsUpdated) {
+          this.onContactsUpdated(this.contactStore.values());
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.orphanReconcilePromise = null;
+      });
+    return this.orphanReconcilePromise;
+  }
+
+  private async reconcileOrphanLinkedContacts(): Promise<{ attempted: number; resolved: number }> {
+    const now = Date.now();
     const orphans: string[] = [];
     for (const [jid] of this.contactStore.entries()) {
       if (!isLinkedId(jid)) {
@@ -981,25 +1175,39 @@ export class ContactsService {
       if (this.lidMap.findCanonical(jid)) {
         continue;
       }
+      if ((this.orphanLidRetryAt.get(jid) ?? 0) > now) {
+        continue;
+      }
       orphans.push(jid);
     }
 
-    if (!orphans.length) {
-      return;
-    }
-
-    for (const lidJid of orphans) {
-      try {
-        const canonical = await resolvePhoneFromLid(this.client, lidJid);
-        if (!canonical || this.selfJidResolver.isSelfJid(canonical)) {
-          continue;
+    let resolved = 0;
+    let cursor = 0;
+    const runWorker = async (): Promise<void> => {
+      while (cursor < orphans.length) {
+        const lidJid = orphans[cursor];
+        cursor += 1;
+        try {
+          const canonical = await resolvePhoneFromLid(this.client, lidJid);
+          if (!canonical || this.selfJidResolver.isSelfJid(canonical)) {
+            this.orphanLidRetryAt.set(lidJid, Date.now() + ORPHAN_LID_RETRY_AFTER_MS);
+            continue;
+          }
+          this.orphanLidRetryAt.delete(lidJid);
+          this.registerCanonicalLid(canonical, lidJid);
+          this.mergeAliasContactIntoCanonical(canonical, lidJid);
+          resolved += 1;
+        } catch {
+          this.orphanLidRetryAt.set(lidJid, Date.now() + ORPHAN_LID_RETRY_AFTER_MS);
         }
-        this.registerCanonicalLid(canonical, lidJid);
-        this.mergeAliasContactIntoCanonical(canonical, lidJid);
-      } catch {
-        // best effort, move on
       }
-    }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(ORPHAN_LID_RESOLVE_CONCURRENCY, orphans.length) }, () => runWorker())
+    );
+
+    return { attempted: orphans.length, resolved };
   }
 
   triggerRefresh(options: { preloadedChats?: RawChat[] | null; reason?: string } = {}): Promise<void> {

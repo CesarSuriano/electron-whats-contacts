@@ -20,6 +20,15 @@ export class ContactsController {
         || waitForRefreshRaw === 'true'
         || waitForRefreshRaw === 'yes';
 
+      // Botão "Atualizar" da tela: relê a agenda do celular na hora.
+      if (String(req.query.refreshAgenda || '') === '1') {
+        const refreshed = await this.contactsService.requestAgendaReload();
+        if (!refreshed) {
+          res.status(503).json({ error: 'Failed to refresh phone contacts' });
+          return;
+        }
+      }
+
       const startedAt = Date.now();
       await this.contactsService.waitForContactsWarmup(waitForRefresh);
       const waitedMs = Date.now() - startedAt;

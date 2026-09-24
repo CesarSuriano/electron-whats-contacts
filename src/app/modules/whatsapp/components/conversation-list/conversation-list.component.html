@@ -7,6 +7,18 @@
 
     <button
       type="button"
+      class="conversation-list__refresh-button"
+      *ngIf="!isSelectionMode"
+      (click)="onRefreshContacts()"
+      [disabled]="disabled || isLoading"
+      aria-label="Atualizar contatos"
+      title="Atualizar contatos (inclui os salvos no celular)"
+    >
+      <span class="material-symbols-outlined">refresh</span>
+    </button>
+
+    <button
+      type="button"
       class="conversation-list__select-button"
       *ngIf="!isSelectionMode && filteredContacts.length"
       (click)="enterSelectionMode()"

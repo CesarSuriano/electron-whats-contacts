@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
-  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/3.0.0/UniqSystem.Setup.3.0.0.exe",
-  "notes": "- WhatsApp abre bem mais rápido: as conversas carregam quando você abre cada uma\n- Envio em massa mais fluido, sem travar entre um contato e outro\n- Envio em massa interrompido fica salvo em Agendamentos para continuar de onde parou ou remover\n- Correção da seta de opções da mensagem que aparecia por cima do painel de envio"
+  "version": "3.1.0",
+  "url": "https://github.com/CesarSuriano/electron-whats-contacts/releases/download/3.1.0/UniqSystem.Setup.3.1.0.exe",
+  "notes": "- Agenda do celular salva entre aberturas, com contatos disponíveis mais cedo\n- Leitura leve da agenda para milhares de contatos sem sobrecarregar envios e conversas\n- Botão para atualizar a agenda do celular na hora\n- Lista de contatos mais ágil e melhor associação de números a contatos\n- Envio de mensagens e fotos de perfil preservados para contatos comerciais"
 }

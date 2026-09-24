@@ -77,10 +77,13 @@ export class WhatsappWebjsGatewayService {
     );
   }
 
-  loadContacts(instanceName: string, options: { waitForRefresh?: boolean } = {}): Observable<WhatsappContact[]> {
+  loadContacts(instanceName: string, options: { waitForRefresh?: boolean; refreshAgenda?: boolean } = {}): Observable<WhatsappContact[]> {
     let params = new HttpParams().set('instanceName', instanceName);
     if (options.waitForRefresh) {
       params = params.set('waitForRefresh', '1');
+    }
+    if (options.refreshAgenda) {
+      params = params.set('refreshAgenda', '1');
     }
 
     return this.http.get<ContactsResponse>(`${this.baseUrl}/contacts`, { params }).pipe(

@@ -564,6 +564,15 @@ describe('WhatsappStateService', () => {
   // ─── refresh ─────────────────────────────────────────────────────────────────
 
   describe('refresh', () => {
+    it('asks the bridge to re-read the phone agenda when the user refreshes', () => {
+      service.loadInstances();
+      gateway.loadContacts.calls.reset();
+
+      service.refresh();
+
+      expect(gateway.loadContacts).toHaveBeenCalledWith(mockInstance.name, { waitForRefresh: false, refreshAgenda: true });
+    });
+
     it('does not throw when called with no selected instance', () => {
       expect(() => service.refresh()).not.toThrow();
     });
@@ -991,6 +1000,90 @@ describe('WhatsappStateService', () => {
       ]);
 
       expect(mapped[0].contactJid).toBe('5511987654321@c.us');
+    });
+  });
+
+  describe('contatos equivalentes em listas grandes', () => {
+    // Gera contatos com muitas duplicatas reais: com/sem 9º dígito, com/sem 55,
+    // telefone apontando para outro jid, @lid, grupos.
+    function buildDuplicatedContacts(count: number): WhatsappContact[] {
+      let seed = 42;
+      const random = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return seed / 2147483648;
+      };
+      const contacts: WhatsappContact[] = [];
+      for (let index = 0; index < count; index += 1) {
+        const base = Math.floor(random() * (count / 3));
+        const ddd = 11 + (base % 80);
+        const local8 = String(80000000 + base * 13).slice(0, 8);
+        const with9 = `55${ddd}9${local8}`;
+        const without9 = `55${ddd}${local8}`;
+        const variant = Math.floor(random() * 7);
+        const common = {
+          name: random() > 0.3 ? `Nome ${base}` : '',
+          found: random() > 0.2,
+          fromGetChats: random() > 0.5,
+          lastMessageAt: random() > 0.3 ? new Date(1_700_000_000_000 + Math.floor(random() * 1e9)).toISOString() : null,
+          unreadCount: Math.floor(random() * 3),
+          labels: random() > 0.8 ? ['vip'] : []
+        };
+        if (variant === 0) contacts.push({ jid: `${with9}@c.us`, phone: with9, ...common });
+        else if (variant === 1) contacts.push({ jid: `${without9}@c.us`, phone: without9, ...common });
+        else if (variant === 2) contacts.push({ jid: `${with9.slice(2)}@c.us`, phone: with9.slice(2), ...common });
+        else if (variant === 3) contacts.push({ jid: `${100000000000000 + base}@lid`, phone: random() > 0.5 ? with9 : '', ...common });
+        else if (variant === 4) contacts.push({ jid: `${with9}@c.us`, phone: without9, ...common });
+        else if (variant === 5) contacts.push({ jid: `${with9}-${base}@g.us`, phone: '', isGroup: true, ...common });
+        else contacts.push({ jid: `${9900000000000000 + base}@c.us`, phone: with9, ...common });
+      }
+      return contacts;
+    }
+
+    it('collapses duplicates exactly like the previous one-by-one comparison', () => {
+      const svc = service as any;
+      for (const count of [60, 900]) {
+        const input = buildDuplicatedContacts(count);
+
+        const expected: WhatsappContact[] = [];
+        for (const contact of input) {
+          const reference = contact.jid || contact.phone;
+          const existing = svc.findEquivalentContact(reference, expected);
+          if (!existing) {
+            expected.push(contact);
+            continue;
+          }
+          expected.splice(expected.indexOf(existing), 1, svc.mergeEquivalentContacts(existing, contact));
+        }
+
+        expect(JSON.stringify(svc.collapseEquivalentContacts(input))).toBe(JSON.stringify(expected));
+      }
+    });
+
+    it('keeps the same photo as the previous lookup when a snapshot arrives', () => {
+      const svc = service as any;
+      const input = buildDuplicatedContacts(400);
+      const current = buildDuplicatedContacts(400).map((contact, index) => ({
+        ...contact,
+        photoUrl: index % 3 ? `data:image/png;base64,foto${index}` : null
+      }));
+      const currentIndex = svc.buildEquivalenceIndex(current);
+
+      for (const contact of input) {
+        const reference = contact.jid || contact.phone;
+        const previousMatch = current.find(existing => svc.isEquivalentContactReference(reference, existing));
+        const expected = previousMatch && svc.hasPhotoUrl(previousMatch.photoUrl)
+          ? previousMatch.photoUrl
+          : (svc.hasPhotoUrl(contact.photoUrl) ? contact.photoUrl : null);
+        expect(svc.resolveSnapshotPhotoUrl(contact, current, currentIndex)).toBe(expected);
+      }
+    });
+
+    it('loads 5000 contacts without freezing the screen', () => {
+      const contacts = buildDuplicatedContacts(5000);
+      const startedAt = performance.now();
+      (service as any).applyContactsSnapshot(contacts, { bootstrap: false });
+      (service as any).applyContactsSnapshot(buildDuplicatedContacts(5000), { bootstrap: false });
+      expect(performance.now() - startedAt).toBeLessThan(2000);
     });
   });
 

@@ -8,6 +8,7 @@ import { LabelService } from '../../../../services/label.service';
 import { ManagerLaunchService } from '../../../../services/manager-launch.service';
 import { formatBrazilianPhone, resolveDisplayedPhoneSource } from '../../helpers/phone-format.helper';
 import { WhatsappStateService } from '../../services/whatsapp-state.service';
+import { telemetry } from '../../../../telemetry/telemetry';
 
 type ConversationFilterId = 'all' | 'conversations' | 'unread' | `label:${string}` | `app-label:${string}`;
 
@@ -355,6 +356,15 @@ export class ConversationListComponent implements OnInit, AfterViewInit, OnDestr
       return;
     }
     this.state.selectContact(contact.jid);
+  }
+
+  // Atualiza a lista e relê na hora a agenda do celular (contato recém-salvo).
+  onRefreshContacts(): void {
+    if (this.disabled || this.isLoading) {
+      return;
+    }
+    telemetry.track('ui.contacts_refresh_clicked', {});
+    this.state.refresh();
   }
 
   enterSelectionMode(contact?: WhatsappContact): void {
