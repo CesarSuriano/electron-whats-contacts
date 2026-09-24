@@ -2,7 +2,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import { LABELS_POLL_PAUSE_AFTER_SEND_MS, bindClientEvents, isOutboundActive } from '../../src/container.js';
+import {
+  LABELS_POLL_PAUSE_AFTER_SEND_MS,
+  bindClientEvents,
+  isOutboundActive,
+  shouldRetryReadyStep,
+  type ReadyProbeResult
+} from '../../src/container.js';
 import { SessionState } from '../../src/state/SessionState.js';
 import { wait } from '../../src/utils/time.js';
 
@@ -13,10 +19,12 @@ function createContainer(options: {
   allowRecovery?: boolean;
   initializeInFlight?: boolean;
   getChats?: () => Promise<unknown[]>;
+  pupPage?: unknown;
 } = {}) {
   const client = new EventEmitter();
   Object.assign(client, {
-    getChats: options.getChats ?? (async () => [])
+    getChats: options.getChats ?? (async () => []),
+    pupPage: options.pupPage ?? null
   });
   const sessionState = new SessionState('local-webjs', () => '');
   const broadcasts: Array<{ type: string; payload: unknown }> = [];
@@ -286,5 +294,65 @@ describe('bindClientEvents disconnected recovery', () => {
         process.env.WA_AUTHENTICATED_READY_TIMEOUT_MS = previousTimeout;
       }
     }
+  });
+});
+
+describe('sessão autenticada que não fica pronta', () => {
+  const stuckProbe: ReadyProbeResult = {
+    wwebjs: false,
+    hasSynced: true,
+    socketState: 'CONNECTED',
+    handler: true,
+    documentState: 'complete',
+    waVersion: '2.3000.0'
+  };
+
+  it('only retries when synced, utilities missing and after the library timeout', () => {
+    assert.equal(shouldRetryReadyStep(stuckProbe, 40_000, 0), true);
+    assert.equal(shouldRetryReadyStep(stuckProbe, 20_000, 0), false, 'antes do timeout da biblioteca');
+    assert.equal(shouldRetryReadyStep({ ...stuckProbe, wwebjs: true }, 40_000, 0), false, 'utilitários já injetados');
+    assert.equal(shouldRetryReadyStep({ ...stuckProbe, hasSynced: false }, 40_000, 0), false, 'ainda sincronizando');
+    assert.equal(shouldRetryReadyStep({ ...stuckProbe, handler: false }, 40_000, 0), false, 'sem o callback da biblioteca');
+    assert.equal(shouldRetryReadyStep(stuckProbe, 40_000, 2), false, 'limite de tentativas');
+  });
+
+  async function runStuckScenario(probeAnswers: ReadyProbeResult[]): Promise<number> {
+    process.env.WA_READY_PROBE_DELAYS_MS = '10,40';
+    process.env.WA_READY_RETRY_MIN_AFTER_MS = '0';
+    let retries = 0;
+    let probes = 0;
+    const pupPage = {
+      on: () => undefined,
+      evaluate: async (fn: { name?: string }) => {
+        if (fn.name === 'readPageReadiness') {
+          const answer = probeAnswers[Math.min(probes, probeAnswers.length - 1)];
+          probes += 1;
+          return answer;
+        }
+        retries += 1;
+        return undefined;
+      }
+    };
+
+    try {
+      const { client } = createContainer({ pupPage });
+      client.emit('authenticated');
+      await wait(120);
+      client.emit('auth_failure', 'test cleanup');
+    } finally {
+      delete process.env.WA_READY_PROBE_DELAYS_MS;
+      delete process.env.WA_READY_RETRY_MIN_AFTER_MS;
+    }
+    return retries;
+  }
+
+  it('re-runs only the page preparation step when the utilities were never injected', async () => {
+    const retries = await runStuckScenario([stuckProbe, { ...stuckProbe, wwebjs: true }]);
+    assert.equal(retries, 1);
+  });
+
+  it('does not re-run the step when the utilities are already in the page', async () => {
+    const retries = await runStuckScenario([{ ...stuckProbe, wwebjs: true }]);
+    assert.equal(retries, 0);
   });
 });

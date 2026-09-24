@@ -23,7 +23,7 @@ import { LabelsController } from './controllers/LabelsController.js';
 import { EventsController } from './controllers/EventsController.js';
 import { HistoryController } from './controllers/HistoryController.js';
 import { MessagesController } from './controllers/MessagesController.js';
-import { wait } from './utils/time.js';
+import { wait, withTimeout } from './utils/time.js';
 import { errorMessageOf, telemetry } from './telemetry/Telemetry.js';
 
 const { Client, LocalAuth } = pkg;
@@ -54,6 +54,15 @@ function attachPuppeteerDiagnostics(client: WebJsClient): void {
     });
     pupPage.on('pageerror', (error: unknown) => {
       telemetry.trackLimitedPageError(error);
+    });
+    // Recarga da página principal do WhatsApp Web (ex.: no meio da preparação).
+    pupPage.on('framenavigated', (frame: unknown) => {
+      const mainFrame = frame as { parentFrame?: () => unknown; url?: () => string } | null;
+      if (!mainFrame || (typeof mainFrame.parentFrame === 'function' && mainFrame.parentFrame() !== null)) {
+        return;
+      }
+      const url = typeof mainFrame.url === 'function' ? String(mainFrame.url()) : '';
+      telemetry.track('puppeteer.navigated', { postLogout: url.includes('post_logout') });
     });
   }
 }
@@ -157,6 +166,78 @@ const AGENDA_FIRST_LOAD_DELAY_MS = 2 * 60 * 1000;
 
 export function isOutboundActive(lastOutboundAt: number, now = Date.now()): boolean {
   return lastOutboundAt > 0 && now - lastOutboundAt < LABELS_POLL_PAUSE_AFTER_SEND_MS;
+}
+
+// ─── "Autenticou mas não ficou pronto" ──────────────────────────────────────
+// O whatsapp-web.js emite `authenticated` e só depois injeta seus utilitários
+// na página (LoadUtils) e registra os listeners antes do `ready`. Esse passo
+// roda dentro de um callback da página: se falha (ex.: 'ready timeout' após
+// 30s), o erro some e o `ready` nunca vem. Sondamos a página para registrar
+// em que ponto parou e, no único caso seguro (sincronizado, utilitários
+// ausentes, depois do timeout da própria biblioteca), repetimos só esse passo.
+export interface ReadyProbeResult {
+  wwebjs: boolean;
+  hasSynced: boolean | null;
+  socketState: string | null;
+  handler: boolean;
+  documentState: string;
+  waVersion: string | null;
+}
+
+const DEFAULT_READY_PROBE_DELAYS_MS = [15_000, 35_000, 60_000];
+const DEFAULT_READY_RETRY_MIN_AFTER_MS = 35_000;
+const READY_PROBE_EVAL_TIMEOUT_MS = 10_000;
+export const READY_STEP_MAX_RETRIES = 2;
+
+function getReadyProbeDelaysMs(): number[] {
+  const raw = String(process.env.WA_READY_PROBE_DELAYS_MS || '').trim();
+  const parsed = raw.split(',').map(Number).filter(value => Number.isFinite(value) && value > 0);
+  return parsed.length ? parsed : DEFAULT_READY_PROBE_DELAYS_MS;
+}
+
+function getReadyRetryMinAfterMs(): number {
+  const raw = Number(process.env.WA_READY_RETRY_MIN_AFTER_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_READY_RETRY_MIN_AFTER_MS;
+}
+
+// Só repete o passo quando é certo que ele falhou e que repetir não duplica
+// listeners: WhatsApp sincronizado, utilitários ainda não injetados e já
+// passado o timeout interno da biblioteca.
+export function shouldRetryReadyStep(
+  probe: ReadyProbeResult,
+  msSinceAuthenticated: number,
+  retriesDone: number,
+  minAfterMs = DEFAULT_READY_RETRY_MIN_AFTER_MS
+): boolean {
+  return probe.hasSynced === true
+    && !probe.wwebjs
+    && probe.handler
+    && msSinceAuthenticated >= minAfterMs
+    && retriesDone < READY_STEP_MAX_RETRIES;
+}
+
+// Executada dentro da página do WhatsApp Web: precisa ser autocontida.
+function readPageReadiness(): ReadyProbeResult {
+  const pageWindow = window as unknown as {
+    require?: (moduleName: string) => { Socket?: { hasSynced?: unknown; state?: unknown } } | undefined;
+    WWebJS?: unknown;
+    onAppStateHasSyncedEvent?: unknown;
+    Debug?: { VERSION?: unknown };
+  };
+  let socket: { hasSynced?: unknown; state?: unknown } | undefined;
+  try {
+    socket = pageWindow.require?.('WAWebSocketModel')?.Socket;
+  } catch {
+    socket = undefined;
+  }
+  return {
+    wwebjs: typeof pageWindow.WWebJS !== 'undefined',
+    hasSynced: typeof socket?.hasSynced === 'boolean' ? socket.hasSynced : null,
+    socketState: typeof socket?.state === 'string' ? socket.state : null,
+    handler: typeof pageWindow.onAppStateHasSyncedEvent === 'function',
+    documentState: document.readyState,
+    waVersion: typeof pageWindow.Debug?.VERSION === 'string' ? pageWindow.Debug.VERSION : null
+  };
 }
 
 function getAuthenticatedReadyTimeoutMs(): number {
@@ -343,6 +424,7 @@ export function bindClientEvents(container: Container): void {
         return;
       }
 
+      stopReadyProbes();
       const canRecover = recoveryBudget.tryConsume();
       telemetry.track('session.ready_watchdog_timeout', {
         timeoutMs,
@@ -383,6 +465,7 @@ export function bindClientEvents(container: Container): void {
   };
 
   client.on('qr', qr => {
+    stopReadyProbes();
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
     cancelReadyBootstrap();
@@ -396,9 +479,86 @@ export function bindClientEvents(container: Container): void {
     broadcaster.broadcast('session_state', sessionManager.getSessionSnapshot());
   });
 
+  // Sondagens da página enquanto a sessão está autenticada mas não pronta.
+  let readyProbeTimers: ReturnType<typeof setTimeout>[] = [];
+  let readyStepRetries = 0;
+
+  const stopReadyProbes = (): void => {
+    readyProbeTimers.forEach(timer => clearTimeout(timer));
+    readyProbeTimers = [];
+  };
+
+  const runReadyProbe = async (authenticatedStartedAt: number): Promise<void> => {
+    if (sessionState.status !== 'authenticated') {
+      return;
+    }
+
+    const page = (client as unknown as {
+      pupPage?: { evaluate: <T>(fn: () => T) => Promise<T> } | null;
+    }).pupPage;
+    if (!page) {
+      return;
+    }
+
+    const afterMs = Date.now() - authenticatedStartedAt;
+    const evalStartedAt = Date.now();
+    let probe: ReadyProbeResult;
+    try {
+      probe = await withTimeout(page.evaluate(readPageReadiness), READY_PROBE_EVAL_TIMEOUT_MS, 'ready probe');
+    } catch (error) {
+      // Página sem responder: WhatsApp Web ocupado/travado.
+      telemetry.trackError('session.ready_probe_failed', error, { afterMs, evalMs: Date.now() - evalStartedAt });
+      return;
+    }
+
+    telemetry.track('session.ready_probe', { afterMs, evalMs: Date.now() - evalStartedAt, ...probe });
+    if (sessionState.status !== 'authenticated'
+      || !shouldRetryReadyStep(probe, afterMs, readyStepRetries, getReadyRetryMinAfterMs())) {
+      return;
+    }
+
+    readyStepRetries += 1;
+    telemetry.track('session.ready_retry', { attempt: readyStepRetries, afterMs });
+    console.warn(`[whatsapp-webjs-bridge] Sessao autenticada sem ficar pronta; repetindo a preparacao da pagina (${readyStepRetries}/${READY_STEP_MAX_RETRIES}).`);
+    try {
+      await withTimeout(
+        page.evaluate(() => {
+          const handler = (window as unknown as { onAppStateHasSyncedEvent?: () => Promise<void> }).onAppStateHasSyncedEvent;
+          // Dispara sem esperar: o próprio fluxo da biblioteca segue até o ready.
+          void handler?.();
+        }),
+        READY_PROBE_EVAL_TIMEOUT_MS,
+        'ready retry'
+      );
+    } catch (error) {
+      telemetry.trackError('session.ready_retry_failed', error, { attempt: readyStepRetries });
+    }
+  };
+
+  const startReadyProbes = (): void => {
+    stopReadyProbes();
+    readyStepRetries = 0;
+    const authenticatedStartedAt = Date.now();
+    for (const delayMs of getReadyProbeDelaysMs()) {
+      const timer = setTimeout(() => {
+        void runReadyProbe(authenticatedStartedAt);
+      }, delayMs);
+      timer.unref?.();
+      readyProbeTimers.push(timer);
+    }
+  };
+
   client.on('authenticated', () => {
+    // A recuperação acima reexecuta o passo da biblioteca, que emite
+    // `authenticated` de novo: não reinicia a contagem do vigia nem as sondagens.
+    if (sessionState.status === 'authenticated' && authenticatedReadyTimer) {
+      telemetry.track('client.authenticated_again', { retries: readyStepRetries });
+      return;
+    }
+
     stopDisconnectRecovery();
     startAuthenticatedReadyWatchdog();
+    startReadyProbes();
     cancelReadyBootstrap();
     sessionState.status = 'authenticated';
     sessionState.qr = null;
@@ -520,6 +680,7 @@ export function bindClientEvents(container: Container): void {
   };
 
   client.on('ready', async () => {
+    stopReadyProbes();
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
     recoveryBudget.reset();
@@ -604,6 +765,7 @@ export function bindClientEvents(container: Container): void {
   });
 
   client.on('auth_failure', (message: string) => {
+    stopReadyProbes();
     stopDisconnectRecovery();
     stopAuthenticatedReadyWatchdog();
     cancelReadyBootstrap();
@@ -649,6 +811,7 @@ export function bindClientEvents(container: Container): void {
     }
 
     stopAuthenticatedReadyWatchdog();
+    stopReadyProbes();
     cancelReadyBootstrap();
     sessionState.status = 'disconnected';
     sessionState.qr = null;
